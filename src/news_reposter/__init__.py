@@ -1,0 +1,2 @@
+"""News Reposter application package."""
+
