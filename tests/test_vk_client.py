@@ -12,12 +12,17 @@ def test_get_latest_post() -> None:
     async def scenario() -> None:
         """Выполняет асинхронную часть проверки."""
 
+        request_count = 0
+
         def handler(request: httpx.Request) -> httpx.Response:
             """Проверяет запрос и возвращает тестовый ответ VK."""
 
+            nonlocal request_count
+            request_count += 1
+
             assert request.url.path.endswith("/wall.get")
             assert request.url.params["domain"] == "news_murmansk"
-            assert request.url.params["count"] == "2"
+            assert request.url.params["count"] == "1"
             return httpx.Response(
                 200,
                 json={
@@ -47,6 +52,7 @@ def test_get_latest_post() -> None:
         assert post.id == 42
         assert post.text == "Тестовая новость"
         assert post.source_url == "https://vk.com/wall-123_42"
+        assert request_count == 1
 
     asyncio.run(scenario())
 
@@ -57,8 +63,29 @@ def test_get_latest_post_skips_old_pinned_post() -> None:
     async def scenario() -> None:
         """Выполняет асинхронную часть проверки."""
 
+        offsets: list[str | None] = []
+
         def handler(request: httpx.Request) -> httpx.Response:
-            """Возвращает закреплённый и обычный посты в порядке ответа VK."""
+            """Возвращает запись с учётом смещения в запросе."""
+
+            offsets.append(request.url.params.get("offset"))
+            if request.url.params.get("offset") == "1":
+                return httpx.Response(
+                    200,
+                    json={
+                        "response": {
+                            "count": 2,
+                            "items": [
+                                {
+                                    "id": 11,
+                                    "owner_id": -123,
+                                    "date": 1_800_000_000,
+                                    "text": "Новый пост",
+                                }
+                            ],
+                        }
+                    },
+                )
 
             return httpx.Response(
                 200,
@@ -72,13 +99,7 @@ def test_get_latest_post_skips_old_pinned_post() -> None:
                                 "date": 1_700_000_000,
                                 "text": "Старый закреплённый пост",
                                 "is_pinned": 1,
-                            },
-                            {
-                                "id": 11,
-                                "owner_id": -123,
-                                "date": 1_800_000_000,
-                                "text": "Новый пост",
-                            },
+                            }
                         ],
                     }
                 },
@@ -93,6 +114,7 @@ def test_get_latest_post_skips_old_pinned_post() -> None:
         assert post is not None
         assert post.id == 11
         assert post.text == "Новый пост"
+        assert offsets == [None, "1"]
 
     asyncio.run(scenario())
 

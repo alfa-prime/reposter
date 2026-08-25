@@ -40,7 +40,7 @@ class VKClient:
         params: dict[str, str | int] = {
             "access_token": self._access_token,
             "v": self._api_version,
-            "count": 2,
+            "count": 1,
             # Посты посетителей стены для репостера не нужны.
             "filter": "owner",
         }
@@ -57,7 +57,22 @@ class VKClient:
         client: httpx.AsyncClient,
         params: dict[str, str | int],
     ) -> VKPost | None:
-        """Выполняет wall.get и преобразует ответ в модель поста."""
+        """Возвращает первую обычную запись, пропуская закреплённую."""
+
+        post = await self._request_post(client, params)
+        if post is None or post.is_pinned != 1:
+            return post
+
+        # Второй запрос нужен только для стены с закреплённой записью.
+        next_post = await self._request_post(client, {**params, "offset": 1})
+        return next_post or post
+
+    async def _request_post(
+        self,
+        client: httpx.AsyncClient,
+        params: dict[str, str | int],
+    ) -> VKPost | None:
+        """Выполняет wall.get и преобразует первую запись в модель поста."""
 
         try:
             response = await client.get(f"{self._api_url}/wall.get", params=params)
@@ -76,8 +91,7 @@ class VKClient:
         if envelope.response is None or not envelope.response.items:
             return None
 
-        # Закреплённый пост VK ставит первым, даже если он старше остальных.
-        return max(envelope.response.items, key=lambda post: post.date)
+        return envelope.response.items[0]
 
     @staticmethod
     def _group_parameter(group: str) -> dict[str, str | int]:
