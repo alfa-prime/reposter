@@ -4,6 +4,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
+    """Настройки приложения из переменных окружения и файла .env."""
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
@@ -19,5 +21,7 @@ class Settings(BaseSettings):
 
 @lru_cache
 def get_settings() -> Settings:
-    return Settings()
+    """Возвращает общий экземпляр настроек для всего приложения."""
 
+    # Настройки не меняются во время работы, поэтому перечитывать .env не нужно.
+    return Settings()
