@@ -16,5 +16,6 @@ app.include_router(vk_router, prefix="/api/v1")
 
 @app.get("/health", tags=["System"])
 async def health() -> dict[str, str]:
-    return {"status": "ok"}
+    """Показывает, что приложение запущено и отвечает на запросы."""
 
+    return {"status": "ok"}

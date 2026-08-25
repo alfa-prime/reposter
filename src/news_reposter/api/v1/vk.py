@@ -13,6 +13,8 @@ async def get_latest_vk_post(
         description="Ссылка, короткое имя или ID группы; по умолчанию VK_GROUP",
     ),
 ) -> VKPost:
+    """Возвращает последний пост указанной или настроенной группы VK."""
+
     settings = get_settings()
 
     if not settings.vk_access_token:
@@ -21,6 +23,7 @@ async def get_latest_vk_post(
             detail="VK_ACCESS_TOKEN не задан в .env",
         )
 
+    # Параметр запроса позволяет проверить другую группу без правки .env.
     selected_group = group or settings.vk_group
     if not selected_group:
         raise HTTPException(
@@ -55,4 +58,3 @@ async def get_latest_vk_post(
         )
 
     return post
-

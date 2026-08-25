@@ -5,7 +5,7 @@ from pydantic import BaseModel, ConfigDict, Field, computed_field
 
 
 class VKPost(BaseModel):
-    """Fields needed for later rewriting and publication in MAX."""
+    """Поля поста, которые понадобятся для рерайта и публикации в MAX."""
 
     model_config = ConfigDict(extra="allow")
 
@@ -21,20 +21,27 @@ class VKPost(BaseModel):
     @computed_field
     @property
     def source_url(self) -> str:
+        """Возвращает прямую ссылку на исходный пост."""
+
         return f"https://vk.com/wall{self.owner_id}_{self.id}"
 
     @computed_field
     @property
     def published_at(self) -> datetime:
+        """Возвращает время публикации в UTC."""
+
         return datetime.fromtimestamp(self.date, tz=timezone.utc)
 
 
 class VKWallResponse(BaseModel):
+    """Полезная часть успешного ответа метода wall.get."""
+
     count: int
     items: list[VKPost]
 
 
 class VKWallEnvelope(BaseModel):
+    """Обёртка ответа VK с результатом или описанием ошибки."""
+
     response: VKWallResponse | None = None
     error: dict[str, Any] | None = None
-
