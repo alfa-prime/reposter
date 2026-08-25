@@ -17,7 +17,7 @@ def test_get_latest_post() -> None:
 
             assert request.url.path.endswith("/wall.get")
             assert request.url.params["domain"] == "news_murmansk"
-            assert request.url.params["count"] == "1"
+            assert request.url.params["count"] == "2"
             return httpx.Response(
                 200,
                 json={
@@ -47,6 +47,52 @@ def test_get_latest_post() -> None:
         assert post.id == 42
         assert post.text == "Тестовая новость"
         assert post.source_url == "https://vk.com/wall-123_42"
+
+    asyncio.run(scenario())
+
+
+def test_get_latest_post_skips_old_pinned_post() -> None:
+    """Проверяет выбор свежего поста, если первым пришёл старый закреплённый."""
+
+    async def scenario() -> None:
+        """Выполняет асинхронную часть проверки."""
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            """Возвращает закреплённый и обычный посты в порядке ответа VK."""
+
+            return httpx.Response(
+                200,
+                json={
+                    "response": {
+                        "count": 2,
+                        "items": [
+                            {
+                                "id": 10,
+                                "owner_id": -123,
+                                "date": 1_700_000_000,
+                                "text": "Старый закреплённый пост",
+                                "is_pinned": 1,
+                            },
+                            {
+                                "id": 11,
+                                "owner_id": -123,
+                                "date": 1_800_000_000,
+                                "text": "Новый пост",
+                            },
+                        ],
+                    }
+                },
+            )
+
+        async with httpx.AsyncClient(
+            transport=httpx.MockTransport(handler),
+        ) as http_client:
+            client = VKClient(access_token="secret", http_client=http_client)
+            post = await client.get_latest_post("news_murmansk")
+
+        assert post is not None
+        assert post.id == 11
+        assert post.text == "Новый пост"
 
     asyncio.run(scenario())
 

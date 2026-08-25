@@ -40,7 +40,7 @@ class VKClient:
         params: dict[str, str | int] = {
             "access_token": self._access_token,
             "v": self._api_version,
-            "count": 1,
+            "count": 2,
             # Посты посетителей стены для репостера не нужны.
             "filter": "owner",
         }
@@ -76,7 +76,8 @@ class VKClient:
         if envelope.response is None or not envelope.response.items:
             return None
 
-        return envelope.response.items[0]
+        # Закреплённый пост VK ставит первым, даже если он старше остальных.
+        return max(envelope.response.items, key=lambda post: post.date)
 
     @staticmethod
     def _group_parameter(group: str) -> dict[str, str | int]:
