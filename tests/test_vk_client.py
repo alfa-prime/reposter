@@ -7,8 +7,14 @@ from news_reposter.integrations.vk import VKAPIError, VKClient
 
 
 def test_get_latest_post() -> None:
+    """Проверяет разбор успешного ответа wall.get."""
+
     async def scenario() -> None:
+        """Выполняет асинхронную часть проверки."""
+
         def handler(request: httpx.Request) -> httpx.Response:
+            """Проверяет запрос и возвращает тестовый ответ VK."""
+
             assert request.url.path.endswith("/wall.get")
             assert request.url.params["domain"] == "news_murmansk"
             assert request.url.params["count"] == "1"
@@ -46,8 +52,14 @@ def test_get_latest_post() -> None:
 
 
 def test_vk_api_error() -> None:
+    """Проверяет преобразование ошибки VK в исключение клиента."""
+
     async def scenario() -> None:
+        """Выполняет асинхронную часть проверки."""
+
         def handler(request: httpx.Request) -> httpx.Response:
+            """Возвращает ошибку VK с успешным HTTP-статусом."""
+
             return httpx.Response(
                 200,
                 json={"error": {"error_code": 5, "error_msg": "User authorization failed"}},
@@ -72,8 +84,11 @@ def test_vk_api_error() -> None:
         ("public123", {"owner_id": -123}),
         ("-123", {"owner_id": -123}),
         ("https://vk.com/news_murmansk", {"domain": "news_murmansk"}),
+        ("https://vk.ru/peninsula51", {"domain": "peninsula51"}),
+        ("https://m.vk.ru/peninsula51/", {"domain": "peninsula51"}),
     ],
 )
 def test_group_parameter(group: str, expected: dict[str, str | int]) -> None:
-    assert VKClient._group_parameter(group) == expected
+    """Проверяет разные варианты адреса и идентификатора группы."""
 
+    assert VKClient._group_parameter(group) == expected
