@@ -18,6 +18,11 @@ class Settings(BaseSettings):
     vk_api_version: str = "5.199"
     vk_api_url: str = "https://api.vk.com/method"
 
+    max_access_token: str | None = None
+    max_chat_id: int | None = None
+    max_api_url: str = "https://platform-api2.max.ru"
+    max_ca_file: str | None = None
+
 
 @lru_cache
 def get_settings() -> Settings:
