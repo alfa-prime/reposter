@@ -7,6 +7,7 @@
 __pycache__
 *.py[cod]
 *.log
+certs/*.pem
 tests
 docker-compose.yml
 compose.override.yaml

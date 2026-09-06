@@ -34,7 +34,15 @@ DATABASE_ECHO=false
 
 API MAX использует сертификат Минцифры. На сервере должны быть установлены
 `Russian Trusted Root CA` и `Russian Trusted Sub CA`. Если сертификаты нельзя
-добавить в системное хранилище, укажите путь к PEM-файлу в `MAX_CA_FILE`.
+добавить в системное хранилище, сохраните объединённый PEM-файл в каталоге
+`certs`, например `certs/russian-trusted-ca.pem`, и укажите путь внутри
+контейнера:
+
+```dotenv
+MAX_CA_FILE=/app/certs/russian-trusted-ca.pem
+```
+
+Файлы `*.pem` из этого каталога исключены из Git и контекста сборки Docker.
 
 ## Запуск в Docker
 

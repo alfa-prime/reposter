@@ -45,6 +45,8 @@ services:
       POSTGRES_PORT: 5432
     ports:
       - "${APP_PORT:-8000}:8000"
+    volumes:
+      - ./certs:/app/certs:ro
     depends_on:
       postgres:
         condition: service_healthy
