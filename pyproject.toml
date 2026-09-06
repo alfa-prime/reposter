@@ -5,9 +5,12 @@ description = "VK to MAX news reposter"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "alembic>=1.16.5",
+    "asyncpg>=0.30.0",
     "fastapi>=0.116.1",
     "httpx>=0.28.1",
     "pydantic-settings>=2.10.1",
+    "sqlalchemy[asyncio]>=2.0.43",
     "uvicorn[standard]>=0.35.0",
 ]
 
@@ -26,4 +29,3 @@ packages = ["src/news_reposter"]
 [tool.pytest.ini_options]
 pythonpath = ["src"]
 testpaths = ["tests"]
-
