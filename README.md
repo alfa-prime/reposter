@@ -34,30 +34,56 @@ DATABASE_ECHO=false
 
 API MAX использует сертификат Минцифры. На сервере должны быть установлены
 `Russian Trusted Root CA` и `Russian Trusted Sub CA`. Если сертификаты нельзя
-добавить в системное хранилище, укажите путь к PEM-файлу в `MAX_CA_FILE`.
+добавить в системное хранилище, сохраните объединённый PEM-файл в каталоге
+`certs`, например `certs/russian-trusted-ca.pem`, и укажите путь внутри
+контейнера:
 
-## PostgreSQL
+```dotenv
+MAX_CA_FILE=/app/certs/russian-trusted-ca.pem
+```
 
-Запустите базу данных:
+Файлы `*.pem` из этого каталога исключены из Git и контекста сборки Docker.
+
+## Запуск в Docker
+
+Для локальной разработки запустите весь проект одной командой:
 
 ```bash
-docker compose up -d postgres
+docker compose up -d --build
 docker compose ps
+```
+
+Docker Compose автоматически объединяет `compose.yaml` и
+`compose.override.yaml`. В режиме разработки исходный код подключается в
+контейнер, а Uvicorn запускается с автоматической перезагрузкой.
+
+Перед запуском приложения отдельный контейнер `migrate` ожидает готовности
+PostgreSQL и применяет миграции Alembic. Приложение внутри Docker подключается к
+базе по имени сервиса `postgres` и внутреннему порту `5432`.
+
+Логи приложения:
+
+```bash
+docker compose logs -f app
+```
+
+Остановка контейнеров без удаления данных:
+
+```bash
+docker compose down
+```
+
+Для запуска без настроек разработки используйте только базовый файл:
+
+```bash
+docker compose -f compose.yaml up -d --build
 ```
 
 Приложение использует асинхронный драйвер `asyncpg`, асинхронные сессии
 SQLAlchemy и асинхронное окружение Alembic. Строка подключения собирается в
-`config.py` из отдельных параметров `POSTGRES_*`. При запуске приложения на
-хосте используйте `POSTGRES_HOST=localhost`; внутри Docker-сети —
-`POSTGRES_HOST=postgres`.
+`config.py` из отдельных параметров `POSTGRES_*`.
 
-Проверка подключения и применение миграций:
-
-```bash
-uv run alembic upgrade head
-```
-
-После запуска приложения связь с базой можно проверить через HTTP:
+Связь приложения с базой можно проверить через HTTP:
 
 ```bash
 curl http://127.0.0.1:8000/health/database
