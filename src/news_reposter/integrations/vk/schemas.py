@@ -9,14 +9,23 @@ class VKPost(BaseModel):
 
     model_config = ConfigDict(extra="allow")
 
-    id: int
-    owner_id: int
-    from_id: int | None = None
-    date: int
-    text: str = ""
-    post_type: str | None = None
-    attachments: list[dict[str, Any]] = Field(default_factory=list)
-    is_pinned: int | None = None
+    id: int = Field(description="Идентификатор поста в VK")
+    owner_id: int = Field(description="Идентификатор владельца стены VK")
+    from_id: int | None = Field(
+        default=None,
+        description="Идентификатор автора поста",
+    )
+    date: int = Field(description="Время публикации в формате Unix timestamp")
+    text: str = Field(default="", description="Текст исходного поста")
+    post_type: str | None = Field(default=None, description="Тип записи VK")
+    attachments: list[dict[str, Any]] = Field(
+        default_factory=list,
+        description="Исходные вложения поста из ответа VK API",
+    )
+    is_pinned: int | None = Field(
+        default=None,
+        description="Признак закреплённого поста",
+    )
 
     @computed_field
     @property

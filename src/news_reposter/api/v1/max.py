@@ -5,15 +5,35 @@ from fastapi import APIRouter, HTTPException, Query, status
 from news_reposter.config import get_settings
 from news_reposter.integrations.max import MAXAPIError, MAXClient
 from news_reposter.integrations.vk import VKAPIError, VKClient
+from news_reposter.schemas import MAXPublishResponse
 
 router = APIRouter(prefix="/max", tags=["MAX"])
 
 
-@router.post("/posts/from-vk/latest")
+@router.post(
+    "/posts/from-vk/latest",
+    response_model=MAXPublishResponse,
+    summary="Опубликовать последний пост VK в MAX",
+    description=(
+        "Получает последний обычный пост выбранной группы VK и сразу отправляет "
+        "его текст и фотографии в канал MAX, настроенный через `.env`."
+    ),
+    response_description="Результат публикации, ссылка на источник и число фотографий",
+    responses={
+        404: {"description": "В группе VK нет постов"},
+        422: {"description": "Неверная группа или содержимое поста"},
+        502: {"description": "Ошибка VK API или MAX API"},
+        503: {"description": "Не настроены обязательные параметры интеграций"},
+    },
+)
 async def publish_latest_vk_post(
     group: str | None = Query(
         default=None,
-        description="Ссылка, короткое имя или ID группы; по умолчанию VK_GROUP",
+        description=(
+            "Группа VK для разовой публикации. Если параметр не передан, "
+            "используется `VK_GROUP` из `.env`."
+        ),
+        examples=["https://vk.ru/peninsula51", "peninsula51"],
     ),
 ) -> dict[str, Any]:
     """Публикует в MAX последний обычный пост выбранной группы VK."""

@@ -13,6 +13,29 @@ from news_reposter.db.session import close_database
 
 settings = get_settings()
 
+OPENAPI_TAGS = [
+    {
+        "name": "Система",
+        "description": "Проверка работы приложения и подключения к PostgreSQL.",
+    },
+    {
+        "name": "Источники",
+        "description": "Управление площадками, из которых приложение получает посты.",
+    },
+    {
+        "name": "Цели публикаций",
+        "description": "Управление каналами и чатами для публикации готовых постов.",
+    },
+    {
+        "name": "VK",
+        "description": "Получение исходных публикаций через API ВКонтакте.",
+    },
+    {
+        "name": "MAX",
+        "description": "Отправка текста и фотографий в канал MAX.",
+    },
+]
+
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
@@ -27,7 +50,11 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
 app = FastAPI(
     title=settings.app_name,
     version="0.1.0",
-    description="Получение новостей из VK и публикация в MAX",
+    description=(
+        "Получает публикации из внешних источников, хранит очередь обработки "
+        "и отправляет подготовленные посты в настроенные каналы."
+    ),
+    openapi_tags=OPENAPI_TAGS,
     lifespan=lifespan,
 )
 
