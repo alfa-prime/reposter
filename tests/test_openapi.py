@@ -76,5 +76,7 @@ def test_openapi_describes_api_key_security() -> None:
         for operation in path_item.values():
             if path.startswith("/api/v1/"):
                 assert operation["security"] == [{"APIKeyHeader": []}]
+                assert "401" in operation["responses"]
+                assert "503" in operation["responses"]
             elif path.startswith("/health"):
                 assert "security" not in operation

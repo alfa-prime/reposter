@@ -15,6 +15,7 @@ api_key_header = APIKeyHeader(
 
 API_KEY_RESPONSES = {
     401: {"description": "Неверный или отсутствующий API-ключ"},
+    503: {"description": "API-ключ не настроен на сервере"},
 }
 
 
