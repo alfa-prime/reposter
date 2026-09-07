@@ -7,10 +7,29 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 class SourceBase(BaseModel):
     """Общие поля источника."""
 
-    name: str = Field(min_length=1, max_length=200)
-    platform: str = Field(min_length=2, max_length=32, pattern=r"^[a-z][a-z0-9_-]+$")
-    url: str = Field(min_length=1, max_length=2048)
-    is_active: bool = True
+    name: str = Field(
+        min_length=1,
+        max_length=200,
+        description="Понятное название источника",
+        examples=["Полуостров 51"],
+    )
+    platform: str = Field(
+        min_length=2,
+        max_length=32,
+        pattern=r"^[a-z][a-z0-9_-]+$",
+        description="Код платформы в нижнем регистре",
+        examples=["vk"],
+    )
+    url: str = Field(
+        min_length=1,
+        max_length=2048,
+        description="Полная ссылка на источник публикаций",
+        examples=["https://vk.ru/peninsula51"],
+    )
+    is_active: bool = Field(
+        default=True,
+        description="Нужно ли получать новые посты из этого источника",
+    )
 
     @field_validator("name", "url", mode="before")
     @classmethod
@@ -40,19 +59,44 @@ class SourceBase(BaseModel):
 class SourceCreate(SourceBase):
     """Данные для создания источника."""
 
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "name": "Полуостров 51",
+                "platform": "vk",
+                "url": "https://vk.ru/peninsula51",
+                "is_active": True,
+            }
+        }
+    )
+
 
 class SourceUpdate(BaseModel):
     """Поля источника, которые можно изменить."""
 
-    name: str | None = Field(default=None, min_length=1, max_length=200)
+    name: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=200,
+        description="Новое название источника",
+    )
     platform: str | None = Field(
         default=None,
         min_length=2,
         max_length=32,
         pattern=r"^[a-z][a-z0-9_-]+$",
+        description="Новый код платформы",
     )
-    url: str | None = Field(default=None, min_length=1, max_length=2048)
-    is_active: bool | None = None
+    url: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=2048,
+        description="Новая полная ссылка на источник",
+    )
+    is_active: bool | None = Field(
+        default=None,
+        description="Включить или приостановить получение постов",
+    )
 
     @field_validator("name", "url", mode="before")
     @classmethod
@@ -96,6 +140,6 @@ class SourceRead(SourceBase):
 
     model_config = ConfigDict(from_attributes=True)
 
-    source_id: int
-    created_at: datetime
-    updated_at: datetime
+    source_id: int = Field(description="Идентификатор источника в нашей базе")
+    created_at: datetime = Field(description="Дата и время создания записи")
+    updated_at: datetime = Field(description="Дата и время последнего изменения")

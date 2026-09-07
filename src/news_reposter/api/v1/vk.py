@@ -6,11 +6,30 @@ from news_reposter.integrations.vk import VKAPIError, VKClient, VKPost
 router = APIRouter(prefix="/vk", tags=["VK"])
 
 
-@router.get("/posts/latest", response_model=VKPost)
+@router.get(
+    "/posts/latest",
+    response_model=VKPost,
+    summary="Получить последний пост VK",
+    description=(
+        "Возвращает последний обычный пост выбранной группы. Если первой записью "
+        "идёт закреплённый пост, получает следующую запись стены."
+    ),
+    response_description="Последний обычный пост группы VK",
+    responses={
+        404: {"description": "В группе нет постов"},
+        422: {"description": "Группа не указана или имеет неверный формат"},
+        502: {"description": "VK API вернул ошибку"},
+        503: {"description": "Не настроен токен VK"},
+    },
+)
 async def get_latest_vk_post(
     group: str | None = Query(
         default=None,
-        description="Ссылка, короткое имя или ID группы; по умолчанию VK_GROUP",
+        description=(
+            "Ссылка `vk.ru` или `vk.com`, короткое имя, `club123` или числовой "
+            "ID группы. Если параметр не передан, используется `VK_GROUP` из `.env`."
+        ),
+        examples=["https://vk.ru/peninsula51", "peninsula51", "club185052131"],
     ),
 ) -> VKPost:
     """Возвращает последний пост указанной или настроенной группы VK."""

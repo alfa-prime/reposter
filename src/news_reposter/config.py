@@ -13,7 +13,7 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    app_name: str = "News Reposter"
+    app_name: str = "Сервис публикации новостей"
     vk_access_token: str | None = None
     vk_group: str | None = None
     vk_api_version: str = "5.199"

@@ -7,11 +7,35 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 class TargetBase(BaseModel):
     """Общие поля цели публикации."""
 
-    name: str = Field(min_length=1, max_length=200)
-    platform: str = Field(min_length=2, max_length=32, pattern=r"^[a-z][a-z0-9_-]+$")
-    external_id: str = Field(min_length=1, max_length=255)
-    url: str | None = Field(default=None, max_length=2048)
-    is_active: bool = True
+    name: str = Field(
+        min_length=1,
+        max_length=200,
+        description="Понятное название канала или чата",
+        examples=["Новости 51 региона"],
+    )
+    platform: str = Field(
+        min_length=2,
+        max_length=32,
+        pattern=r"^[a-z][a-z0-9_-]+$",
+        description="Код платформы в нижнем регистре",
+        examples=["max"],
+    )
+    external_id: str = Field(
+        min_length=1,
+        max_length=255,
+        description="Идентификатор канала или чата во внешней платформе",
+        examples=["-77162942582085"],
+    )
+    url: str | None = Field(
+        default=None,
+        max_length=2048,
+        description="Необязательная ссылка на канал или чат",
+        examples=["https://max.ru/channel_51_news"],
+    )
+    is_active: bool = Field(
+        default=True,
+        description="Можно ли публиковать посты в эту цель",
+    )
 
     @field_validator("name", "external_id", mode="before")
     @classmethod
@@ -46,20 +70,50 @@ class TargetBase(BaseModel):
 class TargetCreate(TargetBase):
     """Данные для создания цели публикации."""
 
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "name": "Новости 51 региона",
+                "platform": "max",
+                "external_id": "-77162942582085",
+                "url": "https://max.ru/channel_51_news",
+                "is_active": True,
+            }
+        }
+    )
+
 
 class TargetUpdate(BaseModel):
     """Поля цели публикации, которые можно изменить."""
 
-    name: str | None = Field(default=None, min_length=1, max_length=200)
+    name: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=200,
+        description="Новое название цели",
+    )
     platform: str | None = Field(
         default=None,
         min_length=2,
         max_length=32,
         pattern=r"^[a-z][a-z0-9_-]+$",
+        description="Новый код платформы",
     )
-    external_id: str | None = Field(default=None, min_length=1, max_length=255)
-    url: str | None = Field(default=None, max_length=2048)
-    is_active: bool | None = None
+    external_id: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=255,
+        description="Новый ID канала или чата во внешней платформе",
+    )
+    url: str | None = Field(
+        default=None,
+        max_length=2048,
+        description="Новая ссылка; значение null удаляет текущую ссылку",
+    )
+    is_active: bool | None = Field(
+        default=None,
+        description="Включить или приостановить публикацию",
+    )
 
     @field_validator("name", "external_id", mode="before")
     @classmethod
@@ -107,6 +161,6 @@ class TargetRead(TargetBase):
 
     model_config = ConfigDict(from_attributes=True)
 
-    target_id: int
-    created_at: datetime
-    updated_at: datetime
+    target_id: int = Field(description="Идентификатор цели в нашей базе")
+    created_at: datetime = Field(description="Дата и время создания записи")
+    updated_at: datetime = Field(description="Дата и время последнего изменения")
