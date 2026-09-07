@@ -41,7 +41,9 @@ class SourceRepository:
     ) -> list[Source]:
         """Возвращает источники с фильтрацией и пагинацией."""
 
-        statement = select(Source).order_by(Source.id).offset(offset).limit(limit)
+        statement = (
+            select(Source).order_by(Source.source_id).offset(offset).limit(limit)
+        )
         if platform is not None:
             statement = statement.where(Source.platform == platform)
         if is_active is not None:

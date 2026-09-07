@@ -34,12 +34,12 @@ class MemorySourceRepository:
             raise SourceAlreadyExistsError
         now = datetime.now(UTC)
         source = SimpleNamespace(
-            id=self.next_id,
+            source_id=self.next_id,
             created_at=now,
             updated_at=now,
             **data.model_dump(),
         )
-        self.records[source.id] = source
+        self.records[source.source_id] = source
         type(self).next_id += 1
         return source
 
@@ -75,7 +75,7 @@ class MemorySourceRepository:
         changes = data.model_dump(exclude_unset=True)
         new_url = changes.get("url")
         if new_url is not None and any(
-            item.id != source.id and item.url == new_url
+            item.source_id != source.source_id and item.url == new_url
             for item in self.records.values()
         ):
             raise SourceAlreadyExistsError
@@ -87,7 +87,7 @@ class MemorySourceRepository:
     async def delete(self, source: SimpleNamespace) -> None:
         """Удаляет тестовый источник."""
 
-        self.records.pop(source.id)
+        self.records.pop(source.source_id)
 
 
 @pytest.fixture
@@ -119,7 +119,7 @@ def test_sources_crud(memory_repository: None) -> None:
             )
             assert created.status_code == 201
             source = created.json()
-            assert source["id"] == 1
+            assert source["source_id"] == 1
             assert source["name"] == "Полуостров 51"
             assert source["platform"] == "vk"
             assert source["is_active"] is True
