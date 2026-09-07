@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     )
 
     app_name: str = "Сервис публикации новостей"
+    api_key: str | None = None
     vk_access_token: str | None = None
     vk_group: str | None = None
     vk_api_version: str = "5.199"

@@ -1,9 +1,10 @@
 from fastapi import APIRouter, HTTPException, Query, status
 
+from news_reposter.api.dependencies import API_KEY_RESPONSES, ApiKeyDep
 from news_reposter.config import get_settings
 from news_reposter.integrations.vk import VKAPIError, VKClient, VKPost
 
-router = APIRouter(prefix="/vk", tags=["VK"])
+router = APIRouter(prefix="/vk", tags=["VK"], responses=API_KEY_RESPONSES)
 
 
 @router.get(
@@ -23,6 +24,7 @@ router = APIRouter(prefix="/vk", tags=["VK"])
     },
 )
 async def get_latest_vk_post(
+    _api_key: ApiKeyDep,
     group: str | None = Query(
         default=None,
         description=(

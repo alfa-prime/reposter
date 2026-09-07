@@ -1,4 +1,5 @@
 import asyncio
+from collections.abc import Iterator
 from datetime import UTC, datetime
 from types import SimpleNamespace
 
@@ -6,6 +7,7 @@ import httpx
 import pytest
 
 import news_reposter.api.v1.targets as targets_api
+from news_reposter.api.dependencies import require_api_key
 from news_reposter.main import app
 from news_reposter.repositories import TargetAlreadyExistsError
 from news_reposter.schemas import TargetCreate, TargetUpdate
@@ -97,11 +99,19 @@ class MemoryTargetRepository:
 
 
 @pytest.fixture
-def memory_target_repository(monkeypatch: pytest.MonkeyPatch) -> None:
+def memory_target_repository(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     """Подменяет репозиторий целей хранилищем в памяти."""
+
+    async def allow_api_key() -> None:
+        """Разрешает тестовые запросы без настоящего ключа."""
 
     MemoryTargetRepository.reset()
     monkeypatch.setattr(targets_api, "TargetRepository", MemoryTargetRepository)
+    app.dependency_overrides[require_api_key] = allow_api_key
+    try:
+        yield
+    finally:
+        app.dependency_overrides.pop(require_api_key, None)
 
 
 def test_targets_crud(memory_target_repository: None) -> None:

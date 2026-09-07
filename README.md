@@ -13,6 +13,8 @@ cp .env.example .env
 Заполните `.env`:
 
 ```dotenv
+API_KEY=сгенерированный_ключ_доступа
+
 VK_ACCESS_TOKEN=ваш_сервисный_ключ
 VK_GROUP=https://vk.ru/peninsula51
 VK_API_VERSION=5.199
@@ -43,6 +45,26 @@ MAX_CA_FILE=/app/certs/russian-trusted-ca.pem
 ```
 
 Файлы `*.pem` из этого каталога исключены из Git и контекста сборки Docker.
+
+## Доступ к API
+
+Все прикладные маршруты `/api/v1/*` защищены API-ключом. Сгенерировать ключ
+можно локально:
+
+```bash
+python -c "import secrets; print(secrets.token_urlsafe(32))"
+```
+
+Полученное значение сохраните в `API_KEY` файла `.env` и передавайте в
+заголовке `X-API-Key`:
+
+```bash
+curl -H 'X-API-Key: ваш_ключ' http://127.0.0.1:8000/api/v1/sources
+```
+
+В Swagger UI откройте <http://127.0.0.1:8000/docs>, нажмите `Authorize` и
+введите сам ключ без префиксов. Маршруты `/health` и `/health/database`
+остаются доступными без ключа для проверок состояния приложения и Docker.
 
 ## Запуск в Docker
 
@@ -105,6 +127,7 @@ curl http://127.0.0.1:8000/health/database
 
 ```bash
 curl -X POST http://127.0.0.1:8000/api/v1/sources \
+  -H 'X-API-Key: ваш_ключ' \
   -H 'Content-Type: application/json' \
   -d '{"name":"Полуостров 51","platform":"vk","url":"https://vk.ru/peninsula51"}'
 ```
@@ -112,7 +135,7 @@ curl -X POST http://127.0.0.1:8000/api/v1/sources \
 Получение списка:
 
 ```bash
-curl http://127.0.0.1:8000/api/v1/sources
+curl -H 'X-API-Key: ваш_ключ' http://127.0.0.1:8000/api/v1/sources
 ```
 
 Список поддерживает параметры `platform`, `is_active`, `offset` и `limit`.
@@ -126,6 +149,7 @@ curl http://127.0.0.1:8000/api/v1/sources
 
 ```bash
 curl -X POST http://127.0.0.1:8000/api/v1/targets \
+  -H 'X-API-Key: ваш_ключ' \
   -H 'Content-Type: application/json' \
   -d '{"name":"Новости 51 региона","platform":"max","external_id":"-77162942582085","url":"https://max.ru/channel_51_news"}'
 ```
@@ -133,7 +157,7 @@ curl -X POST http://127.0.0.1:8000/api/v1/targets \
 Получение списка:
 
 ```bash
-curl http://127.0.0.1:8000/api/v1/targets
+curl -H 'X-API-Key: ваш_ключ' http://127.0.0.1:8000/api/v1/targets
 ```
 
 Список поддерживает параметры `platform`, `is_active`, `offset` и `limit`.
@@ -178,19 +202,23 @@ curl http://127.0.0.1:8000/health
 Получение последнего поста VK без публикации:
 
 ```bash
-curl http://127.0.0.1:8000/api/v1/vk/posts/latest
+curl -H 'X-API-Key: ваш_ключ' \
+  http://127.0.0.1:8000/api/v1/vk/posts/latest
 ```
 
 Публикация последнего поста VK в настроенный канал MAX:
 
 ```bash
-curl -X POST http://127.0.0.1:8000/api/v1/max/posts/from-vk/latest
+curl -X POST \
+  -H 'X-API-Key: ваш_ключ' \
+  http://127.0.0.1:8000/api/v1/max/posts/from-vk/latest
 ```
 
 Другую публичную группу можно передать в параметре `group`:
 
 ```bash
 curl -X POST \
+  -H 'X-API-Key: ваш_ключ' \
   'http://127.0.0.1:8000/api/v1/max/posts/from-vk/latest?group=https://vk.ru/another_group'
 ```
 
