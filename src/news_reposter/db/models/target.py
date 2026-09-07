@@ -1,9 +1,13 @@
 from datetime import datetime
+from typing import TYPE_CHECKING
 
 from sqlalchemy import Boolean, DateTime, Index, String, UniqueConstraint, func, true
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from news_reposter.db.base import Base
+
+if TYPE_CHECKING:
+    from news_reposter.db.models.publication import Publication
 
 
 class Target(Base):
@@ -40,4 +44,9 @@ class Target(Base):
         nullable=False,
         server_default=func.now(),
         onupdate=func.now(),
+    )
+
+    publications: Mapped[list["Publication"]] = relationship(
+        back_populates="target",
+        passive_deletes=True,
     )
