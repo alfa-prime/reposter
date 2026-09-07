@@ -3,11 +3,16 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from news_reposter.api.dependencies import API_KEY_RESPONSES, ApiKeyDep
 from news_reposter.db.session import get_db_session
 from news_reposter.repositories import SourceAlreadyExistsError, SourceRepository
 from news_reposter.schemas import SourceCreate, SourceRead, SourceUpdate
 
-router = APIRouter(prefix="/sources", tags=["Источники"])
+router = APIRouter(
+    prefix="/sources",
+    tags=["Источники"],
+    responses=API_KEY_RESPONSES,
+)
 Session = Annotated[AsyncSession, Depends(get_db_session)]
 
 
@@ -44,7 +49,11 @@ def duplicate_error() -> HTTPException:
         422: {"description": "Переданы некорректные данные"},
     },
 )
-async def create_source(data: SourceCreate, session: Session) -> SourceRead:
+async def create_source(
+    data: SourceCreate,
+    session: Session,
+    _api_key: ApiKeyDep,
+) -> SourceRead:
     """Добавляет новый источник публикаций."""
 
     repository = SourceRepository(session)
@@ -67,6 +76,7 @@ async def create_source(data: SourceCreate, session: Session) -> SourceRead:
 )
 async def list_sources(
     session: Session,
+    _api_key: ApiKeyDep,
     offset: Annotated[
         int,
         Query(ge=0, description="Сколько записей пропустить от начала списка"),
@@ -114,6 +124,7 @@ async def get_source(
         Path(gt=0, description="Идентификатор источника в нашей базе"),
     ],
     session: Session,
+    _api_key: ApiKeyDep,
 ) -> SourceRead:
     """Возвращает один источник по идентификатору."""
 
@@ -145,6 +156,7 @@ async def update_source(
     ],
     data: SourceUpdate,
     session: Session,
+    _api_key: ApiKeyDep,
 ) -> SourceRead:
     """Частично изменяет источник."""
 
@@ -176,6 +188,7 @@ async def delete_source(
         Path(gt=0, description="Идентификатор источника в нашей базе"),
     ],
     session: Session,
+    _api_key: ApiKeyDep,
 ) -> Response:
     """Удаляет источник."""
 

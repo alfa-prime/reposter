@@ -60,3 +60,21 @@ def test_openapi_models_have_field_descriptions() -> None:
             property_schema.get("description")
             for property_schema in properties.values()
         )
+
+
+def test_openapi_describes_api_key_security() -> None:
+    """Проверяет схему ключа и защиту всех рабочих эндпоинтов."""
+
+    schema = app.openapi()
+    security_scheme = schema["components"]["securitySchemes"]["APIKeyHeader"]
+
+    assert security_scheme["type"] == "apiKey"
+    assert security_scheme["in"] == "header"
+    assert security_scheme["name"] == "X-API-Key"
+
+    for path, path_item in schema["paths"].items():
+        for operation in path_item.values():
+            if path.startswith("/api/v1/"):
+                assert operation["security"] == [{"APIKeyHeader": []}]
+            elif path.startswith("/health"):
+                assert "security" not in operation

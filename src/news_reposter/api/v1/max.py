@@ -2,12 +2,13 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query, status
 
+from news_reposter.api.dependencies import API_KEY_RESPONSES, ApiKeyDep
 from news_reposter.config import get_settings
 from news_reposter.integrations.max import MAXAPIError, MAXClient
 from news_reposter.integrations.vk import VKAPIError, VKClient
 from news_reposter.schemas import MAXPublishResponse
 
-router = APIRouter(prefix="/max", tags=["MAX"])
+router = APIRouter(prefix="/max", tags=["MAX"], responses=API_KEY_RESPONSES)
 
 
 @router.post(
@@ -27,6 +28,7 @@ router = APIRouter(prefix="/max", tags=["MAX"])
     },
 )
 async def publish_latest_vk_post(
+    _api_key: ApiKeyDep,
     group: str | None = Query(
         default=None,
         description=(

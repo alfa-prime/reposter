@@ -3,11 +3,16 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from news_reposter.api.dependencies import API_KEY_RESPONSES, ApiKeyDep
 from news_reposter.db.session import get_db_session
 from news_reposter.repositories import TargetAlreadyExistsError, TargetRepository
 from news_reposter.schemas import TargetCreate, TargetRead, TargetUpdate
 
-router = APIRouter(prefix="/targets", tags=["Цели публикаций"])
+router = APIRouter(
+    prefix="/targets",
+    tags=["Цели публикаций"],
+    responses=API_KEY_RESPONSES,
+)
 Session = Annotated[AsyncSession, Depends(get_db_session)]
 
 
@@ -44,7 +49,11 @@ def duplicate_error() -> HTTPException:
         422: {"description": "Переданы некорректные данные"},
     },
 )
-async def create_target(data: TargetCreate, session: Session) -> TargetRead:
+async def create_target(
+    data: TargetCreate,
+    session: Session,
+    _api_key: ApiKeyDep,
+) -> TargetRead:
     """Добавляет новую цель публикации."""
 
     repository = TargetRepository(session)
@@ -67,6 +76,7 @@ async def create_target(data: TargetCreate, session: Session) -> TargetRead:
 )
 async def list_targets(
     session: Session,
+    _api_key: ApiKeyDep,
     offset: Annotated[
         int,
         Query(ge=0, description="Сколько записей пропустить от начала списка"),
@@ -114,6 +124,7 @@ async def get_target(
         Path(gt=0, description="Идентификатор цели в нашей базе"),
     ],
     session: Session,
+    _api_key: ApiKeyDep,
 ) -> TargetRead:
     """Возвращает одну цель публикации по идентификатору."""
 
@@ -145,6 +156,7 @@ async def update_target(
     ],
     data: TargetUpdate,
     session: Session,
+    _api_key: ApiKeyDep,
 ) -> TargetRead:
     """Частично изменяет цель публикации."""
 
@@ -176,6 +188,7 @@ async def delete_target(
         Path(gt=0, description="Идентификатор цели в нашей базе"),
     ],
     session: Session,
+    _api_key: ApiKeyDep,
 ) -> Response:
     """Удаляет цель публикации."""
 

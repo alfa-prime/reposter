@@ -1,4 +1,5 @@
 import asyncio
+from collections.abc import Iterator
 from datetime import UTC, datetime
 from types import SimpleNamespace
 
@@ -6,6 +7,7 @@ import httpx
 import pytest
 
 import news_reposter.api.v1.sources as sources_api
+from news_reposter.api.dependencies import require_api_key
 from news_reposter.main import app
 from news_reposter.repositories import SourceAlreadyExistsError
 from news_reposter.schemas import SourceCreate, SourceUpdate
@@ -91,11 +93,19 @@ class MemorySourceRepository:
 
 
 @pytest.fixture
-def memory_repository(monkeypatch: pytest.MonkeyPatch) -> None:
+def memory_repository(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     """Подменяет репозиторий API хранилищем в памяти."""
+
+    async def allow_api_key() -> None:
+        """Разрешает тестовые запросы без настоящего ключа."""
 
     MemorySourceRepository.reset()
     monkeypatch.setattr(sources_api, "SourceRepository", MemorySourceRepository)
+    app.dependency_overrides[require_api_key] = allow_api_key
+    try:
+        yield
+    finally:
+        app.dependency_overrides.pop(require_api_key, None)
 
 
 def test_sources_crud(memory_repository: None) -> None:
