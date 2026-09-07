@@ -119,6 +119,27 @@ curl http://127.0.0.1:8000/api/v1/sources
 Получение, частичное изменение и удаление одной записи выполняются по адресу
 `/api/v1/sources/{source_id}` методами `GET`, `PATCH` и `DELETE`.
 
+## Цели публикаций
+
+Цель хранит платформу и внешний идентификатор канала. Для MAX это значение
+`MAX_CHAT_ID`; токен бота остаётся в `.env` и в базу не записывается.
+
+```bash
+curl -X POST http://127.0.0.1:8000/api/v1/targets \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"Новости 51 региона","platform":"max","external_id":"-77162942582085","url":"https://max.ru/channel_51_news"}'
+```
+
+Получение списка:
+
+```bash
+curl http://127.0.0.1:8000/api/v1/targets
+```
+
+Список поддерживает параметры `platform`, `is_active`, `offset` и `limit`.
+Получение, частичное изменение и удаление одной цели выполняются по адресу
+`/api/v1/targets/{target_id}` методами `GET`, `PATCH` и `DELETE`.
+
 ## Запуск
 
 ```bash

@@ -73,7 +73,7 @@ def test_repository_filters_sources() -> None:
         result = Mock()
         result.all.return_value = [
             Source(
-                id=2,
+                source_id=2,
                 name="Лента",
                 platform="rss",
                 url="https://example.com/feed",
@@ -108,7 +108,7 @@ def test_repository_updates_and_deletes_source() -> None:
         session = AsyncMock(spec=AsyncSession)
         repository = SourceRepository(session)
         source = Source(
-            id=1,
+            source_id=1,
             name="Старое название",
             platform="vk",
             url="https://vk.ru/source",

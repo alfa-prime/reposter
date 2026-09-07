@@ -9,7 +9,7 @@ def test_source_table_structure() -> None:
     table = Source.__table__
 
     assert table.name == "sources"
-    assert table.c.id.primary_key is True
+    assert table.c.source_id.primary_key is True
     assert isinstance(table.c.name.type, String)
     assert table.c.name.type.length == 200
     assert table.c.platform.type.length == 32
