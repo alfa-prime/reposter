@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import create_async_engine
 
 from news_reposter.config import get_settings
 from news_reposter.db.base import Base
+import news_reposter.db.models  # Регистрирует ORM-модели в metadata Alembic.
 
 config = context.config
 
