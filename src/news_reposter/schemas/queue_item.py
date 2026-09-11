@@ -82,3 +82,15 @@ class QueueItemRead(BaseModel):
         default_factory=list,
         description="Фотографии исходного поста в исходном порядке",
     )
+    target_name: str | None = Field(
+        default=None,
+        description="Название целевого канала",
+    )
+    target_platform: str | None = Field(
+        default=None,
+        description="Платформа целевого канала",
+    )
+    target_url: str | None = Field(
+        default=None,
+        description="Ссылка на целевой канал",
+    )
