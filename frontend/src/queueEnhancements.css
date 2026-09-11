@@ -87,28 +87,35 @@
   inset: 0;
   z-index: 100;
   display: grid;
-  grid-template-columns: minmax(48px, 90px) minmax(0, 1fr) minmax(48px, 90px);
+  grid-template-columns: minmax(52px, 88px) minmax(0, 1fr) minmax(52px, 88px);
   align-items: center;
-  gap: 12px;
-  padding: 36px 24px 24px;
-  background: rgba(2,6,14,.88);
-  backdrop-filter: blur(10px);
+  gap: 14px;
+  padding: 28px 22px;
+  background: rgba(5,9,16,.94);
+  backdrop-filter: blur(16px);
 }
 
 .media-lightbox figure {
+  grid-column: 2;
   margin: 0;
   min-width: 0;
+  width: 100%;
+  height: calc(100vh - 56px);
   display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  align-items: center;
   justify-items: center;
   gap: 10px;
 }
 
 .media-lightbox figure img {
-  max-width: min(1180px, 100%);
-  max-height: calc(100vh - 90px);
+  width: 100%;
+  height: 100%;
+  max-width: 1280px;
+  max-height: calc(100vh - 92px);
   object-fit: contain;
   border-radius: 12px;
-  box-shadow: 0 22px 90px rgba(0,0,0,.38);
+  box-shadow: 0 24px 100px rgba(0,0,0,.42);
 }
 
 .media-lightbox figcaption {
@@ -121,14 +128,14 @@
 .media-lightbox-nav {
   border: 1px solid rgba(255,255,255,.12);
   color: white;
-  background: rgba(14,23,39,.72);
+  background: rgba(14,23,39,.78);
   backdrop-filter: blur(8px);
 }
 
 .media-lightbox-close {
   position: absolute;
-  right: 22px;
-  top: 18px;
+  right: 18px;
+  top: 16px;
   width: 40px;
   height: 40px;
   border-radius: 12px;
@@ -143,6 +150,9 @@
   border-radius: 13px;
   font-size: 34px;
 }
+
+.media-lightbox-prev { grid-column: 1; }
+.media-lightbox-next { grid-column: 3; }
 
 html[data-theme="light"] .editor-panel:has(.photo-strip) .photo-strip img {
   border-color: rgba(42,58,88,.12);
@@ -190,12 +200,17 @@ html[data-theme="light"] .original-text.is-collapsible.expanded::after {
   }
 
   .media-lightbox {
-    grid-template-columns: 44px minmax(0, 1fr) 44px;
-    padding-inline: 8px;
+    grid-template-columns: 42px minmax(0, 1fr) 42px;
+    gap: 6px;
+    padding: 54px 8px 12px;
+  }
+
+  .media-lightbox figure {
+    height: calc(100vh - 66px);
   }
 
   .media-lightbox-nav {
-    width: 38px;
+    width: 36px;
     height: 48px;
   }
 }
