@@ -46,34 +46,44 @@ def ensure_status(item_status: QueueItemStatus, allowed: set[QueueItemStatus]) -
 
 
 def queue_item_response(item: Any) -> QueueItemRead:
-    """Добавляет к редакционному элементу данные исходного поста и фотографии."""
+    """Добавляет к элементу очереди данные исходного поста, фото и цели."""
 
     base = QueueItemRead.model_validate(item).model_dump()
     post = getattr(item, "post", None)
-    if post is None:
-        return QueueItemRead.model_validate(base)
+    target = getattr(item, "target", None)
 
-    photos = []
-    for attachment in getattr(post, "attachments", []):
-        if attachment.attachment_type != AttachmentType.PHOTO or not attachment.source_url:
-            continue
-        photos.append(
+    if post is not None:
+        photos = []
+        for attachment in getattr(post, "attachments", []):
+            if attachment.attachment_type != AttachmentType.PHOTO or not attachment.source_url:
+                continue
+            photos.append(
+                {
+                    "attachment_id": attachment.attachment_id,
+                    "external_attachment_id": attachment.external_attachment_id,
+                    "source_url": attachment.source_url,
+                    "position": attachment.position,
+                }
+            )
+
+        base.update(
             {
-                "attachment_id": attachment.attachment_id,
-                "external_attachment_id": attachment.external_attachment_id,
-                "source_url": attachment.source_url,
-                "position": attachment.position,
+                "original_text": post.original_text,
+                "source_url": post.source_url,
+                "source_published_at": post.source_published_at,
+                "photos": photos,
             }
         )
 
-    base.update(
-        {
-            "original_text": post.original_text,
-            "source_url": post.source_url,
-            "source_published_at": post.source_published_at,
-            "photos": photos,
-        }
-    )
+    if target is not None:
+        base.update(
+            {
+                "target_name": target.name,
+                "target_platform": target.platform,
+                "target_url": target.url,
+            }
+        )
+
     return QueueItemRead.model_validate(base)
 
 
@@ -116,7 +126,7 @@ async def create_queue_item(
     description=(
         "Возвращает редакционную очередь с фильтрами по целевому каналу, "
         "исходному посту, источнику и статусу. Для каждого элемента возвращает "
-        "исходный текст, ссылку на пост и фотографии."
+        "исходный текст, ссылку на пост, фотографии и данные целевого канала."
     ),
     response_description="Список элементов очереди с исходными постами и фото",
 )
@@ -150,7 +160,7 @@ async def list_queue_items(
     summary="Получить элемент очереди",
     description=(
         "Возвращает один редакционный элемент очереди вместе с исходным текстом, "
-        "ссылкой на VK и фотографиями."
+        "ссылкой на VK, фотографиями и данными целевого канала."
     ),
     responses={404: {"description": "Элемент очереди не найден"}},
 )
@@ -254,6 +264,38 @@ async def reject_queue_item(
         raise not_found_error()
     ensure_status(item.status, {QueueItemStatus.AWAITING_MODERATION})
     item = await repository.set_status(item, QueueItemStatus.REJECTED)
+    return queue_item_response(item)
+
+
+@router.post(
+    "/{queue_item_id}/reopen",
+    response_model=QueueItemRead,
+    summary="Вернуть пост в работу",
+    description=(
+        "Возвращает пост в статус pending для повторного редактирования. "
+        "Можно использовать после модерации, одобрения или планирования."
+    ),
+    responses={404: {"description": "Элемент очереди не найден"}, 409: {"description": "Недопустимый переход статуса"}},
+)
+async def reopen_queue_item(
+    queue_item_id: Annotated[int, Path(gt=0, description="Идентификатор элемента очереди")],
+    session: Session,
+    _api_key: ApiKeyDep,
+) -> QueueItemRead:
+    repository = QueueItemRepository(session)
+    item = await repository.get(queue_item_id)
+    if item is None:
+        raise not_found_error()
+    ensure_status(
+        item.status,
+        {
+            QueueItemStatus.AWAITING_MODERATION,
+            QueueItemStatus.APPROVED,
+            QueueItemStatus.REJECTED,
+            QueueItemStatus.SCHEDULED,
+        },
+    )
+    item = await repository.set_status(item, QueueItemStatus.PENDING)
     return queue_item_response(item)
 
 
