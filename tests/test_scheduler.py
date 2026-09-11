@@ -6,15 +6,15 @@ from news_reposter.services.scheduler import CollectionScheduler
 
 
 def make_scheduler(**overrides: object) -> CollectionScheduler:
-    settings = Settings(
-        _env_file=None,
-        collection_enabled=True,
-        collection_interval_minutes=15,
-        collection_start_hour=8,
-        collection_end_hour=20,
-        collection_timezone="Europe/Moscow",
-        **overrides,
-    )
+    values: dict[str, object] = {
+        "collection_enabled": True,
+        "collection_interval_minutes": 15,
+        "collection_start_hour": 8,
+        "collection_end_hour": 20,
+        "collection_timezone": "Europe/Moscow",
+    }
+    values.update(overrides)
+    settings = Settings(_env_file=None, **values)
     return CollectionScheduler(settings)
 
 
