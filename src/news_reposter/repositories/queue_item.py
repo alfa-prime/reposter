@@ -47,7 +47,10 @@ class QueueItemRepository:
     ) -> list[QueueItem]:
         statement = (
             select(QueueItem)
-            .options(selectinload(QueueItem.post).selectinload(Post.attachments))
+            .options(
+                selectinload(QueueItem.post).selectinload(Post.attachments),
+                selectinload(QueueItem.target),
+            )
             .order_by(QueueItem.queue_item_id)
         )
         if source_id is not None:
@@ -65,7 +68,10 @@ class QueueItemRepository:
     async def get(self, queue_item_id: int) -> QueueItem | None:
         statement = (
             select(QueueItem)
-            .options(selectinload(QueueItem.post).selectinload(Post.attachments))
+            .options(
+                selectinload(QueueItem.post).selectinload(Post.attachments),
+                selectinload(QueueItem.target),
+            )
             .where(QueueItem.queue_item_id == queue_item_id)
         )
         return await self.session.scalar(statement)
