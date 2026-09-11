@@ -5,6 +5,8 @@ import { ThemeToggle } from "./ThemeToggle";
 import "./styles.css";
 import "./ux.css";
 import "./theme.css";
+import "./queueEnhancements.css";
+import "./queueEnhancements";
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
