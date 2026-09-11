@@ -19,18 +19,23 @@ export function ThemeToggle() {
     localStorage.setItem(STORAGE_KEY, theme);
   }, [theme]);
 
-  const nextTheme = theme === "dark" ? "light" : "dark";
+  const isLight = theme === "light";
 
   return (
     <button
-      className="theme-toggle"
+      className="theme-switch"
       type="button"
-      onClick={() => setTheme(nextTheme)}
-      title={nextTheme === "light" ? "Включить светлую тему" : "Включить тёмную тему"}
-      aria-label={nextTheme === "light" ? "Включить светлую тему" : "Включить тёмную тему"}
+      onClick={() => setTheme(isLight ? "dark" : "light")}
+      title={isLight ? "Включить тёмную тему" : "Включить светлую тему"}
+      aria-label={isLight ? "Включить тёмную тему" : "Включить светлую тему"}
+      aria-pressed={isLight}
     >
-      {theme === "dark" ? <Sun size={17} /> : <Moon size={17} />}
-      <span>{theme === "dark" ? "Светлая тема" : "Тёмная тема"}</span>
+      <span className="theme-switch-label">Тема</span>
+      <span className="theme-switch-track" aria-hidden="true">
+        <Sun size={13} className="theme-switch-sun" />
+        <Moon size={13} className="theme-switch-moon" />
+        <span className="theme-switch-thumb" />
+      </span>
     </button>
   );
 }
