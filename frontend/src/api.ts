@@ -3,6 +3,8 @@ export type QueuePhoto = {
   external_attachment_id?: string | null;
   source_url: string;
   position: number;
+  kind?: "source" | "uploaded" | string;
+  media_id?: string | null;
 };
 
 export type QueueItem = {
@@ -16,6 +18,7 @@ export type QueueItem = {
   original_text?: string | null;
   source_url?: string | null;
   source_published_at?: string | null;
+  scheduled_at?: string | null;
   status: string;
   photos: QueuePhoto[];
 };
@@ -79,8 +82,21 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return response.json() as Promise<T>;
 }
 
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(reader.error ?? new Error("Не удалось прочитать файл"));
+    reader.onload = () => {
+      const result = String(reader.result ?? "");
+      resolve(result.includes(",") ? result.split(",", 2)[1] : result);
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
 export const api = {
   queue: () => request<QueueItem[]>("/api/v1/queue?limit=100"),
+  queueItem: (id: number) => request<QueueItem>(`/api/v1/queue/${id}`),
   targets: () => request<Target[]>("/api/v1/targets?limit=100"),
   sources: () => request<Source[]>("/api/v1/sources?limit=100"),
   targetSources: (targetId: number) => request<TargetSource[]>(`/api/v1/targets/${targetId}/sources`),
@@ -126,4 +142,20 @@ export const api = {
   approve: (id: number) => request<QueueItem>(`/api/v1/queue/${id}/approve`, { method: "POST" }),
   reject: (id: number) => request<QueueItem>(`/api/v1/queue/${id}/reject`, { method: "POST" }),
   reopen: (id: number) => request<QueueItem>(`/api/v1/queue/${id}/reopen`, { method: "POST" }),
+  schedule: (id: number, scheduledAt: string) => request<QueueItem>(`/api/v1/queue/${id}/schedule`, {
+    method: "POST",
+    body: JSON.stringify({ scheduled_at: scheduledAt }),
+  }),
+  deleteQueueItem: (id: number) => request<void>(`/api/v1/queue/${id}`, { method: "DELETE" }),
+  uploadQueuePhoto: async (id: number, file: File) => request<QueueItem>(`/api/v1/queue/${id}/media`, {
+    method: "POST",
+    body: JSON.stringify({
+      filename: file.name,
+      content_type: file.type,
+      data_base64: await fileToBase64(file),
+    }),
+  }),
+  deleteQueuePhoto: (id: number, mediaId: string) => request<QueueItem>(`/api/v1/queue/${id}/media/${encodeURIComponent(mediaId)}`, {
+    method: "DELETE",
+  }),
 };
