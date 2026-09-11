@@ -123,7 +123,7 @@ async def _store_post_and_queue_items(
     vk_post: VKPost,
     target_sources: list[TargetSource],
 ) -> bool:
-    """Сохраняет один пост, его вложения и создаёт QueueItem для целей."""
+    """Сохраняет один пост, его фотографии и создаёт QueueItem для целей."""
 
     external_post_id = str(vk_post.id)
     post = await session.scalar(
@@ -176,35 +176,27 @@ async def _store_post_and_queue_items(
 
 
 def build_post_attachments(raw_attachments: list[dict[str, Any]]) -> list[PostAttachment]:
-    """Преобразует вложения VK в универсальные PostAttachment."""
+    """Преобразует фотографии VK в PostAttachment в исходном порядке."""
 
     result: list[PostAttachment] = []
-    for position, raw_attachment in enumerate(raw_attachments):
-        vk_type = str(raw_attachment.get("type", "other"))
-        payload = raw_attachment.get(vk_type)
-        payload_dict = payload if isinstance(payload, dict) else {}
+    for raw_attachment in raw_attachments:
+        if raw_attachment.get("type") != "photo":
+            # Для MVP обрабатываем только фотографии. Полный ответ VK всё равно
+            # остаётся в Post.raw_data, поэтому к видео можно вернуться позже.
+            continue
 
+        payload = raw_attachment.get("photo")
+        photo = payload if isinstance(payload, dict) else {}
         result.append(
             PostAttachment(
-                attachment_type=_map_attachment_type(vk_type),
-                external_attachment_id=_external_attachment_id(payload_dict),
-                source_url=_attachment_source_url(vk_type, payload_dict),
-                position=position,
+                attachment_type=AttachmentType.PHOTO,
+                external_attachment_id=_external_attachment_id(photo),
+                source_url=_best_photo_url(photo),
+                position=len(result),
                 raw_data=raw_attachment,
             )
         )
     return result
-
-
-def _map_attachment_type(vk_type: str) -> AttachmentType:
-    mapping = {
-        "photo": AttachmentType.PHOTO,
-        "video": AttachmentType.VIDEO,
-        "audio": AttachmentType.AUDIO,
-        "doc": AttachmentType.DOCUMENT,
-        "link": AttachmentType.LINK,
-    }
-    return mapping.get(vk_type, AttachmentType.OTHER)
 
 
 def _external_attachment_id(payload: dict[str, Any]) -> str | None:
@@ -215,27 +207,6 @@ def _external_attachment_id(payload: dict[str, Any]) -> str | None:
     if owner_id is None:
         return str(attachment_id)
     return f"{owner_id}_{attachment_id}"
-
-
-def _attachment_source_url(vk_type: str, payload: dict[str, Any]) -> str | None:
-    if vk_type == "photo":
-        return _best_photo_url(payload)
-
-    if vk_type == "video":
-        player = payload.get("player")
-        if isinstance(player, str) and player:
-            return player
-        owner_id = payload.get("owner_id")
-        video_id = payload.get("id")
-        if owner_id is not None and video_id is not None:
-            return f"https://vk.com/video{owner_id}_{video_id}"
-
-    if vk_type in {"audio", "doc", "link"}:
-        url = payload.get("url")
-        if isinstance(url, str) and url:
-            return url
-
-    return None
 
 
 def _best_photo_url(photo: dict[str, Any]) -> str | None:
