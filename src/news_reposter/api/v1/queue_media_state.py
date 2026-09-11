@@ -19,7 +19,7 @@ router = APIRouter(
 )
 Session = Annotated[AsyncSession, Depends(get_db_session)]
 MEDIA_ROOT = Path(os.getenv("MEDIA_ROOT", "/app/data/media"))
-STATE_FILENAME = ".media-state.json"
+STATE_ROOT = MEDIA_ROOT / "_state"
 
 
 class QueueMediaState(BaseModel):
@@ -33,7 +33,7 @@ def item_dir(queue_item_id: int) -> Path:
 
 
 def state_path(queue_item_id: int) -> Path:
-    return item_dir(queue_item_id) / STATE_FILENAME
+    return STATE_ROOT / f"{queue_item_id}.json"
 
 
 def source_keys(item: Any) -> list[str]:
@@ -52,10 +52,7 @@ def uploaded_keys(queue_item_id: int) -> list[str]:
     directory = item_dir(queue_item_id)
     if not directory.exists():
         return []
-    files = [
-        path for path in directory.iterdir()
-        if path.is_file() and path.name != STATE_FILENAME
-    ]
+    files = [path for path in directory.iterdir() if path.is_file()]
     files.sort(key=lambda path: path.stat().st_mtime)
     return [f"upload:{path.name}" for path in files]
 
@@ -79,8 +76,7 @@ def load_state(item: Any) -> list[str]:
 
 
 def save_state(queue_item_id: int, media_order: list[str]) -> None:
-    directory = item_dir(queue_item_id)
-    directory.mkdir(parents=True, exist_ok=True)
+    STATE_ROOT.mkdir(parents=True, exist_ok=True)
     state_path(queue_item_id).write_text(
         json.dumps(media_order, ensure_ascii=False, indent=2),
         encoding="utf-8",
