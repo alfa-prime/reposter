@@ -19,6 +19,22 @@ EXPECTED_OPERATIONS = {
     ("/api/v1/targets/{target_id}", "get"): "Получить цель публикации",
     ("/api/v1/targets/{target_id}", "patch"): "Изменить цель публикации",
     ("/api/v1/targets/{target_id}", "delete"): "Удалить цель публикации",
+    (
+        "/api/v1/targets/{target_id}/sources",
+        "post",
+    ): "Подключить источник к целевому каналу",
+    (
+        "/api/v1/targets/{target_id}/sources",
+        "get",
+    ): "Получить источники целевого канала",
+    (
+        "/api/v1/targets/{target_id}/sources/{target_source_id}",
+        "patch",
+    ): "Изменить настройки источника целевого канала",
+    (
+        "/api/v1/targets/{target_id}/sources/{target_source_id}",
+        "delete",
+    ): "Отключить источник от целевого канала",
 }
 
 
@@ -43,6 +59,7 @@ def test_openapi_has_ordered_russian_tags() -> None:
         "Система",
         "Источники",
         "Цели публикаций",
+        "Источники целевого канала",
         "VK",
         "MAX",
     ]
@@ -54,7 +71,7 @@ def test_openapi_models_have_field_descriptions() -> None:
 
     schemas = app.openapi()["components"]["schemas"]
 
-    for schema_name in ("SourceCreate", "TargetCreate"):
+    for schema_name in ("SourceCreate", "TargetCreate", "TargetSourceCreate"):
         properties = schemas[schema_name]["properties"]
         assert all(
             property_schema.get("description")
