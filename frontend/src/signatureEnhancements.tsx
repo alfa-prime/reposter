@@ -134,49 +134,90 @@ let channelHost: HTMLElement | null = null;
 let postRoot: Root | null = null;
 let postHost: HTMLElement | null = null;
 let scanning = false;
+let channelMounting = false;
+let postMounting = false;
+
+function removeDuplicateHosts(container: HTMLElement, kind: "channel" | "post") {
+  const hosts = Array.from(container.querySelectorAll<HTMLElement>(`.signature-enhancement-host[data-signature-kind="${kind}"]`));
+  if (hosts.length <= 1) return;
+  hosts.slice(1).forEach((host) => host.remove());
+}
 
 async function mountEnhancements() {
   const channelPanel = document.querySelector<HTMLElement>(".channel-panel");
   const channelTitle = channelPanel?.querySelector(".editor-head h2")?.textContent?.trim();
   if (channelPanel && channelTitle) {
-    if (!channelHost || !channelHost.isConnected || channelHost.dataset.targetName !== channelTitle) {
-      channelRoot?.unmount(); channelHost?.remove();
-      const targets = await api.targets();
-      const target = targets.find((item) => item.name === channelTitle);
-      if (target) {
-        channelHost = document.createElement("div");
-        channelHost.className = "signature-enhancement-host";
-        channelHost.dataset.targetName = channelTitle;
-        const divider = channelPanel.querySelector(".section-divider");
-        channelPanel.insertBefore(channelHost, divider ?? null);
-        channelRoot = createRoot(channelHost);
-        channelRoot.render(<ChannelSignature target={target}/>);
+    removeDuplicateHosts(channelPanel, "channel");
+    if (!channelMounting && (!channelHost || !channelHost.isConnected || channelHost.dataset.targetName !== channelTitle)) {
+      channelMounting = true;
+      try {
+        channelRoot?.unmount();
+        channelHost?.remove();
+        channelHost = null;
+        channelRoot = null;
+
+        const targets = await api.targets();
+        if (!channelPanel.isConnected) return;
+        const target = targets.find((item) => item.name === channelTitle);
+        if (target) {
+          const host = document.createElement("div");
+          host.className = "signature-enhancement-host";
+          host.dataset.signatureKind = "channel";
+          host.dataset.targetName = channelTitle;
+          const divider = channelPanel.querySelector(".section-divider");
+          channelPanel.insertBefore(host, divider ?? null);
+          channelHost = host;
+          channelRoot = createRoot(host);
+          channelRoot.render(<ChannelSignature target={target}/>);
+        }
+      } finally {
+        channelMounting = false;
       }
     }
-  } else if (channelHost) {
-    channelRoot?.unmount(); channelHost.remove(); channelHost = null; channelRoot = null;
+  } else if (channelHost && !channelMounting) {
+    channelRoot?.unmount();
+    channelHost.remove();
+    channelHost = null;
+    channelRoot = null;
   }
 
   const drawer = document.querySelector<HTMLElement>(".editorial-drawer");
   const sourceLink = drawer?.querySelector<HTMLAnchorElement>(".drawer-source-row a")?.href;
   if (drawer && sourceLink) {
-    if (!postHost || !postHost.isConnected || postHost.dataset.sourceUrl !== sourceLink) {
-      postRoot?.unmount(); postHost?.remove();
-      const items = await api.queue();
-      const item = items.find((candidate) => candidate.source_url && new URL(candidate.source_url, location.origin).href === sourceLink);
-      if (item) {
-        const target = await api.target(item.target_id);
-        postHost = document.createElement("div");
-        postHost.className = "signature-enhancement-host";
-        postHost.dataset.sourceUrl = sourceLink;
-        const textSection = drawer.querySelector(".drawer-text-section");
-        textSection?.insertAdjacentElement("afterend", postHost);
-        postRoot = createRoot(postHost);
-        postRoot.render(<PostSignature item={item} target={target}/>);
+    removeDuplicateHosts(drawer, "post");
+    if (!postMounting && (!postHost || !postHost.isConnected || postHost.dataset.sourceUrl !== sourceLink)) {
+      postMounting = true;
+      try {
+        postRoot?.unmount();
+        postHost?.remove();
+        postHost = null;
+        postRoot = null;
+
+        const items = await api.queue();
+        if (!drawer.isConnected) return;
+        const item = items.find((candidate) => candidate.source_url && new URL(candidate.source_url, location.origin).href === sourceLink);
+        if (item) {
+          const target = await api.target(item.target_id);
+          if (!drawer.isConnected) return;
+          const host = document.createElement("div");
+          host.className = "signature-enhancement-host";
+          host.dataset.signatureKind = "post";
+          host.dataset.sourceUrl = sourceLink;
+          const textSection = drawer.querySelector(".drawer-text-section");
+          textSection?.insertAdjacentElement("afterend", host);
+          postHost = host;
+          postRoot = createRoot(host);
+          postRoot.render(<PostSignature item={item} target={target}/>);
+        }
+      } finally {
+        postMounting = false;
       }
     }
-  } else if (postHost) {
-    postRoot?.unmount(); postHost.remove(); postHost = null; postRoot = null;
+  } else if (postHost && !postMounting) {
+    postRoot?.unmount();
+    postHost.remove();
+    postHost = null;
+    postRoot = null;
   }
 }
 
