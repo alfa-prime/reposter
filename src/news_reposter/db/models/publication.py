@@ -9,7 +9,6 @@ from sqlalchemy import (
     Index,
     String,
     Text,
-    UniqueConstraint,
     func,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -18,33 +17,23 @@ from news_reposter.db.base import Base
 from news_reposter.db.models.enums import PublicationStatus, enum_values
 
 if TYPE_CHECKING:
-    from news_reposter.db.models.post import Post
-    from news_reposter.db.models.target import Target
+    from news_reposter.db.models.queue_item import QueueItem
 
 
 class Publication(Base):
-    """Попытка публикации одного поста в одной цели."""
+    """Техническое состояние публикации одного элемента редакционной очереди."""
 
     __tablename__ = "publications"
     __table_args__ = (
-        UniqueConstraint(
-            "post_id",
-            "target_id",
-            name="uq_publications_post_id_target_id",
-        ),
         CheckConstraint("attempts >= 0", name="ck_publications_attempts"),
         Index("ix_publications_status_created_at", "status", "created_at"),
     )
 
     publication_id: Mapped[int] = mapped_column(primary_key=True)
-    post_id: Mapped[int] = mapped_column(
-        ForeignKey("posts.post_id", ondelete="CASCADE"),
+    queue_item_id: Mapped[int] = mapped_column(
+        ForeignKey("queue_items.queue_item_id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
-    )
-    target_id: Mapped[int] = mapped_column(
-        ForeignKey("targets.target_id", ondelete="RESTRICT"),
-        nullable=False,
+        unique=True,
         index=True,
     )
     status: Mapped[PublicationStatus] = mapped_column(
@@ -75,5 +64,4 @@ class Publication(Base):
         onupdate=func.now(),
     )
 
-    post: Mapped["Post"] = relationship(back_populates="publications")
-    target: Mapped["Target"] = relationship(back_populates="publications")
+    queue_item: Mapped["QueueItem"] = relationship(back_populates="publication")
