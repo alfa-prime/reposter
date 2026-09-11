@@ -1,31 +1,48 @@
-# Production deployment
+# Production / demo deployment
 
 Recommended VPS baseline: Ubuntu 24.04 LTS, 2 vCPU, 4 GB RAM, 40+ GB SSD.
 
-## 1. DNS
+## Fast demo mode without a domain
 
-Create an A record for the chosen domain/subdomain and point it to the VPS IPv4 address.
+For the current customer demo, the simplest setup is plain HTTP by VPS IPv4 address with Caddy Basic Auth.
 
-Example:
+Use:
 
-```text
-news.example.ru -> 203.0.113.10
+```dotenv
+SITE_ADDRESS=:80
+ADMIN_USER=demo
+ADMIN_PASSWORD_HASH='<bcrypt-hash>'
 ```
 
-## 2. Server preparation
+Then open:
 
-Install Docker Engine and the Docker Compose plugin. Allow only SSH, HTTP and HTTPS through the firewall.
+```text
+http://VPS_IP
+```
 
-Example with UFW:
+Important: Basic Auth over plain HTTP is suitable only as a temporary demo barrier. HTTP does not encrypt the login/password or traffic. Use a unique temporary password, do not reuse any real password, and do not place sensitive data in this demo instance. When a domain is added, switch `SITE_ADDRESS` to the domain and Caddy will provide HTTPS automatically.
+
+For IP-only demo mode the firewall only needs SSH and HTTP:
 
 ```bash
 sudo ufw allow OpenSSH
 sudo ufw allow 80/tcp
-sudo ufw allow 443/tcp
 sudo ufw enable
 ```
 
-## 3. Clone repository
+## 1. Server preparation
+
+Install Docker Engine, the Docker Compose plugin and Git.
+
+On Ubuntu 24.04 you can use Docker's official repository or the provider's preinstalled Docker image. Verify:
+
+```bash
+docker --version
+docker compose version
+git --version
+```
+
+## 2. Clone repository
 
 ```bash
 git clone git@github.com:alfa-prime/reposter.git
@@ -35,51 +52,97 @@ git switch feature/frontend-admin
 
 Use an SSH deploy key or another secure GitHub credential for the private repository.
 
-## 4. Environment
+## 3. Environment
 
 ```bash
 cp .env.example .env
 chmod 600 .env
 ```
 
-At minimum set strong values for:
+For the current IP-only demo set at least:
 
 ```dotenv
 API_KEY=<random-secret>
 VK_ACCESS_TOKEN=<token>
 MAX_ACCESS_TOKEN=<token>
 POSTGRES_PASSWORD=<strong-random-password>
-SITE_ADDRESS=news.example.ru
-ADMIN_USER=admin
+SITE_ADDRESS=:80
+ADMIN_USER=demo
 ADMIN_PASSWORD_HASH='<bcrypt-hash>'
+```
+
+Generate a strong API key and database password, for example:
+
+```bash
+openssl rand -hex 32
 ```
 
 Generate the Caddy-compatible bcrypt password hash on the server:
 
 ```bash
-docker run --rm caddy:2-alpine caddy hash-password --plaintext 'YOUR_PASSWORD'
+docker run --rm caddy:2-alpine caddy hash-password --plaintext 'YOUR_TEMP_DEMO_PASSWORD'
 ```
 
 Copy the complete output into `ADMIN_PASSWORD_HASH` in `.env`. Keep the value single-quoted because bcrypt hashes contain `$` characters.
 
-## 5. Start production
+## 4. Start demo/production stack
 
 ```bash
 docker compose -f compose.yaml -f compose.prod.yaml up -d --build
 ```
 
-Caddy will obtain and renew a public TLS certificate automatically when `SITE_ADDRESS` is a real domain pointing to the VPS and ports 80/443 are reachable.
-
-The web UI, API, Swagger and health endpoint are protected by HTTP Basic Authentication at Caddy. The backend port is bound only to `127.0.0.1` on the VPS and is not exposed publicly.
-
-## 6. Useful commands
+Check status:
 
 ```bash
 docker compose -f compose.yaml -f compose.prod.yaml ps
+```
+
+Watch logs if needed:
+
+```bash
 docker compose -f compose.yaml -f compose.prod.yaml logs -f frontend app
-docker compose -f compose.yaml -f compose.prod.yaml pull
+```
+
+The web UI, API, Swagger and health endpoint are protected by HTTP Basic Authentication at Caddy. FastAPI is not exposed publicly in the production override.
+
+## 5. Open the demo
+
+Go to:
+
+```text
+http://VPS_IP
+```
+
+The browser will ask for `ADMIN_USER` and the temporary password used to create `ADMIN_PASSWORD_HASH`.
+
+## 6. Later: add a domain and HTTPS
+
+Point an A record at the VPS IPv4 address, for example:
+
+```text
+news.example.ru -> 203.0.113.10
+```
+
+Change only:
+
+```dotenv
+SITE_ADDRESS=news.example.ru
+```
+
+Then allow HTTPS and restart:
+
+```bash
+sudo ufw allow 443/tcp
+docker compose -f compose.yaml -f compose.prod.yaml up -d
+```
+
+Caddy will obtain and renew the public TLS certificate automatically when the domain points to the VPS and ports 80/443 are reachable.
+
+## 7. Updating
+
+```bash
 git pull
 docker compose -f compose.yaml -f compose.prod.yaml up -d --build
 ```
 
-PostgreSQL data and Caddy certificates/config are stored in Docker volumes. Add periodic PostgreSQL backups before treating the instance as production data storage.
+PostgreSQL data and Caddy configuration are stored in Docker volumes. Add periodic PostgreSQL backups before treating the instance as permanent production data storage.
