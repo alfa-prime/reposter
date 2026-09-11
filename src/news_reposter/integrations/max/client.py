@@ -15,13 +15,13 @@ class MAXAPIError(RuntimeError):
 
 
 class MAXClient:
-    """Асинхронный клиент для публикации сообщений и изображений в MAX."""
+    """Асинхронный клиент для работы с API MAX."""
 
     def __init__(
         self,
         *,
         access_token: str,
-        chat_id: int,
+        chat_id: int | None = None,
         api_url: str = "https://platform-api2.max.ru",
         ca_file: str | None = None,
         http_client: httpx.AsyncClient | None = None,
@@ -34,6 +34,23 @@ class MAXClient:
         self._ca_file = ca_file
         self._http_client = http_client
 
+    async def get_channel_by_link(self, chat_link: str) -> dict[str, Any]:
+        """Возвращает информацию о публичном канале по короткой ссылке MAX."""
+
+        clean_link = chat_link.strip().lstrip("@")
+        if not clean_link:
+            raise ValueError("Публичная ссылка канала не указана")
+
+        if self._http_client is not None:
+            return await self._get_channel(self._http_client, clean_link)
+
+        ssl_context = ssl.create_default_context()
+        if self._ca_file:
+            ssl_context.load_verify_locations(cafile=self._ca_file)
+
+        async with httpx.AsyncClient(timeout=30.0, verify=ssl_context) as client:
+            return await self._get_channel(client, clean_link)
+
     async def publish_post(
         self,
         *,
@@ -41,6 +58,9 @@ class MAXClient:
         image_urls: list[str] | None = None,
     ) -> dict[str, Any]:
         """Публикует текст и фотографии по внешним URL в настроенный канал."""
+
+        if self._chat_id is None:
+            raise ValueError("Для публикации необходимо указать chat_id")
 
         clean_text = text.strip()
         images = image_urls or []
@@ -67,6 +87,34 @@ class MAXClient:
             verify=ssl_context,
         ) as client:
             return await self._send(client, body)
+
+    async def _get_channel(
+        self,
+        client: httpx.AsyncClient,
+        chat_link: str,
+    ) -> dict[str, Any]:
+        """Запрашивает канал по его публичной ссылке."""
+
+        try:
+            response = await client.get(
+                f"{self._api_url}/chats/{chat_link}",
+                headers={"Authorization": self._access_token},
+            )
+            response.raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            detail = exc.response.text or str(exc)
+            raise MAXAPIError(detail, exc.response.status_code) from exc
+        except httpx.HTTPError as exc:
+            raise MAXAPIError(f"Не удалось выполнить запрос к MAX: {exc}") from exc
+
+        try:
+            result = response.json()
+        except ValueError as exc:
+            raise MAXAPIError("MAX вернул ответ не в формате JSON") from exc
+
+        if not isinstance(result, dict):
+            raise MAXAPIError("MAX вернул неожиданный формат ответа")
+        return result
 
     async def _send(
         self,
