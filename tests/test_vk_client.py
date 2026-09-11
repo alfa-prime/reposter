@@ -119,6 +119,128 @@ def test_get_latest_post_skips_old_pinned_post() -> None:
     asyncio.run(scenario())
 
 
+def test_get_posts_after_returns_all_new_posts_in_chronological_order() -> None:
+    """Проверяет получение всех постов после известного ID."""
+
+    async def scenario() -> None:
+        offsets: list[str] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            offset = request.url.params["offset"]
+            offsets.append(offset)
+            assert request.url.params["count"] == "100"
+
+            if offset == "0":
+                items = [
+                    {
+                        "id": 105,
+                        "owner_id": -123,
+                        "date": 1_800_000_005,
+                        "text": "Пятый",
+                    },
+                    {
+                        "id": 104,
+                        "owner_id": -123,
+                        "date": 1_800_000_004,
+                        "text": "Четвёртый",
+                    },
+                    {
+                        "id": 103,
+                        "owner_id": -123,
+                        "date": 1_800_000_003,
+                        "text": "Третий",
+                    },
+                    {
+                        "id": 102,
+                        "owner_id": -123,
+                        "date": 1_800_000_002,
+                        "text": "Второй",
+                    },
+                    {
+                        "id": 101,
+                        "owner_id": -123,
+                        "date": 1_800_000_001,
+                        "text": "Первый",
+                    },
+                    {
+                        "id": 100,
+                        "owner_id": -123,
+                        "date": 1_800_000_000,
+                        "text": "Уже известный",
+                    },
+                ]
+            else:
+                items = []
+
+            return httpx.Response(
+                200,
+                json={"response": {"count": len(items), "items": items}},
+            )
+
+        async with httpx.AsyncClient(
+            transport=httpx.MockTransport(handler),
+        ) as http_client:
+            client = VKClient(access_token="secret", http_client=http_client)
+            posts = await client.get_posts_after("news_murmansk", 100)
+
+        assert [post.id for post in posts] == [101, 102, 103, 104, 105]
+        assert offsets == ["0"]
+
+    asyncio.run(scenario())
+
+
+def test_get_posts_after_skips_pinned_post() -> None:
+    """Проверяет, что закреплённый старый пост не мешает сбору свежих записей."""
+
+    async def scenario() -> None:
+        def handler(_request: httpx.Request) -> httpx.Response:
+            return httpx.Response(
+                200,
+                json={
+                    "response": {
+                        "count": 4,
+                        "items": [
+                            {
+                                "id": 50,
+                                "owner_id": -123,
+                                "date": 1_700_000_000,
+                                "text": "Старый закреплённый",
+                                "is_pinned": 1,
+                            },
+                            {
+                                "id": 103,
+                                "owner_id": -123,
+                                "date": 1_800_000_003,
+                                "text": "Новый 3",
+                            },
+                            {
+                                "id": 102,
+                                "owner_id": -123,
+                                "date": 1_800_000_002,
+                                "text": "Новый 2",
+                            },
+                            {
+                                "id": 100,
+                                "owner_id": -123,
+                                "date": 1_800_000_000,
+                                "text": "Известный",
+                            },
+                        ],
+                    }
+                },
+            )
+
+        async with httpx.AsyncClient(
+            transport=httpx.MockTransport(handler),
+        ) as http_client:
+            client = VKClient(access_token="secret", http_client=http_client)
+            posts = await client.get_posts_after("news_murmansk", 100)
+
+        assert [post.id for post in posts] == [102, 103]
+
+    asyncio.run(scenario())
+
+
 def test_vk_api_error() -> None:
     """Проверяет преобразование ошибки VK в исключение клиента."""
 
