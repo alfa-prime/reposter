@@ -35,6 +35,15 @@ EXPECTED_OPERATIONS = {
         "/api/v1/targets/{target_id}/sources/{target_source_id}",
         "delete",
     ): "Отключить источник от целевого канала",
+    ("/api/v1/queue", "post"): "Добавить пост в очередь",
+    ("/api/v1/queue", "get"): "Получить очередь постов",
+    ("/api/v1/queue/{queue_item_id}", "get"): "Получить элемент очереди",
+    ("/api/v1/queue/{queue_item_id}", "patch"): "Изменить текст элемента очереди",
+    ("/api/v1/queue/{queue_item_id}", "delete"): "Удалить элемент очереди",
+    ("/api/v1/queue/{queue_item_id}/submit", "post"): "Отправить пост на модерацию",
+    ("/api/v1/queue/{queue_item_id}/approve", "post"): "Одобрить пост",
+    ("/api/v1/queue/{queue_item_id}/reject", "post"): "Отклонить пост",
+    ("/api/v1/queue/{queue_item_id}/schedule", "post"): "Запланировать публикацию",
 }
 
 
@@ -60,6 +69,7 @@ def test_openapi_has_ordered_russian_tags() -> None:
         "Источники",
         "Цели публикаций",
         "Источники целевого канала",
+        "Очередь постов",
         "VK",
         "MAX",
     ]
@@ -71,7 +81,12 @@ def test_openapi_models_have_field_descriptions() -> None:
 
     schemas = app.openapi()["components"]["schemas"]
 
-    for schema_name in ("SourceCreate", "TargetCreate", "TargetSourceCreate"):
+    for schema_name in (
+        "SourceCreate",
+        "TargetCreate",
+        "TargetSourceCreate",
+        "QueueItemCreate",
+    ):
         properties = schemas[schema_name]["properties"]
         assert all(
             property_schema.get("description")
