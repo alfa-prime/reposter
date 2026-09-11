@@ -39,6 +39,18 @@ class QueueItemSchedule(BaseModel):
     )
 
 
+class QueuePhotoRead(BaseModel):
+    """Фотография исходного поста для отображения в редакционной очереди."""
+
+    attachment_id: int = Field(description="Идентификатор вложения")
+    external_attachment_id: str | None = Field(
+        default=None,
+        description="Идентификатор фотографии во внешнем источнике",
+    )
+    source_url: str = Field(description="URL фотографии")
+    position: int = Field(description="Позиция фотографии в исходном посте")
+
+
 class QueueItemRead(BaseModel):
     """Элемент редакционной очереди в ответе API."""
 
@@ -53,3 +65,32 @@ class QueueItemRead(BaseModel):
     created_at: datetime = Field(description="Дата создания элемента очереди")
     updated_at: datetime = Field(description="Дата последнего изменения")
     error_message: str | None = Field(description="Ошибка редакционной обработки")
+
+    original_text: str | None = Field(
+        default=None,
+        description="Исходный текст поста из источника",
+    )
+    source_url: str | None = Field(
+        default=None,
+        description="Ссылка на исходный пост",
+    )
+    source_published_at: datetime | None = Field(
+        default=None,
+        description="Дата публикации исходного поста",
+    )
+    photos: list[QueuePhotoRead] = Field(
+        default_factory=list,
+        description="Фотографии исходного поста в исходном порядке",
+    )
+    target_name: str | None = Field(
+        default=None,
+        description="Название целевого канала",
+    )
+    target_platform: str | None = Field(
+        default=None,
+        description="Платформа целевого канала",
+    )
+    target_url: str | None = Field(
+        default=None,
+        description="Ссылка на целевой канал",
+    )

@@ -12,8 +12,10 @@ from news_reposter.api.v1.targets import router as targets_router
 from news_reposter.api.v1.vk import router as vk_router
 from news_reposter.config import get_settings
 from news_reposter.db.session import close_database
+from news_reposter.services.scheduler import CollectionScheduler
 
 settings = get_settings()
+collection_scheduler = CollectionScheduler(settings)
 
 OPENAPI_TAGS = [
     {
@@ -55,11 +57,13 @@ OPENAPI_TAGS = [
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
-    """Закрывает пул соединений с базой при остановке приложения."""
+    """Запускает фоновые задачи и освобождает ресурсы при остановке."""
 
+    collection_scheduler.start()
     try:
         yield
     finally:
+        await collection_scheduler.stop()
         await close_database()
 
 

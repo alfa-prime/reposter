@@ -3,6 +3,7 @@ from datetime import datetime
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from news_reposter.db.models import Post, QueueItem, QueueItemStatus, Target
 from news_reposter.schemas.queue_item import QueueItemCreate, QueueItemUpdate
@@ -32,8 +33,7 @@ class QueueItemRepository:
         except IntegrityError as exc:
             await self.session.rollback()
             raise QueueItemAlreadyExistsError from exc
-        await self.session.refresh(item)
-        return item
+        return await self.get(item.queue_item_id)  # type: ignore[return-value]
 
     async def list(
         self,
@@ -45,7 +45,14 @@ class QueueItemRepository:
         source_id: int | None,
         status: QueueItemStatus | None,
     ) -> list[QueueItem]:
-        statement = select(QueueItem).order_by(QueueItem.queue_item_id)
+        statement = (
+            select(QueueItem)
+            .options(
+                selectinload(QueueItem.post).selectinload(Post.attachments),
+                selectinload(QueueItem.target),
+            )
+            .order_by(QueueItem.queue_item_id)
+        )
         if source_id is not None:
             statement = statement.join(Post).where(Post.source_id == source_id)
         if target_id is not None:
@@ -59,14 +66,21 @@ class QueueItemRepository:
         return list(result.all())
 
     async def get(self, queue_item_id: int) -> QueueItem | None:
-        return await self.session.get(QueueItem, queue_item_id)
+        statement = (
+            select(QueueItem)
+            .options(
+                selectinload(QueueItem.post).selectinload(Post.attachments),
+                selectinload(QueueItem.target),
+            )
+            .where(QueueItem.queue_item_id == queue_item_id)
+        )
+        return await self.session.scalar(statement)
 
     async def update(self, item: QueueItem, data: QueueItemUpdate) -> QueueItem:
         for field, value in data.model_dump(exclude_unset=True).items():
             setattr(item, field, value)
         await self.session.commit()
-        await self.session.refresh(item)
-        return item
+        return await self.get(item.queue_item_id)  # type: ignore[return-value]
 
     async def set_status(
         self,
@@ -79,8 +93,7 @@ class QueueItemRepository:
         item.scheduled_at = scheduled_at
         item.error_message = None
         await self.session.commit()
-        await self.session.refresh(item)
-        return item
+        return await self.get(item.queue_item_id)  # type: ignore[return-value]
 
     async def delete(self, item: QueueItem) -> None:
         await self.session.delete(item)
