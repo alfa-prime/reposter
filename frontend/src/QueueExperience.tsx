@@ -1,4 +1,4 @@
-import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
+import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
   Archive,
   ArrowLeft,
@@ -30,6 +30,11 @@ import { api, QueueItem, QueuePhoto } from "./api";
 import "./queueExperience.css";
 
 type QueueTab = "storage" | "scheduled" | "archive";
+
+type LinkSelection = {
+  start: number;
+  end: number;
+};
 
 const statusLabels: Record<string, string> = {
   pending: "В работе",
@@ -71,6 +76,13 @@ function mediaKey(photo: QueuePhoto) {
     : `source:${photo.attachment_id}`;
 }
 
+function normalizeUrl(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+  if (/^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed)) return trimmed;
+  return `https://${trimmed}`;
+}
+
 export function QueueExperience() {
   const [items, setItems] = useState<QueueItem[]>([]);
   const [tab, setTab] = useState<QueueTab>("storage");
@@ -85,7 +97,13 @@ export function QueueExperience() {
   const [lightbox, setLightbox] = useState<QueuePhoto | null>(null);
   const [mediaOrder, setMediaOrder] = useState<string[]>([]);
   const [emojiOpen, setEmojiOpen] = useState(false);
+  const [linkDialogOpen, setLinkDialogOpen] = useState(false);
+  const [linkText, setLinkText] = useState("");
+  const [linkUrl, setLinkUrl] = useState("");
+  const [linkError, setLinkError] = useState("");
+  const [linkSelection, setLinkSelection] = useState<LinkSelection>({ start: 0, end: 0 });
   const textRef = useRef<HTMLTextAreaElement | null>(null);
+  const linkTextRef = useRef<HTMLInputElement | null>(null);
 
   const selected = useMemo(
     () => items.find((item) => item.queue_item_id === selectedId) ?? null,
@@ -147,10 +165,16 @@ export function QueueExperience() {
     setEditing(false);
     setShowSource(false);
     setEmojiOpen(false);
+    setLinkDialogOpen(false);
     void api.queueMediaState(selected.queue_item_id)
       .then((state) => setMediaOrder(state.media_order))
       .catch(() => setMediaOrder(selected.photos.map(mediaKey)));
   }, [selectedId]);
+
+  useEffect(() => {
+    if (!linkDialogOpen) return;
+    requestAnimationFrame(() => linkTextRef.current?.focus());
+  }, [linkDialogOpen]);
 
   function applyUpdated(updated: QueueItem) {
     setItems((current) => current.map((item) => item.queue_item_id === updated.queue_item_id ? updated : item));
@@ -192,6 +216,16 @@ export function QueueExperience() {
     const included = mediaOrder.includes(key);
     const next = included ? mediaOrder.filter((item) => item !== key) : [...mediaOrder, key];
     await saveMediaOrder(next, included ? "Фото исключено из публикации" : "Фото добавлено в публикацию");
+  }
+
+  async function removeAllPhotos() {
+    if (!selected || mediaOrder.length === 0) return;
+    await saveMediaOrder([], "Все фото исключены из публикации");
+  }
+
+  async function restoreAllPhotos() {
+    if (!selected) return;
+    await saveMediaOrder(orderedPhotos.map(mediaKey), "Все фото возвращены в публикацию");
   }
 
   async function movePhoto(photo: QueuePhoto, direction: -1 | 1) {
@@ -300,13 +334,48 @@ export function QueueExperience() {
     });
   }
 
-  function insertLink() {
+  function openLinkDialog() {
     const textarea = textRef.current;
     if (!textarea) return;
-    const label = draft.slice(textarea.selectionStart, textarea.selectionEnd) || "ссылка";
-    const url = window.prompt("Адрес ссылки", "https://");
-    if (!url) return;
-    insertAtCursor(`[${label}](${url})`);
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    setLinkSelection({ start, end });
+    setLinkText(draft.slice(start, end));
+    setLinkUrl("");
+    setLinkError("");
+    setEmojiOpen(false);
+    setLinkDialogOpen(true);
+  }
+
+  function closeLinkDialog() {
+    setLinkDialogOpen(false);
+    setLinkError("");
+    requestAnimationFrame(() => textRef.current?.focus());
+  }
+
+  function confirmLink(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const label = linkText.trim();
+    const url = normalizeUrl(linkUrl);
+    if (!label) {
+      setLinkError("Укажите текст ссылки");
+      return;
+    }
+    if (!url) {
+      setLinkError("Укажите адрес ссылки");
+      return;
+    }
+
+    const value = `[${label}](${url})`;
+    const { start, end } = linkSelection;
+    setDraft(`${draft.slice(0, start)}${value}${draft.slice(end)}`);
+    setLinkDialogOpen(false);
+    setLinkError("");
+    requestAnimationFrame(() => {
+      const textarea = textRef.current;
+      textarea?.focus();
+      textarea?.setSelectionRange(start + value.length, start + value.length);
+    });
   }
 
   async function schedule() {
@@ -379,7 +448,18 @@ export function QueueExperience() {
             </div>
 
             <div className="drawer-media">
-              <div className="drawer-section-title"><span>Медиа публикации</span><span>В публикации {mediaOrder.length} из {selected.photos.length}</span></div>
+              <div className="drawer-section-title media-section-title">
+                <span>Медиа публикации</span>
+                <div className="media-summary-actions">
+                  <span>В публикации {mediaOrder.length} из {selected.photos.length}</span>
+                  {selected.photos.length > 0 && (
+                    <div className="media-bulk-actions">
+                      <button type="button" onClick={() => void removeAllPhotos()} disabled={busy || mediaOrder.length === 0}>Убрать все</button>
+                      <button type="button" onClick={() => void restoreAllPhotos()} disabled={busy || mediaOrder.length === selected.photos.length}>Вернуть все</button>
+                    </div>
+                  )}
+                </div>
+              </div>
               {selected.photos.length > 0 ? (
                 <div className="drawer-photo-grid">
                   {orderedPhotos.map((photo) => {
@@ -389,11 +469,14 @@ export function QueueExperience() {
                     return (
                       <div className={`drawer-photo ${included ? "included" : "excluded"}`} key={key}>
                         <img src={photo.source_url} alt="Фото публикации" onClick={() => setLightbox(photo)}/>
-                        <div className="media-controls">
-                          <button title={included ? "Исключить из публикации" : "Вернуть в публикацию"} onClick={() => void togglePhoto(photo)}>{included ? <Eye size={14}/> : <EyeOff size={14}/>}</button>
+                        {!included && <div className="media-excluded-label">Не попадёт в публикацию</div>}
+                        <div className="media-controls media-controls-readable">
+                          <button className={included ? "media-remove" : "media-restore"} title={included ? "Убрать фото из публикации" : "Вернуть фото в публикацию"} onClick={() => void togglePhoto(photo)}>
+                            {included ? <EyeOff size={14}/> : <Eye size={14}/>}<span>{included ? "Убрать" : "Вернуть"}</span>
+                          </button>
                           {included && <button title="Сдвинуть левее" disabled={orderIndex <= 0} onClick={() => void movePhoto(photo, -1)}><ArrowLeft size={14}/></button>}
                           {included && <button title="Сдвинуть правее" disabled={orderIndex < 0 || orderIndex >= mediaOrder.length - 1} onClick={() => void movePhoto(photo, 1)}><ArrowRight size={14}/></button>}
-                          {photo.kind === "uploaded" && photo.media_id && <button title="Удалить загруженное фото" onClick={() => void removeUploadedPhoto(photo)}><Trash2 size={14}/></button>}
+                          {photo.kind === "uploaded" && photo.media_id && <button className="media-delete-file" title="Удалить загруженный файл" onClick={() => void removeUploadedPhoto(photo)}><Trash2 size={14}/><span>Удалить файл</span></button>}
                         </div>
                         <span>{photo.kind === "uploaded" ? "Добавлено вручную" : included ? `№ ${orderIndex + 1}` : "Исключено"}</span>
                       </div>
@@ -403,7 +486,7 @@ export function QueueExperience() {
               ) : <div className="no-media"><FileImage size={28}/><span>У публикации пока нет фотографий</span></div>}
 
               <label className="upload-media-button"><Upload size={17}/>Добавить фото<input type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={(event) => void uploadPhotos(event)} disabled={busy}/></label>
-              <small>Можно исключать исходные фото, менять порядок и добавлять свои · JPEG, PNG или WebP · до 10 МБ на файл</small>
+              <small>«Убрать» исключает исходное фото только из публикации — сам оригинал остаётся. Загруженные вручную файлы можно удалить полностью · JPEG, PNG или WebP · до 10 МБ на файл.</small>
             </div>
 
             <div className="drawer-text-section">
@@ -412,15 +495,15 @@ export function QueueExperience() {
               {editing ? (
                 <div className="rich-editor">
                   <div className="rich-toolbar" aria-label="Форматирование текста">
-                    <button title="Жирный" onClick={() => replaceSelection("**")}><Bold size={17}/></button>
-                    <button title="Курсив" onClick={() => replaceSelection("_")}><Italic size={17}/></button>
-                    <button title="Зачёркнутый" onClick={() => replaceSelection("~~")}><Strikethrough size={17}/></button>
-                    <button title="Подчёркнутый" onClick={() => replaceSelection("<u>", "</u>")}><Underline size={17}/></button>
+                    <button type="button" title="Жирный" onClick={() => replaceSelection("**")}><Bold size={17}/></button>
+                    <button type="button" title="Курсив" onClick={() => replaceSelection("_")}><Italic size={17}/></button>
+                    <button type="button" title="Зачёркнутый" onClick={() => replaceSelection("~~")}><Strikethrough size={17}/></button>
+                    <button type="button" title="Подчёркнутый" onClick={() => replaceSelection("<u>", "</u>")}><Underline size={17}/></button>
                     <span className="toolbar-divider"/>
-                    <button title="Вставить ссылку" onClick={insertLink}><LinkIcon size={17}/></button>
+                    <button type="button" title="Вставить ссылку" onClick={openLinkDialog}><LinkIcon size={17}/></button>
                     <div className="emoji-control">
-                      <button title="Эмодзи" onClick={() => setEmojiOpen((value) => !value)}><Smile size={18}/></button>
-                      {emojiOpen && <div className="emoji-picker">{emojis.map((emoji) => <button key={emoji} onClick={() => { insertAtCursor(emoji); setEmojiOpen(false); }}>{emoji}</button>)}</div>}
+                      <button type="button" title="Эмодзи" onClick={() => setEmojiOpen((value) => !value)}><Smile size={18}/></button>
+                      {emojiOpen && <div className="emoji-picker">{emojis.map((emoji) => <button type="button" key={emoji} onClick={() => { insertAtCursor(emoji); setEmojiOpen(false); }}>{emoji}</button>)}</div>}
                     </div>
                   </div>
                   <textarea ref={textRef} value={draft} onChange={(event) => setDraft(event.target.value)} rows={12} autoFocus/>
@@ -447,6 +530,33 @@ export function QueueExperience() {
               <button className="drawer-delete" onClick={() => void removeItem()} disabled={busy}><Trash2 size={16}/>Удалить</button>
             </footer>
           </aside>
+        </div>
+      )}
+
+      {linkDialogOpen && (
+        <div className="link-dialog-backdrop" onMouseDown={closeLinkDialog}>
+          <form className="link-dialog" onSubmit={confirmLink} onMouseDown={(event) => event.stopPropagation()}>
+            <div className="link-dialog-head">
+              <div>
+                <h3>Вставить ссылку</h3>
+                <p>Укажите, какой текст увидит читатель, и адрес страницы.</p>
+              </div>
+              <button type="button" className="link-dialog-close" onClick={closeLinkDialog} aria-label="Закрыть"><X size={19}/></button>
+            </div>
+            <label>
+              <span>Текст ссылки</span>
+              <input ref={linkTextRef} value={linkText} onChange={(event) => { setLinkText(event.target.value); setLinkError(""); }} placeholder="Например: Подробнее на сайте" />
+            </label>
+            <label>
+              <span>Адрес ссылки</span>
+              <input value={linkUrl} onChange={(event) => { setLinkUrl(event.target.value); setLinkError(""); }} placeholder="https://example.com" inputMode="url" />
+            </label>
+            {linkError && <div className="link-dialog-error">{linkError}</div>}
+            <div className="link-dialog-actions">
+              <button type="button" className="secondary" onClick={closeLinkDialog}>Отмена</button>
+              <button type="submit" className="primary"><LinkIcon size={16}/>Вставить ссылку</button>
+            </div>
+          </form>
         </div>
       )}
 
