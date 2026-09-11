@@ -8,7 +8,7 @@ import pytest
 
 import news_reposter.api.v1.queue as queue_api
 from news_reposter.api.dependencies import require_api_key
-from news_reposter.db.models import QueueItemStatus
+from news_reposter.db.models import AttachmentType, QueueItemStatus
 from news_reposter.main import app
 from news_reposter.repositories.queue_item import QueueItemAlreadyExistsError
 from news_reposter.schemas.queue_item import QueueItemCreate, QueueItemUpdate
@@ -118,6 +118,59 @@ def memory_queue_repository(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
         app.dependency_overrides.pop(require_api_key, None)
 
 
+def test_queue_response_includes_source_post_and_photos() -> None:
+    now = datetime.now(UTC)
+    item = SimpleNamespace(
+        queue_item_id=1,
+        post_id=10,
+        target_id=20,
+        rewritten_text="Подготовленный текст",
+        status=QueueItemStatus.PENDING,
+        scheduled_at=None,
+        created_at=now,
+        updated_at=now,
+        error_message=None,
+        post=SimpleNamespace(
+            original_text="Исходный текст",
+            source_url="https://vk.com/wall-1_2",
+            source_published_at=now,
+            attachments=[
+                SimpleNamespace(
+                    attachment_id=11,
+                    attachment_type=AttachmentType.PHOTO,
+                    external_attachment_id="-1_100",
+                    source_url="https://img/1.jpg",
+                    position=0,
+                ),
+                SimpleNamespace(
+                    attachment_id=12,
+                    attachment_type=AttachmentType.OTHER,
+                    external_attachment_id="77",
+                    source_url=None,
+                    position=1,
+                ),
+                SimpleNamespace(
+                    attachment_id=13,
+                    attachment_type=AttachmentType.PHOTO,
+                    external_attachment_id="-1_101",
+                    source_url="https://img/2.jpg",
+                    position=2,
+                ),
+            ],
+        ),
+    )
+
+    response = queue_api.queue_item_response(item)
+
+    assert response.original_text == "Исходный текст"
+    assert response.source_url == "https://vk.com/wall-1_2"
+    assert [photo.source_url for photo in response.photos] == [
+        "https://img/1.jpg",
+        "https://img/2.jpg",
+    ]
+    assert [photo.position for photo in response.photos] == [0, 2]
+
+
 def test_queue_crud_and_moderation(memory_queue_repository: None) -> None:
     async def scenario() -> None:
         transport = httpx.ASGITransport(app=app)
@@ -134,6 +187,7 @@ def test_queue_crud_and_moderation(memory_queue_repository: None) -> None:
             )
             assert created.status_code == 201
             assert created.json()["status"] == "pending"
+            assert created.json()["photos"] == []
 
             duplicate = await client.post(
                 "/api/v1/queue",
