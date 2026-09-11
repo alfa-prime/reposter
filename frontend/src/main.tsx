@@ -9,6 +9,7 @@ import "./queueEnhancements.css";
 import "./polish.css";
 import "./brand.css";
 import "./mediaControls.css";
+import "./queueExperiencePatch.css";
 import "./queueEnhancements";
 import "./brandEnhancements";
 
