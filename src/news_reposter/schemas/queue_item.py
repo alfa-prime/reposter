@@ -39,8 +39,16 @@ class QueueItemSchedule(BaseModel):
     )
 
 
+class QueueMediaUpload(BaseModel):
+    """Пользовательское изображение, добавляемое редактором к публикации."""
+
+    filename: str = Field(min_length=1, max_length=255, description="Исходное имя файла")
+    content_type: str = Field(description="MIME-тип изображения")
+    data_base64: str = Field(min_length=1, description="Содержимое файла в Base64")
+
+
 class QueuePhotoRead(BaseModel):
-    """Фотография исходного поста для отображения в редакционной очереди."""
+    """Фотография публикации для отображения в редакционной очереди."""
 
     attachment_id: int = Field(description="Идентификатор вложения")
     external_attachment_id: str | None = Field(
@@ -48,7 +56,12 @@ class QueuePhotoRead(BaseModel):
         description="Идентификатор фотографии во внешнем источнике",
     )
     source_url: str = Field(description="URL фотографии")
-    position: int = Field(description="Позиция фотографии в исходном посте")
+    position: int = Field(description="Позиция фотографии в публикации")
+    kind: str = Field(default="source", description="Источник фото: source или uploaded")
+    media_id: str | None = Field(
+        default=None,
+        description="Идентификатор загруженного редактором файла",
+    )
 
 
 class QueueItemRead(BaseModel):
@@ -80,7 +93,7 @@ class QueueItemRead(BaseModel):
     )
     photos: list[QueuePhotoRead] = Field(
         default_factory=list,
-        description="Фотографии исходного поста в исходном порядке",
+        description="Фотографии исходного поста и добавленные редактором изображения",
     )
     target_name: str | None = Field(
         default=None,
