@@ -118,7 +118,7 @@ def memory_queue_repository(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
         app.dependency_overrides.pop(require_api_key, None)
 
 
-def test_queue_response_includes_source_post_and_photos() -> None:
+def test_queue_response_includes_source_post_photos_and_target() -> None:
     now = datetime.now(UTC)
     item = SimpleNamespace(
         queue_item_id=1,
@@ -130,6 +130,11 @@ def test_queue_response_includes_source_post_and_photos() -> None:
         created_at=now,
         updated_at=now,
         error_message=None,
+        target=SimpleNamespace(
+            name="MAX Мурманск",
+            platform="max",
+            url="https://max.ru/murmansk",
+        ),
         post=SimpleNamespace(
             original_text="Исходный текст",
             source_url="https://vk.com/wall-1_2",
@@ -164,6 +169,9 @@ def test_queue_response_includes_source_post_and_photos() -> None:
 
     assert response.original_text == "Исходный текст"
     assert response.source_url == "https://vk.com/wall-1_2"
+    assert response.target_name == "MAX Мурманск"
+    assert response.target_platform == "max"
+    assert response.target_url == "https://max.ru/murmansk"
     assert [photo.source_url for photo in response.photos] == [
         "https://img/1.jpg",
         "https://img/2.jpg",
@@ -227,6 +235,11 @@ def test_queue_crud_and_moderation(memory_queue_repository: None) -> None:
 
             invalid_reject = await client.post("/api/v1/queue/1/reject")
             assert invalid_reject.status_code == 409
+
+            reopened = await client.post("/api/v1/queue/1/reopen")
+            assert reopened.status_code == 200
+            assert reopened.json()["status"] == "pending"
+            assert reopened.json()["scheduled_at"] is None
 
             deleted = await client.delete("/api/v1/queue/1")
             assert deleted.status_code == 204
