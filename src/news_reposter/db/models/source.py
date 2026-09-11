@@ -8,6 +8,7 @@ from news_reposter.db.base import Base
 
 if TYPE_CHECKING:
     from news_reposter.db.models.post import Post
+    from news_reposter.db.models.target_source import TargetSource
 
 
 class Source(Base):
@@ -42,5 +43,10 @@ class Source(Base):
 
     posts: Mapped[list["Post"]] = relationship(
         back_populates="source",
+        passive_deletes=True,
+    )
+    target_sources: Mapped[list["TargetSource"]] = relationship(
+        back_populates="source",
+        cascade="all, delete-orphan",
         passive_deletes=True,
     )
