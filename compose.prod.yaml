@@ -1,7 +1,4 @@
 services:
-  app:
-    ports: !reset []
-
   frontend:
     environment:
       SITE_ADDRESS: ${SITE_ADDRESS}
