@@ -15,6 +15,7 @@ export type QueueItem = {
   target_platform?: string | null;
   target_url?: string | null;
   rewritten_text?: string | null;
+  signature_text?: string | null;
   original_text?: string | null;
   source_url?: string | null;
   source_published_at?: string | null;
@@ -33,6 +34,7 @@ export type Target = {
   platform: string;
   external_id: string;
   url?: string | null;
+  default_signature?: string | null;
   is_active: boolean;
 };
 
@@ -80,9 +82,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     throw new Error(detail);
   }
 
-  if (response.status === 204) {
-    return undefined as T;
-  }
+  if (response.status === 204) return undefined as T;
   return response.json() as Promise<T>;
 }
 
@@ -107,64 +107,37 @@ export const api = {
     body: JSON.stringify({ media_order: mediaOrder }),
   }),
   targets: () => request<Target[]>("/api/v1/targets?limit=100"),
+  target: (id: number) => request<Target>(`/api/v1/targets/${id}`),
   sources: () => request<Source[]>("/api/v1/sources?limit=100"),
   targetSources: (targetId: number) => request<TargetSource[]>(`/api/v1/targets/${targetId}/sources`),
   collectNow: () => request<CollectSummary>("/api/v1/system/collect-now", { method: "POST" }),
 
-  createTarget: (data: Omit<Target, "target_id">) => request<Target>("/api/v1/targets", {
-    method: "POST",
-    body: JSON.stringify(data),
-  }),
-  updateTarget: (id: number, data: Partial<Omit<Target, "target_id">>) => request<Target>(`/api/v1/targets/${id}`, {
-    method: "PATCH",
-    body: JSON.stringify(data),
-  }),
+  createTarget: (data: Omit<Target, "target_id">) => request<Target>("/api/v1/targets", { method: "POST", body: JSON.stringify(data) }),
+  updateTarget: (id: number, data: Partial<Omit<Target, "target_id">>) => request<Target>(`/api/v1/targets/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
   deleteTarget: (id: number) => request<void>(`/api/v1/targets/${id}`, { method: "DELETE" }),
 
-  createSource: (data: Omit<Source, "source_id">) => request<Source>("/api/v1/sources", {
-    method: "POST",
-    body: JSON.stringify(data),
-  }),
-  updateSource: (id: number, data: Partial<Omit<Source, "source_id">>) => request<Source>(`/api/v1/sources/${id}`, {
-    method: "PATCH",
-    body: JSON.stringify(data),
-  }),
+  createSource: (data: Omit<Source, "source_id">) => request<Source>("/api/v1/sources", { method: "POST", body: JSON.stringify(data) }),
+  updateSource: (id: number, data: Partial<Omit<Source, "source_id">>) => request<Source>(`/api/v1/sources/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
   deleteSource: (id: number) => request<void>(`/api/v1/sources/${id}`, { method: "DELETE" }),
 
   attachSource: (targetId: number, sourceId: number) => request<TargetSource>(`/api/v1/targets/${targetId}/sources`, {
     method: "POST",
     body: JSON.stringify({ source_id: sourceId, is_active: true, rewrite_enabled: true }),
   }),
-  updateTargetSource: (targetId: number, targetSourceId: number, data: Partial<Pick<TargetSource, "is_active" | "rewrite_enabled">>) =>
-    request<TargetSource>(`/api/v1/targets/${targetId}/sources/${targetSourceId}`, {
-      method: "PATCH",
-      body: JSON.stringify(data),
-    }),
+  updateTargetSource: (targetId: number, targetSourceId: number, data: Partial<Pick<TargetSource, "is_active" | "rewrite_enabled">>) => request<TargetSource>(`/api/v1/targets/${targetId}/sources/${targetSourceId}`, { method: "PATCH", body: JSON.stringify(data) }),
   detachSource: (targetId: number, targetSourceId: number) => request<void>(`/api/v1/targets/${targetId}/sources/${targetSourceId}`, { method: "DELETE" }),
 
-  updateQueueText: (id: number, rewritten_text: string) =>
-    request<QueueItem>(`/api/v1/queue/${id}`, {
-      method: "PATCH",
-      body: JSON.stringify({ rewritten_text }),
-    }),
+  updateQueueText: (id: number, rewritten_text: string) => request<QueueItem>(`/api/v1/queue/${id}`, { method: "PATCH", body: JSON.stringify({ rewritten_text }) }),
+  updateQueueSignature: (id: number, signature_text: string | null) => request<QueueItem>(`/api/v1/queue/${id}`, { method: "PATCH", body: JSON.stringify({ signature_text }) }),
   submit: (id: number) => request<QueueItem>(`/api/v1/queue/${id}/submit`, { method: "POST" }),
   approve: (id: number) => request<QueueItem>(`/api/v1/queue/${id}/approve`, { method: "POST" }),
   reject: (id: number) => request<QueueItem>(`/api/v1/queue/${id}/reject`, { method: "POST" }),
   reopen: (id: number) => request<QueueItem>(`/api/v1/queue/${id}/reopen`, { method: "POST" }),
-  schedule: (id: number, scheduledAt: string) => request<QueueItem>(`/api/v1/queue/${id}/schedule`, {
-    method: "POST",
-    body: JSON.stringify({ scheduled_at: scheduledAt }),
-  }),
+  schedule: (id: number, scheduledAt: string) => request<QueueItem>(`/api/v1/queue/${id}/schedule`, { method: "POST", body: JSON.stringify({ scheduled_at: scheduledAt }) }),
   deleteQueueItem: (id: number) => request<void>(`/api/v1/queue/${id}`, { method: "DELETE" }),
   uploadQueuePhoto: async (id: number, file: File) => request<QueueItem>(`/api/v1/queue/${id}/media`, {
     method: "POST",
-    body: JSON.stringify({
-      filename: file.name,
-      content_type: file.type,
-      data_base64: await fileToBase64(file),
-    }),
+    body: JSON.stringify({ filename: file.name, content_type: file.type, data_base64: await fileToBase64(file) }),
   }),
-  deleteQueuePhoto: (id: number, mediaId: string) => request<QueueItem>(`/api/v1/queue/${id}/media/${encodeURIComponent(mediaId)}`, {
-    method: "DELETE",
-  }),
+  deleteQueuePhoto: (id: number, mediaId: string) => request<QueueItem>(`/api/v1/queue/${id}/media/${encodeURIComponent(mediaId)}`, { method: "DELETE" }),
 };
