@@ -23,6 +23,10 @@ export type QueueItem = {
   photos: QueuePhoto[];
 };
 
+export type QueueMediaState = {
+  media_order: string[];
+};
+
 export type Target = {
   target_id: number;
   name: string;
@@ -97,6 +101,11 @@ function fileToBase64(file: File): Promise<string> {
 export const api = {
   queue: () => request<QueueItem[]>("/api/v1/queue?limit=100"),
   queueItem: (id: number) => request<QueueItem>(`/api/v1/queue/${id}`),
+  queueMediaState: (id: number) => request<QueueMediaState>(`/api/v1/queue/${id}/media-state`),
+  updateQueueMediaState: (id: number, mediaOrder: string[]) => request<QueueMediaState>(`/api/v1/queue/${id}/media-state`, {
+    method: "PUT",
+    body: JSON.stringify({ media_order: mediaOrder }),
+  }),
   targets: () => request<Target[]>("/api/v1/targets?limit=100"),
   sources: () => request<Source[]>("/api/v1/sources?limit=100"),
   targetSources: (targetId: number) => request<TargetSource[]>(`/api/v1/targets/${targetId}/sources`),
