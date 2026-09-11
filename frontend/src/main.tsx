@@ -6,6 +6,7 @@ import "./styles.css";
 import "./ux.css";
 import "./theme.css";
 import "./queueEnhancements.css";
+import "./polish.css";
 import "./queueEnhancements";
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
