@@ -21,13 +21,20 @@ from news_reposter.integrations.vk import VKAPIError, VKClient, VKPost
 logger = logging.getLogger(__name__)
 
 
-async def collect_active_sources_once() -> None:
+async def collect_active_sources_once() -> dict[str, int]:
     """Забирает новые посты активных VK-источников и создаёт очередь."""
+
+    summary = {
+        "sources_checked": 0,
+        "posts_created": 0,
+        "queue_items_created": 0,
+        "errors": 0,
+    }
 
     settings = get_settings()
     if not settings.vk_access_token:
         logger.warning("Сбор пропущен: VK_ACCESS_TOKEN не настроен")
-        return
+        return summary
 
     async with async_session_factory() as session:
         statement = (
@@ -57,6 +64,7 @@ async def collect_active_sources_once() -> None:
         )
 
         for source_id, source in sources.items():
+            summary["sources_checked"] += 1
             try:
                 last_external_post_id = await _get_last_external_post_id(session, source_id)
 
@@ -73,27 +81,36 @@ async def collect_active_sources_once() -> None:
                     continue
 
                 created_posts = 0
+                created_queue_items = 0
                 for vk_post in vk_posts:
-                    created = await _store_post_and_queue_items(
+                    post_created, queue_items_created = await _store_post_and_queue_items(
                         session=session,
                         source_id=source_id,
                         vk_post=vk_post,
                         target_sources=targets_by_source[source_id],
                     )
-                    created_posts += int(created)
+                    created_posts += int(post_created)
+                    created_queue_items += queue_items_created
 
                 await session.commit()
+                summary["posts_created"] += created_posts
+                summary["queue_items_created"] += created_queue_items
                 logger.info(
-                    "Источник %s обработан: новых постов %s",
+                    "Источник %s обработан: новых постов %s, элементов очереди %s",
                     source_id,
                     created_posts,
+                    created_queue_items,
                 )
             except (VKAPIError, ValueError) as exc:
+                summary["errors"] += 1
                 await session.rollback()
                 logger.exception("Ошибка сбора источника %s: %s", source_id, exc)
             except Exception:
+                summary["errors"] += 1
                 await session.rollback()
                 logger.exception("Неожиданная ошибка сбора источника %s", source_id)
+
+    return summary
 
 
 async def _get_last_external_post_id(session, source_id: int) -> int | None:
@@ -122,7 +139,7 @@ async def _store_post_and_queue_items(
     source_id: int,
     vk_post: VKPost,
     target_sources: list[TargetSource],
-) -> bool:
+) -> tuple[bool, int]:
     """Сохраняет один пост, его фотографии и создаёт QueueItem для целей."""
 
     external_post_id = str(vk_post.id)
@@ -151,6 +168,7 @@ async def _store_post_and_queue_items(
             attachment.post_id = post.post_id
             session.add(attachment)
 
+    queue_items_created = 0
     for target_source in target_sources:
         existing_queue_item = await session.scalar(
             select(QueueItem.queue_item_id).where(
@@ -170,9 +188,10 @@ async def _store_post_and_queue_items(
                 ),
             )
         )
+        queue_items_created += 1
 
     post.status = PostStatus.PROCESSED
-    return created
+    return created, queue_items_created
 
 
 def build_post_attachments(raw_attachments: list[dict[str, Any]]) -> list[PostAttachment]:
