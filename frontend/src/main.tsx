@@ -7,7 +7,9 @@ import "./ux.css";
 import "./theme.css";
 import "./queueEnhancements.css";
 import "./polish.css";
+import "./brand.css";
 import "./queueEnhancements";
+import "./brandEnhancements";
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
