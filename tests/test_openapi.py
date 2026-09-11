@@ -4,6 +4,7 @@ from news_reposter.main import app
 EXPECTED_OPERATIONS = {
     ("/health", "get"): "Проверить работу приложения",
     ("/health/database", "get"): "Проверить подключение к PostgreSQL",
+    ("/api/v1/system/collect-now", "post"): "Запустить сбор источников сейчас",
     ("/api/v1/vk/posts/latest", "get"): "Получить последний пост VK",
     (
         "/api/v1/max/posts/from-vk/latest",
@@ -43,6 +44,7 @@ EXPECTED_OPERATIONS = {
     ("/api/v1/queue/{queue_item_id}/submit", "post"): "Отправить пост на модерацию",
     ("/api/v1/queue/{queue_item_id}/approve", "post"): "Одобрить пост",
     ("/api/v1/queue/{queue_item_id}/reject", "post"): "Отклонить пост",
+    ("/api/v1/queue/{queue_item_id}/reopen", "post"): "Вернуть пост в работу",
     ("/api/v1/queue/{queue_item_id}/schedule", "post"): "Запланировать публикацию",
 }
 
