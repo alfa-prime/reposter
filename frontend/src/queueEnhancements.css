@@ -1,0 +1,201 @@
+.editor-panel:has(.photo-strip) {
+  grid-template-columns: minmax(270px, 320px) minmax(0, 1fr);
+  gap: 14px 18px;
+}
+
+.editor-panel:has(.photo-strip) .photo-strip {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-auto-rows: 62px;
+  gap: 7px;
+  align-content: start;
+}
+
+.editor-panel:has(.photo-strip) .photo-strip img {
+  width: 100%;
+  height: 62px;
+  object-fit: cover;
+  border-radius: 9px;
+  cursor: zoom-in;
+  border: 1px solid rgba(255,255,255,.08);
+  background: rgba(0,0,0,.14);
+  transition: transform .15s ease, border-color .15s ease, opacity .15s ease;
+}
+
+.editor-panel:has(.photo-strip) .photo-strip img:hover {
+  transform: translateY(-1px);
+  border-color: rgba(122,145,255,.45);
+  opacity: .96;
+}
+
+.editor-panel:has(.photo-strip) .photo-strip img:first-child {
+  grid-column: 1 / -1;
+  grid-row: span 4;
+  height: 268px;
+  object-fit: contain;
+  border-radius: 13px;
+}
+
+.editor-panel:has(.photo-strip) .photo-strip img:only-child {
+  height: 268px;
+}
+
+.original-text.is-collapsible {
+  position: relative;
+  max-height: 132px;
+  overflow: hidden;
+  cursor: pointer;
+  padding-bottom: 38px;
+}
+
+.original-text.is-collapsible::after {
+  content: "Показать полностью";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 38px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-start;
+  padding: 0 14px 10px;
+  color: #91a6ff;
+  font-size: 11px;
+  font-weight: 700;
+  background: linear-gradient(to bottom, transparent, #0f192b 45%);
+}
+
+.original-text.is-collapsible.expanded {
+  max-height: none;
+}
+
+.original-text.is-collapsible.expanded::after {
+  content: "Свернуть";
+  position: static;
+  height: auto;
+  margin-top: 10px;
+  padding: 0;
+  background: none;
+}
+
+.lightbox-open {
+  overflow: hidden;
+}
+
+.media-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  grid-template-columns: minmax(48px, 90px) minmax(0, 1fr) minmax(48px, 90px);
+  align-items: center;
+  gap: 12px;
+  padding: 36px 24px 24px;
+  background: rgba(2,6,14,.88);
+  backdrop-filter: blur(10px);
+}
+
+.media-lightbox figure {
+  margin: 0;
+  min-width: 0;
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+}
+
+.media-lightbox figure img {
+  max-width: min(1180px, 100%);
+  max-height: calc(100vh - 90px);
+  object-fit: contain;
+  border-radius: 12px;
+  box-shadow: 0 22px 90px rgba(0,0,0,.38);
+}
+
+.media-lightbox figcaption {
+  min-height: 18px;
+  color: #bac5d8;
+  font-size: 12px;
+}
+
+.media-lightbox-close,
+.media-lightbox-nav {
+  border: 1px solid rgba(255,255,255,.12);
+  color: white;
+  background: rgba(14,23,39,.72);
+  backdrop-filter: blur(8px);
+}
+
+.media-lightbox-close {
+  position: absolute;
+  right: 22px;
+  top: 18px;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  font-size: 26px;
+  line-height: 1;
+}
+
+.media-lightbox-nav {
+  width: 46px;
+  height: 58px;
+  justify-self: center;
+  border-radius: 13px;
+  font-size: 34px;
+}
+
+html[data-theme="light"] .editor-panel:has(.photo-strip) .photo-strip img {
+  border-color: rgba(42,58,88,.12);
+  background: #edf0f4;
+}
+
+html[data-theme="light"] .original-text.is-collapsible::after {
+  color: #5d72d5;
+  background: linear-gradient(to bottom, transparent, #f5f7fb 45%);
+}
+
+html[data-theme="light"] .original-text.is-collapsible.expanded::after {
+  background: none;
+}
+
+@media (max-width: 1100px) {
+  .editor-panel:has(.photo-strip) {
+    grid-template-columns: minmax(230px, 280px) minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 980px) {
+  .editor-panel:has(.photo-strip) {
+    grid-template-columns: 1fr;
+  }
+
+  .editor-panel:has(.photo-strip) .photo-strip {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+
+  .editor-panel:has(.photo-strip) .photo-strip img:first-child,
+  .editor-panel:has(.photo-strip) .photo-strip img:only-child {
+    height: 300px;
+  }
+}
+
+@media (max-width: 680px) {
+  .editor-panel:has(.photo-strip) .photo-strip {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .editor-panel:has(.photo-strip) .photo-strip img:first-child,
+  .editor-panel:has(.photo-strip) .photo-strip img:only-child {
+    height: 220px;
+  }
+
+  .media-lightbox {
+    grid-template-columns: 44px minmax(0, 1fr) 44px;
+    padding-inline: 8px;
+  }
+
+  .media-lightbox-nav {
+    width: 38px;
+    height: 48px;
+  }
+}
