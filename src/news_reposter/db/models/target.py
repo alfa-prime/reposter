@@ -7,7 +7,8 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from news_reposter.db.base import Base
 
 if TYPE_CHECKING:
-    from news_reposter.db.models.publication import Publication
+    from news_reposter.db.models.queue_item import QueueItem
+    from news_reposter.db.models.target_source import TargetSource
 
 
 class Target(Base):
@@ -46,7 +47,13 @@ class Target(Base):
         onupdate=func.now(),
     )
 
-    publications: Mapped[list["Publication"]] = relationship(
+    target_sources: Mapped[list["TargetSource"]] = relationship(
         back_populates="target",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+    queue_items: Mapped[list["QueueItem"]] = relationship(
+        back_populates="target",
+        cascade="all, delete-orphan",
         passive_deletes=True,
     )
