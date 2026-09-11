@@ -2,8 +2,8 @@ from news_reposter.db.models import AttachmentType
 from news_reposter.services.collector import build_post_attachments
 
 
-def test_build_post_attachments_preserves_order_and_types() -> None:
-    """Сохраняет порядок фото, видео и ссылки из исходного поста VK."""
+def test_build_post_attachments_keeps_only_photos_in_order() -> None:
+    """Для MVP сохраняет только фотографии, не меняя их порядок."""
 
     attachments = build_post_attachments(
         [
@@ -13,50 +13,61 @@ def test_build_post_attachments_preserves_order_and_types() -> None:
                     "id": 10,
                     "owner_id": -123,
                     "sizes": [
-                        {"url": "https://img/small.jpg", "width": 100, "height": 100},
-                        {"url": "https://img/big.jpg", "width": 1200, "height": 800},
+                        {"url": "https://img/1-small.jpg", "width": 100, "height": 100},
+                        {"url": "https://img/1-big.jpg", "width": 1200, "height": 800},
                     ],
                 },
             },
             {
                 "type": "video",
-                "video": {
-                    "id": 20,
+                "video": {"id": 20, "owner_id": -123, "title": "Видео"},
+            },
+            {
+                "type": "photo",
+                "photo": {
+                    "id": 11,
                     "owner_id": -123,
-                    "title": "Видео",
+                    "orig_photo": {"url": "https://img/2-original.jpg"},
                 },
             },
             {
                 "type": "link",
-                "link": {
-                    "url": "https://example.com/news",
-                    "title": "Новость",
-                },
+                "link": {"url": "https://example.com/news"},
             },
         ]
     )
 
-    assert [item.position for item in attachments] == [0, 1, 2]
+    assert len(attachments) == 2
+    assert [item.position for item in attachments] == [0, 1]
     assert [item.attachment_type for item in attachments] == [
         AttachmentType.PHOTO,
-        AttachmentType.VIDEO,
-        AttachmentType.LINK,
+        AttachmentType.PHOTO,
     ]
     assert attachments[0].external_attachment_id == "-123_10"
-    assert attachments[0].source_url == "https://img/big.jpg"
-    assert attachments[1].external_attachment_id == "-123_20"
-    assert attachments[1].source_url == "https://vk.com/video-123_20"
-    assert attachments[2].source_url == "https://example.com/news"
+    assert attachments[0].source_url == "https://img/1-big.jpg"
+    assert attachments[1].external_attachment_id == "-123_11"
+    assert attachments[1].source_url == "https://img/2-original.jpg"
 
 
-def test_build_post_attachments_keeps_unknown_payload() -> None:
-    """Неизвестный тип не теряется и сохраняется как OTHER вместе с raw_data."""
+def test_build_post_attachments_keeps_ten_photos() -> None:
+    """Пост с десятью фотографиями доходит до хранения без потерь."""
 
-    raw = {"type": "poll", "poll": {"id": 77, "question": "Вопрос?"}}
-    attachments = build_post_attachments([raw])
+    raw = [
+        {
+            "type": "photo",
+            "photo": {
+                "id": photo_id,
+                "owner_id": -123,
+                "orig_photo": {"url": f"https://img/{photo_id}.jpg"},
+            },
+        }
+        for photo_id in range(1, 11)
+    ]
 
-    assert len(attachments) == 1
-    assert attachments[0].attachment_type == AttachmentType.OTHER
-    assert attachments[0].external_attachment_id == "77"
-    assert attachments[0].source_url is None
-    assert attachments[0].raw_data == raw
+    attachments = build_post_attachments(raw)
+
+    assert len(attachments) == 10
+    assert [item.position for item in attachments] == list(range(10))
+    assert [item.source_url for item in attachments] == [
+        f"https://img/{photo_id}.jpg" for photo_id in range(1, 11)
+    ]
