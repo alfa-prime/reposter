@@ -8,14 +8,22 @@ def enum_values(enum_class: type[StrEnum]) -> list[str]:
 
 
 class PostStatus(StrEnum):
-    """Этап обработки полученного поста."""
+    """Состояние приёма и первичной обработки исходного поста."""
 
     RECEIVED = "received"
+    PROCESSED = "processed"
+    FAILED = "failed"
+
+
+class QueueItemStatus(StrEnum):
+    """Редакционный статус поста для конкретной цели публикации."""
+
+    PENDING = "pending"
     REWRITING = "rewriting"
-    REWRITTEN = "rewritten"
     AWAITING_MODERATION = "awaiting_moderation"
     APPROVED = "approved"
     REJECTED = "rejected"
+    SCHEDULED = "scheduled"
     FAILED = "failed"
 
 
@@ -31,7 +39,7 @@ class AttachmentType(StrEnum):
 
 
 class PublicationStatus(StrEnum):
-    """Состояние отправки поста в одну цель публикации."""
+    """Состояние отправки подготовленного поста во внешнюю платформу."""
 
     PENDING = "pending"
     PUBLISHING = "publishing"
