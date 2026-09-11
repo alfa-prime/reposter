@@ -1,0 +1,49 @@
+.setup-hint {
+  margin: 14px 0 6px;
+  padding: 14px 16px;
+  border: 1px solid rgba(245, 181, 70, .2);
+  border-radius: 12px;
+  background: rgba(245, 181, 70, .07);
+  display: grid;
+  gap: 5px;
+}
+
+.setup-hint strong {
+  color: #ffe1a8;
+  font-size: 13px;
+}
+
+.setup-hint span {
+  color: #a99572;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.form-note {
+  margin: -8px 0 18px;
+  color: #77869e;
+  font-size: 11px;
+}
+
+.form-note span,
+.form-grid label b {
+  color: #ff8fa3;
+  font-weight: 700;
+}
+
+.form-grid label small {
+  color: #66758d;
+  font-weight: 500;
+  margin-left: 4px;
+}
+
+.form-grid input:invalid,
+.form-grid select:invalid {
+  border-color: rgba(255, 105, 130, .42);
+}
+
+.form-grid input:invalid:focus,
+.form-grid select:invalid:focus {
+  border-color: rgba(255, 105, 130, .75);
+  box-shadow: 0 0 0 3px rgba(255, 105, 130, .08);
+}

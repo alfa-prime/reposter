@@ -1,6 +1,12 @@
+import base64
+import binascii
+import os
+from pathlib import Path as FilePath
 from typing import Annotated, Any
+from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Response, status
+from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from news_reposter.api.dependencies import API_KEY_RESPONSES, ApiKeyDep
@@ -15,6 +21,7 @@ from news_reposter.schemas.queue_item import (
     QueueItemRead,
     QueueItemSchedule,
     QueueItemUpdate,
+    QueueMediaUpload,
 )
 
 router = APIRouter(
@@ -23,6 +30,14 @@ router = APIRouter(
     responses=API_KEY_RESPONSES,
 )
 Session = Annotated[AsyncSession, Depends(get_db_session)]
+
+MEDIA_ROOT = FilePath(os.getenv("MEDIA_ROOT", "/app/data/media"))
+MAX_UPLOAD_BYTES = 10 * 1024 * 1024
+ALLOWED_IMAGE_TYPES = {
+    "image/jpeg": ".jpg",
+    "image/png": ".png",
+    "image/webp": ".webp",
+}
 
 
 def not_found_error() -> HTTPException:
@@ -45,15 +60,41 @@ def ensure_status(item_status: QueueItemStatus, allowed: set[QueueItemStatus]) -
         )
 
 
+def media_directory(queue_item_id: int) -> FilePath:
+    return MEDIA_ROOT / str(queue_item_id)
+
+
+def uploaded_photos(queue_item_id: int, start_position: int) -> list[dict[str, Any]]:
+    directory = media_directory(queue_item_id)
+    if not directory.exists():
+        return []
+
+    photos: list[dict[str, Any]] = []
+    for index, path in enumerate(sorted(directory.iterdir(), key=lambda item: item.stat().st_mtime)):
+        if not path.is_file():
+            continue
+        photos.append(
+            {
+                "attachment_id": -(index + 1),
+                "external_attachment_id": f"upload:{path.name}",
+                "source_url": f"/api/v1/queue/{queue_item_id}/media/{path.name}",
+                "position": start_position + index,
+                "kind": "uploaded",
+                "media_id": path.name,
+            }
+        )
+    return photos
+
+
 def queue_item_response(item: Any) -> QueueItemRead:
-    """Добавляет к элементу очереди данные исходного поста, фото и цели."""
+    """Добавляет к элементу очереди исходник, фото, пользовательские медиа и цель."""
 
     base = QueueItemRead.model_validate(item).model_dump()
     post = getattr(item, "post", None)
     target = getattr(item, "target", None)
+    photos: list[dict[str, Any]] = []
 
     if post is not None:
-        photos = []
         for attachment in getattr(post, "attachments", []):
             if attachment.attachment_type != AttachmentType.PHOTO or not attachment.source_url:
                 continue
@@ -63,6 +104,8 @@ def queue_item_response(item: Any) -> QueueItemRead:
                     "external_attachment_id": attachment.external_attachment_id,
                     "source_url": attachment.source_url,
                     "position": attachment.position,
+                    "kind": "source",
+                    "media_id": None,
                 }
             )
 
@@ -71,9 +114,11 @@ def queue_item_response(item: Any) -> QueueItemRead:
                 "original_text": post.original_text,
                 "source_url": post.source_url,
                 "source_published_at": post.source_published_at,
-                "photos": photos,
             }
         )
+
+    photos.extend(uploaded_photos(item.queue_item_id, len(photos)))
+    base["photos"] = photos
 
     if target is not None:
         base.update(
@@ -172,6 +217,97 @@ async def get_queue_item(
     item = await QueueItemRepository(session).get(queue_item_id)
     if item is None:
         raise not_found_error()
+    return queue_item_response(item)
+
+
+@router.post(
+    "/{queue_item_id}/media",
+    response_model=QueueItemRead,
+    summary="Добавить фото к публикации",
+    description=(
+        "Сохраняет пользовательское JPEG, PNG или WebP изображение для конкретного "
+        "элемента очереди. Максимальный размер одного файла — 10 МБ."
+    ),
+    responses={404: {"description": "Элемент очереди не найден"}, 413: {"description": "Файл слишком большой"}},
+)
+async def upload_queue_media(
+    queue_item_id: Annotated[int, Path(gt=0, description="Идентификатор элемента очереди")],
+    data: QueueMediaUpload,
+    session: Session,
+    _api_key: ApiKeyDep,
+) -> QueueItemRead:
+    repository = QueueItemRepository(session)
+    item = await repository.get(queue_item_id)
+    if item is None:
+        raise not_found_error()
+
+    extension = ALLOWED_IMAGE_TYPES.get(data.content_type.lower())
+    if extension is None:
+        raise HTTPException(
+            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            detail="Поддерживаются только JPEG, PNG и WebP",
+        )
+
+    try:
+        content = base64.b64decode(data.data_base64, validate=True)
+    except (binascii.Error, ValueError) as exc:
+        raise HTTPException(status_code=400, detail="Некорректные данные файла") from exc
+
+    if len(content) > MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail="Файл больше 10 МБ")
+    if not content:
+        raise HTTPException(status_code=400, detail="Пустой файл")
+
+    directory = media_directory(queue_item_id)
+    directory.mkdir(parents=True, exist_ok=True)
+    filename = f"{uuid4().hex}{extension}"
+    (directory / filename).write_bytes(content)
+    return queue_item_response(item)
+
+
+@router.get(
+    "/{queue_item_id}/media/{media_id}",
+    summary="Получить загруженное фото",
+    responses={404: {"description": "Файл не найден"}},
+)
+async def get_queue_media(
+    queue_item_id: Annotated[int, Path(gt=0)],
+    media_id: Annotated[str, Path(min_length=1, max_length=100)],
+    _api_key: ApiKeyDep,
+) -> FileResponse:
+    safe_name = FilePath(media_id).name
+    if safe_name != media_id:
+        raise HTTPException(status_code=400, detail="Некорректное имя файла")
+    path = media_directory(queue_item_id) / safe_name
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="Файл не найден")
+    return FileResponse(path)
+
+
+@router.delete(
+    "/{queue_item_id}/media/{media_id}",
+    response_model=QueueItemRead,
+    summary="Удалить загруженное фото",
+    responses={404: {"description": "Элемент очереди или файл не найден"}},
+)
+async def delete_queue_media(
+    queue_item_id: Annotated[int, Path(gt=0)],
+    media_id: Annotated[str, Path(min_length=1, max_length=100)],
+    session: Session,
+    _api_key: ApiKeyDep,
+) -> QueueItemRead:
+    repository = QueueItemRepository(session)
+    item = await repository.get(queue_item_id)
+    if item is None:
+        raise not_found_error()
+
+    safe_name = FilePath(media_id).name
+    if safe_name != media_id:
+        raise HTTPException(status_code=400, detail="Некорректное имя файла")
+    path = media_directory(queue_item_id) / safe_name
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="Файл не найден")
+    path.unlink()
     return queue_item_response(item)
 
 
@@ -342,4 +478,12 @@ async def delete_queue_item(
     if item is None:
         raise not_found_error()
     await repository.delete(item)
+
+    directory = media_directory(queue_item_id)
+    if directory.exists():
+        for path in directory.iterdir():
+            if path.is_file():
+                path.unlink()
+        directory.rmdir()
+
     return Response(status_code=status.HTTP_204_NO_CONTENT)

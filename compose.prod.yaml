@@ -1,0 +1,15 @@
+services:
+  app:
+    environment:
+      MAX_CA_FILE: /app/certs/russian_trusted_ca.pem
+
+  frontend:
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS}
+      API_KEY: ${API_KEY}
+      ADMIN_USER: ${ADMIN_USER}
+      ADMIN_PASSWORD_HASH: ${ADMIN_PASSWORD_HASH}
+    volumes:
+      - ./frontend/Caddyfile.prod:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config

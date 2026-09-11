@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, DateTime, Index, String, UniqueConstraint, func, true
+from sqlalchemy import Boolean, DateTime, Index, String, Text, UniqueConstraint, func, true
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from news_reposter.db.base import Base
@@ -29,6 +29,7 @@ class Target(Base):
     platform: Mapped[str] = mapped_column(String(32))
     external_id: Mapped[str] = mapped_column(String(255))
     url: Mapped[str | None] = mapped_column(String(2048))
+    default_signature: Mapped[str | None] = mapped_column(Text)
     is_active: Mapped[bool] = mapped_column(
         Boolean,
         nullable=False,

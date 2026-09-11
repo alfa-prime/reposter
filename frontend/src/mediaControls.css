@@ -1,0 +1,136 @@
+.drawer-media .drawer-section-title {
+  align-items: center;
+}
+
+.drawer-photo {
+  overflow: hidden;
+}
+
+.drawer-photo.excluded {
+  opacity: 1;
+}
+
+.drawer-photo.excluded img {
+  filter: grayscale(.9) brightness(.38);
+}
+
+.drawer-photo.excluded::after {
+  content: "Не попадёт в публикацию";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+  color: #f2f5fb;
+  font-size: 12px;
+  font-weight: 750;
+  letter-spacing: .01em;
+  text-shadow: 0 2px 8px rgba(0,0,0,.75);
+  background: rgba(7,12,20,.22);
+}
+
+.drawer-photo > span,
+.media-controls {
+  z-index: 2;
+}
+
+.media-controls {
+  top: 10px;
+  right: 10px;
+  left: auto;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+  max-width: calc(100% - 20px);
+}
+
+.media-controls button {
+  width: auto;
+  min-width: 34px;
+  height: 34px;
+  padding: 0 10px;
+  gap: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(255,255,255,.13);
+  border-radius: 10px;
+  color: #fff;
+  background: rgba(8,13,22,.86);
+  box-shadow: 0 5px 18px rgba(0,0,0,.2);
+  backdrop-filter: blur(10px);
+}
+
+.media-controls button:hover:not(:disabled) {
+  background: rgba(25,37,60,.96);
+  border-color: rgba(145,166,255,.45);
+}
+
+.media-controls button[title="Исключить из публикации"]::after {
+  content: "Убрать";
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.media-controls button[title="Вернуть в публикацию"]::after {
+  content: "Вернуть";
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.media-controls button[title="Удалить загруженное фото"] {
+  color: #ffc3cd;
+  border-color: rgba(238,91,115,.28);
+}
+
+.media-controls button[title="Удалить загруженное фото"]::after {
+  content: "Удалить файл";
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.media-controls button[title="Сдвинуть левее"],
+.media-controls button[title="Сдвинуть правее"] {
+  padding: 0;
+  width: 34px;
+}
+
+.drawer-photo.excluded > span {
+  display: none;
+}
+
+.drawer-media > small {
+  margin-top: 9px;
+  max-width: 680px;
+  line-height: 1.45;
+}
+
+.drawer-media > small::after {
+  content: "  «Убрать» исключает фото только из этой публикации — исходная новость не меняется. У загруженных вручную фото кнопка «Удалить файл» удаляет сам файл.";
+  color: #8291a8;
+}
+
+html[data-theme="light"] .drawer-photo.excluded::after {
+  color: #fff;
+  background: rgba(24,34,52,.28);
+}
+
+html[data-theme="light"] .media-controls button {
+  color: #f7f9ff;
+  background: rgba(25,37,58,.88);
+  border-color: rgba(255,255,255,.16);
+}
+
+@media (max-width: 760px) {
+  .media-controls button::after {
+    display: none;
+  }
+
+  .media-controls button {
+    width: 34px;
+    padding: 0;
+  }
+}
