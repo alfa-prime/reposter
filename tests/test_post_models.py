@@ -28,7 +28,7 @@ def test_post_table_structure() -> None:
     assert table.c.source_id.nullable is False
     source_fk = next(iter(table.c.source_id.foreign_keys))
     assert source_fk.target_fullname == "sources.source_id"
-    assert source_fk.ondelete == "RESTRICT"
+    assert source_fk.ondelete == "CASCADE"
     assert table.c.external_post_id.type.length == 255
     assert table.c.original_text.nullable is False
     assert "rewritten_text" not in table.c
