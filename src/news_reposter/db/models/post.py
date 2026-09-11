@@ -19,7 +19,7 @@ from news_reposter.db.models.types import JSON_DATA
 
 if TYPE_CHECKING:
     from news_reposter.db.models.attachment import PostAttachment
-    from news_reposter.db.models.publication import Publication
+    from news_reposter.db.models.queue_item import QueueItem
     from news_reposter.db.models.source import Source
 
 
@@ -45,7 +45,6 @@ class Post(Base):
     external_post_id: Mapped[str] = mapped_column(String(255))
     source_url: Mapped[str | None] = mapped_column(String(2048))
     original_text: Mapped[str] = mapped_column(Text, default="", server_default="")
-    rewritten_text: Mapped[str | None] = mapped_column(Text)
     status: Mapped[PostStatus] = mapped_column(
         Enum(
             PostStatus,
@@ -81,7 +80,7 @@ class Post(Base):
         passive_deletes=True,
         order_by="PostAttachment.position",
     )
-    publications: Mapped[list["Publication"]] = relationship(
+    queue_items: Mapped[list["QueueItem"]] = relationship(
         back_populates="post",
         cascade="all, delete-orphan",
         passive_deletes=True,
