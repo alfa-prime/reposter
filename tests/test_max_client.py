@@ -83,6 +83,37 @@ def test_upload_video_returns_token() -> None:
     asyncio.run(scenario())
 
 
+def test_upload_video_uses_initial_token_when_upload_response_is_not_json() -> None:
+    """Успешная загрузка видео может вернуть не-JSON, token уже выдан /uploads."""
+
+    async def scenario() -> None:
+        def handler(request: httpx.Request) -> httpx.Response:
+            if request.url.path == "/uploads":
+                return httpx.Response(
+                    200,
+                    json={
+                        "url": "https://upload.example/video",
+                        "token": "video-token-from-uploads",
+                    },
+                )
+            if request.url.host == "upload.example":
+                return httpx.Response(200, text="OK")
+            return httpx.Response(404)
+
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http_client:
+            client = MAXClient(access_token="secret", http_client=http_client)
+            token = await client.upload_media(
+                media_type="video",
+                filename="movie.mp4",
+                content=b"video-bytes",
+                content_type="video/mp4",
+            )
+
+        assert token == "video-token-from-uploads"
+
+    asyncio.run(scenario())
+
+
 def test_get_updates() -> None:
     """Проверяет получение событий MAX через Long Polling."""
 
