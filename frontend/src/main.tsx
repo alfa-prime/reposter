@@ -13,12 +13,14 @@ import "./queueExperiencePatch.css";
 import "./targetWizardEnhancements.css";
 import "./videoEnhancements.css";
 import "./publicationActionsEnhancements.css";
+import "./aboutEnhancements.css";
 import "./queueEnhancements";
 import "./brandEnhancements";
 import "./signatureEnhancements";
 import "./targetWizardEnhancements";
 import "./videoEnhancements";
 import "./publicationActionsEnhancements";
+import "./aboutEnhancements";
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
