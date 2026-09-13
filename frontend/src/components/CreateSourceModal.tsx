@@ -79,7 +79,7 @@ export function CreateSourceModal({ busy, onClose, onCreated, onError }: CreateS
                 setUrl(event.target.value);
                 setUrlError("");
               }}
-              type="url"
+              type="text"
               inputMode="url"
               required
               placeholder="https://vk.com/peninsula51"
