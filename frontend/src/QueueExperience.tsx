@@ -43,13 +43,14 @@ const statusLabels: Record<string, string> = {
   approved: "Согласован",
   rejected: "Отклонён",
   scheduled: "Запланирован",
+  published: "Опубликован",
   failed: "Ошибка",
 };
 
 const tabConfig: Record<QueueTab, { label: string; statuses: string[] }> = {
   storage: { label: "Хранилище постов", statuses: ["pending", "rewriting", "awaiting_moderation"] },
   scheduled: { label: "Очередь публикаций", statuses: ["approved", "scheduled"] },
-  archive: { label: "Архив", statuses: ["rejected", "failed"] },
+  archive: { label: "Архив", statuses: ["published", "rejected", "failed"] },
 };
 
 const emojis = ["😀", "🙂", "😉", "😍", "🔥", "✨", "👍", "👏", "❤️", "📌", "📣", "⚡", "❗", "✅", "➡️", "🎉", "📷", "🚀"];
@@ -388,6 +389,23 @@ export function QueueExperience() {
     await action(() => api.schedule(selected.queue_item_id, date.toISOString()), "Публикация запланирована");
   }
 
+  async function publishNow() {
+    if (!selected) return;
+    setBusy(true);
+    setError("");
+    setNotice("");
+    try {
+      const updated = await api.publishNow(selected.queue_item_id);
+      applyUpdated(updated);
+      setTab("archive");
+      setNotice("Пост опубликован в MAX");
+    } catch (exc) {
+      setError(exc instanceof Error ? exc.message : "Не удалось опубликовать пост");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function removeItem() {
     if (!selected || !window.confirm("Удалить эту публикацию из очереди?")) return;
     setBusy(true);
@@ -437,7 +455,7 @@ export function QueueExperience() {
           <aside className="editorial-drawer" onMouseDown={(event) => event.stopPropagation()}>
             <header className="editorial-drawer-head">
               <button className="drawer-close" onClick={() => setSelectedId(null)}><X size={22}/></button>
-              <div><h2>{selected.status === "scheduled" ? "Публикация в очереди" : "Публикация на модерации"}</h2><div className={`editorial-status status-${selected.status}`}>{statusLabels[selected.status] ?? selected.status}</div></div>
+              <div><h2>{selected.status === "published" ? "Опубликованный пост" : selected.status === "scheduled" ? "Публикация в очереди" : "Публикация на модерации"}</h2><div className={`editorial-status status-${selected.status}`}>{statusLabels[selected.status] ?? selected.status}</div></div>
             </header>
 
             {selected.status === "scheduled" && selected.scheduled_at && <div className="scheduled-banner"><CalendarClock size={18}/> Запланировано на {shortDate(selected.scheduled_at)}</div>}
@@ -452,7 +470,7 @@ export function QueueExperience() {
                 <span>Медиа публикации</span>
                 <div className="media-summary-actions">
                   <span>В публикации {mediaOrder.length} из {selected.photos.length}</span>
-                  {selected.photos.length > 0 && (
+                  {selected.photos.length > 0 && selected.status !== "published" && (
                     <div className="media-bulk-actions">
                       <button type="button" onClick={() => void removeAllPhotos()} disabled={busy || mediaOrder.length === 0}>Убрать все</button>
                       <button type="button" onClick={() => void restoreAllPhotos()} disabled={busy || mediaOrder.length === selected.photos.length}>Вернуть все</button>
@@ -470,14 +488,14 @@ export function QueueExperience() {
                       <div className={`drawer-photo ${included ? "included" : "excluded"}`} key={key}>
                         <img src={photo.source_url} alt="Фото публикации" onClick={() => setLightbox(photo)}/>
                         {!included && <div className="media-excluded-label">Не попадёт в публикацию</div>}
-                        <div className="media-controls media-controls-readable">
+                        {selected.status !== "published" && <div className="media-controls media-controls-readable">
                           <button className={included ? "media-remove" : "media-restore"} title={included ? "Убрать фото из публикации" : "Вернуть фото в публикацию"} onClick={() => void togglePhoto(photo)}>
                             {included ? <EyeOff size={14}/> : <Eye size={14}/>}<span>{included ? "Убрать" : "Вернуть"}</span>
                           </button>
                           {included && <button title="Сдвинуть левее" disabled={orderIndex <= 0} onClick={() => void movePhoto(photo, -1)}><ArrowLeft size={14}/></button>}
                           {included && <button title="Сдвинуть правее" disabled={orderIndex < 0 || orderIndex >= mediaOrder.length - 1} onClick={() => void movePhoto(photo, 1)}><ArrowRight size={14}/></button>}
                           {photo.kind === "uploaded" && photo.media_id && <button className="media-delete-file" title="Удалить загруженный файл" onClick={() => void removeUploadedPhoto(photo)}><Trash2 size={14}/><span>Удалить файл</span></button>}
-                        </div>
+                        </div>}
                         <span>{photo.kind === "uploaded" ? "Добавлено вручную" : included ? `№ ${orderIndex + 1}` : "Исключено"}</span>
                       </div>
                     );
@@ -485,8 +503,8 @@ export function QueueExperience() {
                 </div>
               ) : <div className="no-media"><FileImage size={28}/><span>У публикации пока нет фотографий</span></div>}
 
-              <label className="upload-media-button"><Upload size={17}/>Добавить фото<input type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={(event) => void uploadPhotos(event)} disabled={busy}/></label>
-              <small>«Убрать» исключает исходное фото только из публикации — сам оригинал остаётся. Загруженные вручную файлы можно удалить полностью · JPEG, PNG или WebP · до 10 МБ на файл.</small>
+              {selected.status !== "published" && <><label className="upload-media-button"><Upload size={17}/>Добавить фото<input type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={(event) => void uploadPhotos(event)} disabled={busy}/></label>
+              <small>«Убрать» исключает исходное фото только из публикации — сам оригинал остаётся. Загруженные вручную файлы можно удалить полностью · JPEG, PNG или WebP · до 10 МБ на файл.</small></>}
             </div>
 
             <div className="drawer-text-section">
@@ -512,7 +530,7 @@ export function QueueExperience() {
               ) : <div className="publication-text">{draft || "—"}</div>}
 
               <div className="drawer-inline-actions">
-                <button onClick={() => setEditing((value) => !value)}><Pencil size={16}/>{editing ? "Закончить редактирование" : "Редактировать"}</button>
+                {selected.status !== "published" && <button onClick={() => setEditing((value) => !value)}><Pencil size={16}/>{editing ? "Закончить редактирование" : "Редактировать"}</button>}
                 <button onClick={() => setShowSource((value) => !value)}>{showSource ? "Скрыть исходник" : "Показать текст источника"}</button>
               </div>
               {showSource && <div className="source-text-preview">{selected.original_text || "—"}</div>}
@@ -525,6 +543,7 @@ export function QueueExperience() {
                 {editing && <button className="secondary" onClick={() => void saveText()} disabled={busy}>Сохранить текст</button>}
                 {["pending", "rewriting", "rejected"].includes(selected.status) && <button className="primary" onClick={() => void submit()} disabled={busy}><Send size={17}/>На модерацию</button>}
                 {selected.status === "awaiting_moderation" && <><button className="primary" onClick={() => void action(() => api.approve(selected.queue_item_id), "Пост согласован")} disabled={busy}><CheckCircle2 size={17}/>Согласовать пост</button><button className="danger" onClick={() => void action(() => api.reject(selected.queue_item_id), "Пост отклонён")} disabled={busy}><XCircle size={17}/>Отклонить</button></>}
+                {["approved", "scheduled"].includes(selected.status) && selected.target_platform === "max" && <button className="primary" onClick={() => void publishNow()} disabled={busy}><Send size={17}/>Опубликовать сейчас</button>}
                 {["approved", "scheduled", "rejected"].includes(selected.status) && <button className="secondary" onClick={() => void action(() => api.reopen(selected.queue_item_id), "Пост возвращён в работу")} disabled={busy}><RotateCcw size={17}/>Вернуть в работу</button>}
               </div>
               <button className="drawer-delete" onClick={() => void removeItem()} disabled={busy}><Trash2 size={16}/>Удалить</button>
