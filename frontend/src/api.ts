@@ -201,6 +201,7 @@ export const api = {
   reject: (id: number) => request<QueueItem>(`/api/v1/queue/${id}/reject`, { method: "POST" }),
   reopen: (id: number) => request<QueueItem>(`/api/v1/queue/${id}/reopen`, { method: "POST" }),
   schedule: (id: number, scheduledAt: string) => request<QueueItem>(`/api/v1/queue/${id}/schedule`, { method: "POST", body: JSON.stringify({ scheduled_at: scheduledAt }) }),
+  publishNow: (id: number) => request<QueueItem>(`/api/v1/queue/${id}/publish-now`, { method: "POST" }),
   deleteQueueItem: (id: number) => request<void>(`/api/v1/queue/${id}`, { method: "DELETE" }),
   uploadQueuePhoto: async (id: number, file: File) => request<QueueItem>(`/api/v1/queue/${id}/media`, {
     method: "POST",
