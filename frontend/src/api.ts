@@ -72,13 +72,17 @@ export type MaxChannelInfo = {
 };
 
 export type TargetPlatform = "max" | "telegram" | "vk";
+export type SourcePlatform = TargetPlatform;
 
-export function detectTargetPlatform(value: string): TargetPlatform | null {
+function detectPlatform(value: string, requirePath = false): TargetPlatform | null {
   const raw = value.trim();
   if (!raw) return null;
   try {
     const url = new URL(raw);
+    if (url.protocol !== "http:" && url.protocol !== "https:") return null;
     const host = url.hostname.toLowerCase().replace(/^www\./, "");
+    const path = decodeURIComponent(url.pathname).replace(/^\/+|\/+$/g, "");
+    if (requirePath && !path) return null;
     if (host === "max.ru") return "max";
     if (host === "t.me" || host === "telegram.me") return "telegram";
     if (host === "vk.com" || host === "vk.ru") return "vk";
@@ -86,6 +90,14 @@ export function detectTargetPlatform(value: string): TargetPlatform | null {
     return null;
   }
   return null;
+}
+
+export function detectTargetPlatform(value: string): TargetPlatform | null {
+  return detectPlatform(value);
+}
+
+export function detectSourcePlatform(value: string): SourcePlatform | null {
+  return detectPlatform(value, true);
 }
 
 function externalIdFromUrl(value: string): string {
@@ -164,6 +176,19 @@ async function createTargetFromLink(data: Omit<Target, "target_id">): Promise<Ta
   });
 }
 
+async function createSourceFromLink(data: Omit<Source, "source_id">): Promise<Source> {
+  const url = data.url.trim();
+  const platform = detectSourcePlatform(url);
+  if (!platform) {
+    throw new Error("Укажите корректную ссылку на источник VK, Telegram или MAX, например https://vk.com/example");
+  }
+
+  return request<Source>("/api/v1/sources", {
+    method: "POST",
+    body: JSON.stringify({ ...data, platform, url }),
+  });
+}
+
 export const api = {
   queue: () => request<QueueItem[]>("/api/v1/queue?limit=100"),
   queueItem: (id: number) => request<QueueItem>(`/api/v1/queue/${id}`),
@@ -183,7 +208,7 @@ export const api = {
   updateTarget: (id: number, data: Partial<Omit<Target, "target_id">>) => request<Target>(`/api/v1/targets/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
   deleteTarget: (id: number) => request<void>(`/api/v1/targets/${id}`, { method: "DELETE" }),
 
-  createSource: (data: Omit<Source, "source_id">) => request<Source>("/api/v1/sources", { method: "POST", body: JSON.stringify(data) }),
+  createSource: (data: Omit<Source, "source_id">) => createSourceFromLink(data),
   updateSource: (id: number, data: Partial<Omit<Source, "source_id">>) => request<Source>(`/api/v1/sources/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
   deleteSource: (id: number) => request<void>(`/api/v1/sources/${id}`, { method: "DELETE" }),
 
