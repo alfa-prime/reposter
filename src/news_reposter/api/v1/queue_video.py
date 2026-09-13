@@ -6,6 +6,7 @@ from typing import Annotated, Any
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Path, status
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -37,12 +38,12 @@ class QueueVideoUpload(BaseModel):
     data_base64: str = Field(min_length=1)
 
 
-def media_directory(queue_item_id: int) -> FilePath:
-    return MEDIA_ROOT / str(queue_item_id)
+def video_directory(queue_item_id: int) -> FilePath:
+    return MEDIA_ROOT / str(queue_item_id) / "videos"
 
 
 def _uploaded_videos(queue_item_id: int) -> list[dict[str, Any]]:
-    directory = media_directory(queue_item_id)
+    directory = video_directory(queue_item_id)
     if not directory.exists():
         return []
 
@@ -54,7 +55,7 @@ def _uploaded_videos(queue_item_id: int) -> list[dict[str, Any]]:
             {
                 "media_id": path.name,
                 "filename": path.name,
-                "source_url": f"/api/v1/queue/{queue_item_id}/media/{path.name}",
+                "source_url": f"/api/v1/queue/{queue_item_id}/video/{path.name}",
                 "size": path.stat().st_size,
                 "kind": "uploaded",
             }
@@ -151,7 +152,7 @@ async def upload_queue_video(
     if len(content) > MAX_VIDEO_BYTES:
         raise HTTPException(status_code=413, detail="Видео больше 50 МБ")
 
-    directory = media_directory(queue_item_id)
+    directory = video_directory(queue_item_id)
     directory.mkdir(parents=True, exist_ok=True)
     filename = f"video-{uuid4().hex}{extension}"
     (directory / filename).write_bytes(content)
@@ -159,10 +160,29 @@ async def upload_queue_video(
     return {
         "media_id": filename,
         "filename": data.filename,
-        "source_url": f"/api/v1/queue/{queue_item_id}/media/{filename}",
+        "source_url": f"/api/v1/queue/{queue_item_id}/video/{filename}",
         "size": len(content),
         "kind": "uploaded",
     }
+
+
+@router.get(
+    "/{queue_item_id}/video/{media_id}",
+    summary="Получить загруженное видео",
+    responses={404: {"description": "Видео не найдено"}},
+)
+async def get_queue_video(
+    queue_item_id: Annotated[int, Path(gt=0)],
+    media_id: Annotated[str, Path(min_length=1, max_length=120)],
+    _api_key: ApiKeyDep,
+) -> FileResponse:
+    safe_name = FilePath(media_id).name
+    if safe_name != media_id or FilePath(safe_name).suffix.lower() not in VIDEO_EXTENSIONS:
+        raise HTTPException(status_code=400, detail="Некорректное имя видео")
+    path = video_directory(queue_item_id) / safe_name
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="Видео не найдено")
+    return FileResponse(path)
 
 
 @router.delete(
@@ -181,7 +201,7 @@ async def delete_queue_video(
     if safe_name != media_id or FilePath(safe_name).suffix.lower() not in VIDEO_EXTENSIONS:
         raise HTTPException(status_code=400, detail="Некорректное имя видео")
 
-    path = media_directory(queue_item_id) / safe_name
+    path = video_directory(queue_item_id) / safe_name
     if not path.is_file():
         raise HTTPException(status_code=404, detail="Видео не найдено")
     path.unlink()
