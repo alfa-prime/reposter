@@ -2,7 +2,7 @@ import { projectLogo } from "../logoData";
 
 export function AboutPage() {
   return (
-    <section className="about-project-page">
+    <section className="about-project-page" style={{ display: "block" }}>
       <div className="about-project-hero">
         <div className="about-project-hero-main">
           <img className="about-project-logo" src={projectLogo} alt="Дядя Влад" />
