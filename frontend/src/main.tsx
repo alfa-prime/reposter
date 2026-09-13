@@ -10,7 +10,7 @@ import "./polish.css";
 import "./brand.css";
 import "./mediaControls.css";
 import "./queueExperiencePatch.css";
-import "./targetWizardEnhancements.css";
+import "./targetComponents.css";
 import "./videoEnhancements.css";
 import "./publicationActionsEnhancements.css";
 import "./aboutEnhancements.css";
@@ -18,7 +18,6 @@ import "./sourceComponents.css";
 import "./queueEnhancements";
 import "./brandEnhancements";
 import "./signatureEnhancements";
-import "./targetWizardEnhancements";
 import "./videoEnhancements";
 import "./publicationActionsEnhancements";
 
