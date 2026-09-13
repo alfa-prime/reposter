@@ -427,7 +427,7 @@ export function QueueExperience() {
       setTab("archive");
       setNotice("Пост опубликован в MAX");
     } catch (exc) {
-      setError(exc instanceof Error ? exc.message : "Не удалось опубликовать пост");
+      setError(publicationErrorMessage(exc instanceof Error ? exc.message : null));
     } finally {
       setBusy(false);
     }
@@ -585,7 +585,7 @@ export function QueueExperience() {
                 {editing && <button className="secondary" onClick={() => void saveText()} disabled={busy}>Сохранить текст</button>}
                 {["pending", "rewriting", "rejected"].includes(selected.status) && <button className="primary" onClick={() => void submit()} disabled={busy}><Send size={17}/>На модерацию</button>}
                 {selected.status === "awaiting_moderation" && <><button className="primary" onClick={() => void action(() => api.approve(selected.queue_item_id), "Пост согласован")} disabled={busy}><CheckCircle2 size={17}/>Согласовать пост</button><button className="danger" onClick={() => void action(() => api.reject(selected.queue_item_id), "Пост отклонён")} disabled={busy}><XCircle size={17}/>Отклонить</button></>}
-                {["approved", "scheduled"].includes(selected.status) && selected.target_platform === "max" && <button className="primary" onClick={() => void publishNow()} disabled={busy}><Send size={17}/>Опубликовать сейчас</button>}
+                {["approved", "scheduled", "failed"].includes(selected.status) && selected.target_platform === "max" && <button className="primary" onClick={() => void publishNow()} disabled={busy}>{selected.status === "failed" ? <RefreshCw size={17}/> : <Send size={17}/>} {selected.status === "failed" ? "Повторить публикацию" : "Опубликовать сейчас"}</button>}
                 {["approved", "scheduled", "rejected"].includes(selected.status) && <button className="secondary" onClick={() => void action(() => api.reopen(selected.queue_item_id), "Пост возвращён в работу")} disabled={busy}><RotateCcw size={17}/>Вернуть в работу</button>}
               </div>
               <button className="drawer-delete" onClick={() => void removeItem()} disabled={busy}><Trash2 size={16}/>Удалить</button>
