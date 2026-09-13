@@ -1,4 +1,4 @@
-export {};
+import { projectLogo } from "./logoData";
 
 const ABOUT_ACTIVE_CLASS = "about-project-active";
 
@@ -35,9 +35,14 @@ function createAboutPage(workspace: HTMLElement) {
   page.className = "about-project-page";
   page.innerHTML = `
     <div class="about-project-hero">
-      <div class="about-project-kicker">О ПРОЕКТЕ</div>
-      <h1>Дядя Влад читает новости</h1>
-      <p class="about-project-lead">Система управления контентом, которая помогает собрать работу с новостями в одном месте — от получения исходного материала до готовой публикации в канале.</p>
+      <div class="about-project-hero-main">
+        <img class="about-project-logo" src="${projectLogo}" alt="Дядя Влад" />
+        <div class="about-project-hero-copy">
+          <div class="about-project-kicker">О ПРОЕКТЕ</div>
+          <h1>Дядя Влад читает новости</h1>
+          <p class="about-project-lead">Система управления контентом, которая помогает собрать работу с новостями в одном месте — от получения исходного материала до готовой публикации в канале.</p>
+        </div>
+      </div>
       <div class="about-project-slogan">От новости в источнике до готовой публикации — в одном окне.</div>
     </div>
 
