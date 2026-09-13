@@ -49,7 +49,7 @@ function enhanceTargetForm(form: HTMLFormElement) {
   const panel = document.createElement("div");
   panel.className = "target-connect-panel wide";
   panel.innerHTML = `
-    <div class="target-platform-state">Вставьте ссылку — платформа определится автоматически</div>
+    <div class="target-platform-state"></div>
     <div class="target-connect-help"></div>
   `;
   submit.before(panel);
@@ -64,7 +64,7 @@ function enhanceTargetForm(form: HTMLFormElement) {
       externalId.value = "";
       state.textContent = url.value.trim()
         ? "Не удалось распознать ссылку. Поддерживаются MAX, Telegram и VK."
-        : "Вставьте ссылку — платформа определится автоматически";
+        : "";
       state.className = `target-platform-state${url.value.trim() ? " error" : ""}`;
       help.innerHTML = "";
       submit.textContent = "Добавить канал";
@@ -73,9 +73,8 @@ function enhanceTargetForm(form: HTMLFormElement) {
 
     platform.value = detected;
     externalId.value = "auto";
-    const names = { max: "MAX", telegram: "Telegram", vk: "VK" } as const;
-    state.textContent = `${names[detected]} определён автоматически`;
-    state.className = "target-platform-state ok";
+    state.textContent = "";
+    state.className = "target-platform-state";
 
     if (detected === "max") {
       help.innerHTML = `
@@ -85,11 +84,11 @@ function enhanceTargetForm(form: HTMLFormElement) {
           <li>Затем назначьте этого бота администратором канала.</li>
           <li>После этого нажмите «Проверить и добавить канал».</li>
         </ol>
-        <p>Если бот уже был подключён раньше, удалите его из канала и добавьте заново, чтобы MAX прислал событие подключения.</p>
+        <p><b>Важно:</b> если бот уже находился в канале до подключения сервиса, MAX не пришлёт старое событие. Один раз удалите бота из канала, затем добавьте снова в подписчики и назначьте администратором.</p>
       `;
       submit.textContent = "Проверить и добавить канал";
     } else {
-      help.innerHTML = "<p>Платформа и идентификатор канала будут определены по ссылке автоматически.</p>";
+      help.innerHTML = "";
       submit.textContent = "Добавить канал";
     }
   }
