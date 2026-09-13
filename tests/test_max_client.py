@@ -11,11 +11,7 @@ def test_publish_post_with_images() -> None:
     """Проверяет отправку текста и фотографий в канал MAX."""
 
     async def scenario() -> None:
-        """Выполняет асинхронную часть проверки."""
-
         def handler(request: httpx.Request) -> httpx.Response:
-            """Проверяет запрос и возвращает тестовый ответ MAX."""
-
             assert request.url.path == "/messages"
             assert request.url.params["chat_id"] == "-77162942582085"
             assert request.headers["Authorization"] == "secret"
@@ -33,9 +29,7 @@ def test_publish_post_with_images() -> None:
                 json={"message": {"url": "https://max.ru/channel/post"}},
             )
 
-        async with httpx.AsyncClient(
-            transport=httpx.MockTransport(handler),
-        ) as http_client:
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http_client:
             client = MAXClient(
                 access_token="secret",
                 chat_id=-77162942582085,
@@ -66,18 +60,13 @@ def test_get_updates() -> None:
                 200,
                 json={
                     "updates": [
-                        {
-                            "update_type": "bot_added",
-                            "chat_id": -77162942582085,
-                        }
+                        {"update_type": "bot_added", "chat_id": -77162942582085}
                     ],
                     "marker": 124,
                 },
             )
 
-        async with httpx.AsyncClient(
-            transport=httpx.MockTransport(handler),
-        ) as http_client:
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http_client:
             client = MAXClient(access_token="secret", http_client=http_client)
             result = await client.get_updates(
                 limit=10,
@@ -93,7 +82,7 @@ def test_get_updates() -> None:
 
 
 def test_get_subscriptions() -> None:
-    """Проверяет диагностический запрос webhook-подписок MAX."""
+    """Проверяет запрос webhook-подписок MAX."""
 
     async def scenario() -> None:
         def handler(request: httpx.Request) -> httpx.Response:
@@ -101,9 +90,7 @@ def test_get_subscriptions() -> None:
             assert request.headers["Authorization"] == "secret"
             return httpx.Response(200, json={"subscriptions": []})
 
-        async with httpx.AsyncClient(
-            transport=httpx.MockTransport(handler),
-        ) as http_client:
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http_client:
             client = MAXClient(access_token="secret", http_client=http_client)
             result = await client.get_subscriptions()
 
@@ -112,20 +99,60 @@ def test_get_subscriptions() -> None:
     asyncio.run(scenario())
 
 
+def test_create_subscription_and_get_chat() -> None:
+    """Проверяет создание webhook-подписки и чтение данных канала."""
+
+    async def scenario() -> None:
+        requests: list[httpx.Request] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            requests.append(request)
+            if request.url.path == "/subscriptions":
+                assert request.method == "POST"
+                assert request.headers["Authorization"] == "secret"
+                assert json.loads(request.content) == {
+                    "url": "https://www.uncle-vlad.ru/api/v1/max/webhook",
+                    "secret": "test_secret_123",
+                    "update_types": ["bot_added", "bot_removed"],
+                }
+                return httpx.Response(200, json={"success": True})
+            if request.url.path == "/chats/-77162942582085":
+                return httpx.Response(
+                    200,
+                    json={
+                        "chat_id": -77162942582085,
+                        "type": "channel",
+                        "title": "Новости 51",
+                        "link": "https://max.ru/channel_51_news",
+                    },
+                )
+            return httpx.Response(404)
+
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http_client:
+            client = MAXClient(access_token="secret", http_client=http_client)
+            subscription = await client.create_subscription(
+                url="https://www.uncle-vlad.ru/api/v1/max/webhook",
+                secret="test_secret_123",
+                update_types=["bot_added", "bot_removed"],
+            )
+            chat = await client.get_chat(-77162942582085)
+
+        assert subscription["success"] is True
+        assert chat["chat_id"] == -77162942582085
+        assert chat["link"] == "https://max.ru/channel_51_news"
+        assert len(requests) == 2
+
+    asyncio.run(scenario())
+
+
 def test_max_api_error() -> None:
     """Проверяет преобразование HTTP-ошибки MAX в исключение клиента."""
 
     async def scenario() -> None:
-        """Выполняет асинхронную часть проверки."""
-
         def handler(request: httpx.Request) -> httpx.Response:
-            """Возвращает отказ в доступе от MAX."""
-
             return httpx.Response(403, json={"message": "access denied"})
 
-        async with httpx.AsyncClient(
-            transport=httpx.MockTransport(handler),
-        ) as http_client:
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http_client:
             client = MAXClient(
                 access_token="secret",
                 chat_id=-1,
