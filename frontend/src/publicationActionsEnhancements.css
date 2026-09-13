@@ -111,6 +111,7 @@
 
 .scheduled-banner {
   flex-wrap: wrap;
+  color: #79d9aa;
 }
 
 .scheduled-auto-note {
@@ -135,7 +136,11 @@ html[data-theme="light"] .publication-date-label > span {
 html[data-theme="light"] .publication-choice-head span,
 html[data-theme="light"] .publication-choice-copy span,
 html[data-theme="light"] .scheduled-auto-note {
-  color: #6f7d92;
+  color: #5f6f86;
+}
+
+html[data-theme="light"] .scheduled-banner {
+  color: #2f6f58;
 }
 
 html[data-theme="light"] .publication-choice-card {
