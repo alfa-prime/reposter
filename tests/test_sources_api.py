@@ -2,18 +2,18 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
 from typing import Any
 
 import httpx
 import pytest
 
+from news_reposter.db.session import get_db_session
 from news_reposter.main import app
-from news_reposter.repositories.source import SourceRepository
+from news_reposter.repositories.source import SourceAlreadyExistsError
 from news_reposter.schemas.source import SourceCreate, SourceUpdate
 
 
-class MemorySourceRepository(SourceRepository):
+class MemorySourceRepository:
     """Простой in-memory репозиторий для API-тестов источников."""
 
     def __init__(self) -> None:
@@ -23,11 +23,14 @@ class MemorySourceRepository(SourceRepository):
     async def list(
         self,
         *,
-        is_active: bool | None = None,
-        limit: int = 100,
         offset: int = 0,
+        limit: int = 100,
+        platform: str | None = None,
+        is_active: bool | None = None,
     ) -> list[dict[str, Any]]:
         values = list(self.items.values())
+        if platform is not None:
+            values = [item for item in values if item["platform"] == platform]
         if is_active is not None:
             values = [item for item in values if item["is_active"] is is_active]
         return values[offset : offset + limit]
@@ -41,7 +44,7 @@ class MemorySourceRepository(SourceRepository):
             str(item["url"]).replace("vk.ru", "vk.com") == normalized_url
             for item in self.items.values()
         ):
-            raise ValueError("Источник с такой ссылкой уже существует")
+            raise SourceAlreadyExistsError("Источник с такой ссылкой уже существует")
 
         item = {
             "source_id": self.next_id,
@@ -56,37 +59,36 @@ class MemorySourceRepository(SourceRepository):
 
     async def update(
         self,
-        source_id: int,
+        source: dict[str, Any],
         data: SourceUpdate,
-    ) -> dict[str, Any] | None:
-        item = self.items.get(source_id)
-        if item is None:
-            return None
-
+    ) -> dict[str, Any]:
         payload = data.model_dump(exclude_unset=True)
         if "url" in payload and payload["url"] is not None:
             payload["url"] = str(payload["url"])
-        item.update(payload)
-        return item
+        source.update(payload)
+        return source
 
-    async def delete(self, source_id: int) -> bool:
-        return self.items.pop(source_id, None) is not None
+    async def delete(self, source: dict[str, Any]) -> None:
+        self.items.pop(int(source["source_id"]), None)
 
 
 @pytest.fixture
-def memory_repository(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Подменяет SQLAlchemy-репозиторий на in-memory реализацию."""
+def memory_repository(monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[None]:
+    """Подменяет SQLAlchemy-сессию и репозиторий на in-memory реализацию."""
 
     repository = MemorySourceRepository()
 
-    @asynccontextmanager
-    async def repository_context() -> AsyncIterator[MemorySourceRepository]:
-        yield repository
+    async def fake_session() -> AsyncIterator[object]:
+        yield object()
 
+    app.dependency_overrides[get_db_session] = fake_session
     monkeypatch.setattr(
-        "news_reposter.api.v1.sources.get_repository",
-        repository_context,
+        "news_reposter.api.v1.sources.SourceRepository",
+        lambda _session: repository,
     )
+
+    yield
+    app.dependency_overrides.pop(get_db_session, None)
 
 
 def test_sources_crud(memory_repository: None) -> None:
@@ -169,8 +171,6 @@ def test_source_validation(memory_repository: None) -> None:
     """Проверяет отказ для некорректной ссылки и пустого обязательного поля."""
 
     async def scenario() -> None:
-        """Отправляет запросы, которые не должны доходить до репозитория."""
-
         transport = httpx.ASGITransport(app=app)
         async with httpx.AsyncClient(
             transport=transport,
