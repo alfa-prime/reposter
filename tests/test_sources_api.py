@@ -7,6 +7,7 @@ from typing import Any
 import httpx
 import pytest
 
+from news_reposter.api.dependencies import require_api_key
 from news_reposter.db.session import get_db_session
 from news_reposter.main import app
 from news_reposter.repositories.source import SourceAlreadyExistsError
@@ -74,13 +75,17 @@ class MemorySourceRepository:
 
 @pytest.fixture
 def memory_repository(monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[None]:
-    """Подменяет SQLAlchemy-сессию и репозиторий на in-memory реализацию."""
+    """Подменяет API-ключ, SQLAlchemy-сессию и репозиторий in-memory реализацией."""
 
     repository = MemorySourceRepository()
+
+    async def fake_api_key() -> None:
+        return None
 
     async def fake_session() -> AsyncIterator[object]:
         yield object()
 
+    app.dependency_overrides[require_api_key] = fake_api_key
     app.dependency_overrides[get_db_session] = fake_session
     monkeypatch.setattr(
         "news_reposter.api.v1.sources.SourceRepository",
@@ -88,6 +93,7 @@ def memory_repository(monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[None]:
     )
 
     yield
+    app.dependency_overrides.pop(require_api_key, None)
     app.dependency_overrides.pop(get_db_session, None)
 
 
