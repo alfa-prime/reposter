@@ -207,12 +207,12 @@ async def publish_queue_item(
     *,
     allow_scheduled: bool = True,
 ) -> QueueItem:
-    """Публикует один одобренный QueueItem в MAX и фиксирует результат."""
+    """Публикует согласованный, запланированный или ранее упавший QueueItem в MAX."""
 
     item = await _loaded_item(session, queue_item_id)
     if item is None:
         raise PublicationError("Элемент очереди не найден")
-    allowed = {QueueItemStatus.APPROVED}
+    allowed = {QueueItemStatus.APPROVED, QueueItemStatus.FAILED}
     if allow_scheduled:
         allowed.add(QueueItemStatus.SCHEDULED)
     if item.status not in allowed:
@@ -243,6 +243,7 @@ async def publish_queue_item(
     publication.status = PublicationStatus.PUBLISHING
     publication.attempts += 1
     publication.error_message = None
+    item.error_message = None
     await session.commit()
 
     client = MAXClient(
