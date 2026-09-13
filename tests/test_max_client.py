@@ -51,6 +51,67 @@ def test_publish_post_with_images() -> None:
     asyncio.run(scenario())
 
 
+def test_get_updates() -> None:
+    """Проверяет получение событий MAX через Long Polling."""
+
+    async def scenario() -> None:
+        def handler(request: httpx.Request) -> httpx.Response:
+            assert request.url.path == "/updates"
+            assert request.headers["Authorization"] == "secret"
+            assert request.url.params["limit"] == "10"
+            assert request.url.params["timeout"] == "0"
+            assert request.url.params["marker"] == "123"
+            assert request.url.params["types"] == "bot_added,bot_started"
+            return httpx.Response(
+                200,
+                json={
+                    "updates": [
+                        {
+                            "update_type": "bot_added",
+                            "chat_id": -77162942582085,
+                        }
+                    ],
+                    "marker": 124,
+                },
+            )
+
+        async with httpx.AsyncClient(
+            transport=httpx.MockTransport(handler),
+        ) as http_client:
+            client = MAXClient(access_token="secret", http_client=http_client)
+            result = await client.get_updates(
+                limit=10,
+                timeout=0,
+                marker=123,
+                types=["bot_added", "bot_started"],
+            )
+
+        assert result["marker"] == 124
+        assert result["updates"][0]["chat_id"] == -77162942582085
+
+    asyncio.run(scenario())
+
+
+def test_get_subscriptions() -> None:
+    """Проверяет диагностический запрос webhook-подписок MAX."""
+
+    async def scenario() -> None:
+        def handler(request: httpx.Request) -> httpx.Response:
+            assert request.url.path == "/subscriptions"
+            assert request.headers["Authorization"] == "secret"
+            return httpx.Response(200, json={"subscriptions": []})
+
+        async with httpx.AsyncClient(
+            transport=httpx.MockTransport(handler),
+        ) as http_client:
+            client = MAXClient(access_token="secret", http_client=http_client)
+            result = await client.get_subscriptions()
+
+        assert result == {"subscriptions": []}
+
+    asyncio.run(scenario())
+
+
 def test_max_api_error() -> None:
     """Проверяет преобразование HTTP-ошибки MAX в исключение клиента."""
 
