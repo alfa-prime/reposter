@@ -1,15 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
-import {
-  Archive,
-  ChevronRight,
-  ExternalLink,
-  RefreshCw,
-  Trash2,
-  X,
-} from "lucide-react";
+import { RefreshCw, Trash2, X } from "lucide-react";
 import { api, QueueItem, Source, Target, TargetSource } from "./api";
 import { AboutPage } from "./components/AboutPage";
 import { Dashboard } from "./components/Dashboard";
+import { QueuePage } from "./components/QueuePage";
 import { Sidebar } from "./components/Sidebar";
 import { SourcesPage } from "./components/SourcesPage";
 import { TargetsPage } from "./components/TargetsPage";
@@ -22,17 +16,6 @@ type ConfirmDialog = {
   onConfirm: () => Promise<void>;
 } | null;
 
-const statusLabels: Record<string, string> = {
-  pending: "В работе",
-  rewriting: "Рерайт",
-  awaiting_moderation: "На модерации",
-  approved: "Одобрено",
-  rejected: "Отклонено",
-  scheduled: "Запланировано",
-  published: "Опубликовано",
-  failed: "Ошибка",
-};
-
 const activeQueueStatuses = new Set([
   "pending",
   "rewriting",
@@ -41,25 +24,13 @@ const activeQueueStatuses = new Set([
   "scheduled",
 ]);
 
-function shortDate(value?: string | null): string {
-  if (!value) return "—";
-  return new Intl.DateTimeFormat("ru-RU", {
-    day: "2-digit",
-    month: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(new Date(value));
-}
-
 export function App() {
   const [section, setSection] = useState<Section>("queue");
   const [queue, setQueue] = useState<QueueItem[]>([]);
   const [targets, setTargets] = useState<Target[]>([]);
   const [sources, setSources] = useState<Source[]>([]);
-  const [selected, setSelected] = useState<QueueItem | null>(null);
   const [selectedTarget, setSelectedTarget] = useState<Target | null>(null);
   const [targetSources, setTargetSources] = useState<TargetSource[]>([]);
-  const [draftText, setDraftText] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -82,12 +53,6 @@ export function App() {
       setTargets(targetData);
       setSources(sourceData);
 
-      if (selected) {
-        const updated = queueData.find((item) => item.queue_item_id === selected.queue_item_id) ?? null;
-        setSelected(updated);
-        setDraftText(updated?.rewritten_text ?? updated?.original_text ?? "");
-      }
-
       if (selectedTarget) {
         const updatedTarget = targetData.find((item) => item.target_id === selectedTarget.target_id) ?? null;
         setSelectedTarget(updatedTarget);
@@ -106,11 +71,6 @@ export function App() {
 
   useEffect(() => { void loadAll(); }, []);
 
-  function openItem(item: QueueItem) {
-    setSelected(item);
-    setDraftText(item.rewritten_text ?? item.original_text ?? "");
-  }
-
   async function openTarget(item: Target) {
     setSelectedTarget(item);
     setBusy(true);
@@ -119,22 +79,6 @@ export function App() {
       setTargetSources(await api.targetSources(item.target_id));
     } catch (exc) {
       setError(exc instanceof Error ? exc.message : "Не удалось загрузить источники канала");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function runAction(action: () => Promise<QueueItem>, message: string) {
-    setBusy(true);
-    setError("");
-    try {
-      const item = await action();
-      setSelected(item);
-      setDraftText(item.rewritten_text ?? item.original_text ?? "");
-      setQueue((items) => items.map((current) => current.queue_item_id === item.queue_item_id ? item : current));
-      setNotice(message);
-    } catch (exc) {
-      setError(exc instanceof Error ? exc.message : "Операция не выполнена");
     } finally {
       setBusy(false);
     }
@@ -215,7 +159,13 @@ export function App() {
     }
   }
 
-  const pageTitle = section === "queue" ? "Редакционная очередь" : section === "targets" ? "Целевые каналы" : section === "sources" ? "Источники" : "Обзор";
+  const pageTitle = section === "queue"
+    ? "Редакционная очередь"
+    : section === "targets"
+      ? "Целевые каналы"
+      : section === "sources"
+        ? "Источники"
+        : "Обзор";
 
   return (
     <div className="shell">
@@ -224,54 +174,86 @@ export function App() {
       <main className="workspace">
         {section !== "about" && <>
           <header className="topbar">
-            <div><p className="eyebrow">ДЯДЯ ВЛАД · ЧИТАЕТ НОВОСТИ</p><h1>{pageTitle}</h1></div>
-            <button className="primary" onClick={() => void collectNow()} disabled={busy}><RefreshCw size={17} className={busy ? "spin" : ""} />Собрать сейчас</button>
+            <div>
+              <p className="eyebrow">ДЯДЯ ВЛАД · ЧИТАЕТ НОВОСТИ</p>
+              <h1>{pageTitle}</h1>
+            </div>
+            <button className="primary" onClick={() => void collectNow()} disabled={busy}>
+              <RefreshCw size={17} className={busy ? "spin" : ""} />Собрать сейчас
+            </button>
           </header>
 
-          {(error || notice) && <div className={error ? "toast error" : "toast"}>{error || notice}<button onClick={() => { setError(""); setNotice(""); }}>×</button></div>}
+          {(error || notice) && (
+            <div className={error ? "toast error" : "toast"}>
+              {error || notice}
+              <button onClick={() => { setError(""); setNotice(""); }}>×</button>
+            </div>
+          )}
         </>}
 
         {section === "about" && <AboutPage />}
 
-        {section === "dashboard" && <Dashboard
-          activeTargets={activeTargets}
-          totalTargets={targets.length}
-          activeSources={activeSources}
-          totalSources={sources.length}
-          activeQueue={activeQueue}
-          totalQueue={queue.length}
-        />}
+        {section === "dashboard" && (
+          <Dashboard
+            activeTargets={activeTargets}
+            totalTargets={targets.length}
+            activeSources={activeSources}
+            totalSources={sources.length}
+            activeQueue={activeQueue}
+            totalQueue={queue.length}
+          />
+        )}
 
-        {section === "queue" && <section className="queue-layout">
-          <div className="queue-list">{queue.length === 0 && <div className="empty">Очередь пока пуста</div>}{queue.map((item) => <button key={item.queue_item_id} className={`queue-card ${selected?.queue_item_id === item.queue_item_id ? "selected" : ""}`} onClick={() => openItem(item)}><div className="queue-card-head"><span className={`badge status-${item.status}`}>{statusLabels[item.status] ?? item.status}</span><time>{shortDate(item.source_published_at)}</time></div><h3>{item.target_name ?? `Канал #${item.target_id}`}</h3><p>{item.original_text || "Пост без текста"}</p><div className="queue-card-bottom"><span>{item.photos.length ? `${item.photos.length} фото` : "без фото"}</span><ChevronRight size={16}/></div></button>)}</div>
-          <div className="editor-panel">{!selected ? <div className="empty large"><Archive size={34}/><h3>Выберите пост</h3><p>Здесь появятся исходник, фотографии и редакционный текст.</p></div> : <><div className="editor-head"><div><span className={`badge status-${selected.status}`}>{statusLabels[selected.status] ?? selected.status}</span><h2>{selected.target_name ?? `Канал #${selected.target_id}`}</h2></div>{selected.source_url && <a href={selected.source_url} target="_blank" rel="noreferrer">VK <ExternalLink size={14}/></a>}</div>{selected.photos.length > 0 && <div className="photo-strip">{selected.photos.map((photo) => <img key={photo.attachment_id} src={photo.source_url} alt="Вложение поста" />)}</div>}<div className="text-block"><label>Исходный текст</label><div className="original-text">{selected.original_text || "—"}</div></div><div className="text-block"><label>Текст для публикации</label><textarea value={draftText} onChange={(event) => setDraftText(event.target.value)} rows={11} /></div><div className="actions"><button className="secondary" onClick={() => void runAction(() => api.updateQueueText(selected.queue_item_id, draftText), "Текст сохранён")}>Сохранить</button>{selected.status === "pending" && <button className="primary" onClick={() => void runAction(async () => { await api.updateQueueText(selected.queue_item_id, draftText); return api.submit(selected.queue_item_id); }, "Отправлено на модерацию")}>На модерацию</button>}{selected.status === "awaiting_moderation" && <><button className="danger" onClick={() => void runAction(() => api.reject(selected.queue_item_id), "Пост отклонён")}>Отклонить</button><button className="primary" onClick={() => void runAction(() => api.approve(selected.queue_item_id), "Пост одобрен")}>Одобрить</button></>}{["rejected", "approved", "scheduled", "awaiting_moderation"].includes(selected.status) && <button className="secondary" onClick={() => void runAction(() => api.reopen(selected.queue_item_id), "Пост возвращён в работу")}>Вернуть в работу</button>}</div></>}</div>
-        </section>}
+        {section === "queue" && <QueuePage />}
 
-        {section === "targets" && <TargetsPage
-          targets={targets}
-          sources={sources}
-          selectedTarget={selectedTarget}
-          targetSources={targetSources}
-          busy={busy}
-          onOpenTarget={openTarget}
-          onChanged={loadAll}
-          onTargetSourcesChanged={setTargetSources}
-          onDelete={askDeleteTarget}
-          onError={setError}
-          onNotice={setNotice}
-        />}
+        {section === "targets" && (
+          <TargetsPage
+            targets={targets}
+            sources={sources}
+            selectedTarget={selectedTarget}
+            targetSources={targetSources}
+            busy={busy}
+            onOpenTarget={openTarget}
+            onChanged={loadAll}
+            onTargetSourcesChanged={setTargetSources}
+            onDelete={askDeleteTarget}
+            onError={setError}
+            onNotice={setNotice}
+          />
+        )}
 
-        {section === "sources" && <SourcesPage
-          sources={sources}
-          busy={busy}
-          onChanged={loadAll}
-          onDelete={askDeleteSource}
-          onError={setError}
-          onNotice={setNotice}
-        />}
+        {section === "sources" && (
+          <SourcesPage
+            sources={sources}
+            busy={busy}
+            onChanged={loadAll}
+            onDelete={askDeleteSource}
+            onError={setError}
+            onNotice={setNotice}
+          />
+        )}
       </main>
 
-      {confirmDialog && <div className="modal-backdrop" onMouseDown={() => setConfirmDialog(null)}><div className="modal-card confirm-card" onMouseDown={(event) => event.stopPropagation()}><div className="modal-head"><div><p className="eyebrow">ПОДТВЕРЖДЕНИЕ</p><h2>{confirmDialog.title}</h2></div><button className="icon-button" onClick={() => setConfirmDialog(null)}><X size={18}/></button></div><p className="confirm-message">{confirmDialog.message}</p><div className="actions confirm-actions"><button className="secondary" onClick={() => setConfirmDialog(null)}>Отмена</button><button className="danger" disabled={busy} onClick={() => void confirmAction()}><Trash2 size={15}/>{confirmDialog.confirmLabel}</button></div></div></div>}
+      {confirmDialog && (
+        <div className="modal-backdrop" onMouseDown={() => setConfirmDialog(null)}>
+          <div className="modal-card confirm-card" onMouseDown={(event) => event.stopPropagation()}>
+            <div className="modal-head">
+              <div>
+                <p className="eyebrow">ПОДТВЕРЖДЕНИЕ</p>
+                <h2>{confirmDialog.title}</h2>
+              </div>
+              <button className="icon-button" onClick={() => setConfirmDialog(null)}><X size={18} /></button>
+            </div>
+            <p className="confirm-message">{confirmDialog.message}</p>
+            <div className="actions confirm-actions">
+              <button className="secondary" onClick={() => setConfirmDialog(null)}>Отмена</button>
+              <button className="danger" disabled={busy} onClick={() => void confirmAction()}>
+                <Trash2 size={15} />{confirmDialog.confirmLabel}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
