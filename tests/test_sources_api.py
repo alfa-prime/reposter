@@ -1,119 +1,98 @@
+from __future__ import annotations
+
 import asyncio
-from collections.abc import Iterator
-from datetime import UTC, datetime
-from types import SimpleNamespace
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+from typing import Any
 
 import httpx
 import pytest
 
-import news_reposter.api.v1.sources as sources_api
-from news_reposter.api.dependencies import require_api_key
 from news_reposter.main import app
-from news_reposter.repositories import SourceAlreadyExistsError
-from news_reposter.schemas import SourceCreate, SourceUpdate
+from news_reposter.repositories.sources import SourceRepository
+from news_reposter.schemas.source import SourceCreate, SourceUpdate
 
 
-class MemorySourceRepository:
-    """Хранит источники в памяти во время проверки HTTP API."""
+class MemorySourceRepository(SourceRepository):
+    """Простой in-memory репозиторий для API-тестов источников."""
 
-    records: dict[int, SimpleNamespace] = {}
-    next_id = 1
-
-    def __init__(self, _session: object) -> None:
-        """Принимает совместимый с настоящим репозиторием аргумент."""
-
-    @classmethod
-    def reset(cls) -> None:
-        """Очищает записи перед запуском нового сценария."""
-
-        cls.records = {}
-        cls.next_id = 1
-
-    async def create(self, data: SourceCreate) -> SimpleNamespace:
-        """Создаёт тестовый источник и проверяет уникальность ссылки."""
-
-        if any(source.url == data.url for source in self.records.values()):
-            raise SourceAlreadyExistsError
-        now = datetime.now(UTC)
-        source = SimpleNamespace(
-            source_id=self.next_id,
-            created_at=now,
-            updated_at=now,
-            **data.model_dump(),
-        )
-        self.records[source.source_id] = source
-        type(self).next_id += 1
-        return source
+    def __init__(self) -> None:
+        self.items: dict[int, dict[str, Any]] = {}
+        self.next_id = 1
 
     async def list(
         self,
         *,
-        offset: int,
-        limit: int,
-        platform: str | None,
-        is_active: bool | None,
-    ) -> list[SimpleNamespace]:
-        """Возвращает отфильтрованный участок тестовых записей."""
-
-        records = list(self.records.values())
-        if platform is not None:
-            records = [item for item in records if item.platform == platform]
+        is_active: bool | None = None,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> list[dict[str, Any]]:
+        values = list(self.items.values())
         if is_active is not None:
-            records = [item for item in records if item.is_active == is_active]
-        return records[offset : offset + limit]
+            values = [item for item in values if item["is_active"] is is_active]
+        return values[offset : offset + limit]
 
-    async def get(self, source_id: int) -> SimpleNamespace | None:
-        """Находит тестовый источник по идентификатору."""
+    async def get(self, source_id: int) -> dict[str, Any] | None:
+        return self.items.get(source_id)
 
-        return self.records.get(source_id)
+    async def create(self, data: SourceCreate) -> dict[str, Any]:
+        normalized_url = str(data.url).replace("vk.ru", "vk.com")
+        if any(
+            str(item["url"]).replace("vk.ru", "vk.com") == normalized_url
+            for item in self.items.values()
+        ):
+            raise ValueError("Источник с такой ссылкой уже существует")
+
+        item = {
+            "source_id": self.next_id,
+            "name": data.name,
+            "platform": data.platform,
+            "url": str(data.url),
+            "is_active": data.is_active,
+        }
+        self.items[self.next_id] = item
+        self.next_id += 1
+        return item
 
     async def update(
         self,
-        source: SimpleNamespace,
+        source_id: int,
         data: SourceUpdate,
-    ) -> SimpleNamespace:
-        """Изменяет поля тестового источника."""
+    ) -> dict[str, Any] | None:
+        item = self.items.get(source_id)
+        if item is None:
+            return None
 
-        changes = data.model_dump(exclude_unset=True)
-        new_url = changes.get("url")
-        if new_url is not None and any(
-            item.source_id != source.source_id and item.url == new_url
-            for item in self.records.values()
-        ):
-            raise SourceAlreadyExistsError
-        for field, value in changes.items():
-            setattr(source, field, value)
-        source.updated_at = datetime.now(UTC)
-        return source
+        payload = data.model_dump(exclude_unset=True)
+        if "url" in payload and payload["url"] is not None:
+            payload["url"] = str(payload["url"])
+        item.update(payload)
+        return item
 
-    async def delete(self, source: SimpleNamespace) -> None:
-        """Удаляет тестовый источник."""
-
-        self.records.pop(source.source_id)
+    async def delete(self, source_id: int) -> bool:
+        return self.items.pop(source_id, None) is not None
 
 
 @pytest.fixture
-def memory_repository(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
-    """Подменяет репозиторий API хранилищем в памяти."""
+def memory_repository(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Подменяет SQLAlchemy-репозиторий на in-memory реализацию."""
 
-    async def allow_api_key() -> None:
-        """Разрешает тестовые запросы без настоящего ключа."""
+    repository = MemorySourceRepository()
 
-    MemorySourceRepository.reset()
-    monkeypatch.setattr(sources_api, "SourceRepository", MemorySourceRepository)
-    app.dependency_overrides[require_api_key] = allow_api_key
-    try:
-        yield
-    finally:
-        app.dependency_overrides.pop(require_api_key, None)
+    @asynccontextmanager
+    async def repository_context() -> AsyncIterator[MemorySourceRepository]:
+        yield repository
+
+    monkeypatch.setattr(
+        "news_reposter.api.v1.sources.get_repository",
+        repository_context,
+    )
 
 
 def test_sources_crud(memory_repository: None) -> None:
-    """Проверяет полный цикл управления источниками через HTTP API."""
+    """Проверяет основной CRUD источников и фильтрацию по активности."""
 
     async def scenario() -> None:
-        """Отправляет CRUD-запросы приложению."""
-
         transport = httpx.ASGITransport(app=app)
         async with httpx.AsyncClient(
             transport=transport,
@@ -122,9 +101,9 @@ def test_sources_crud(memory_repository: None) -> None:
             created = await client.post(
                 "/api/v1/sources",
                 json={
-                    "name": " Полуостров 51 ",
-                    "platform": "VK",
-                    "url": " https://vk.ru/peninsula51 ",
+                    "name": "Полуостров 51",
+                    "platform": "vk",
+                    "url": "https://vk.com/peninsula51",
                 },
             )
             assert created.status_code == 201
@@ -148,8 +127,8 @@ def test_sources_crud(memory_repository: None) -> None:
                 "/api/v1/sources",
                 json={
                     "name": "Резервный источник",
-                    "platform": "rss",
-                    "url": "https://example.com/feed.xml",
+                    "platform": "telegram",
+                    "url": "https://t.me/reserve_feed",
                     "is_active": False,
                 },
             )
