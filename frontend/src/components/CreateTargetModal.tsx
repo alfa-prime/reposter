@@ -33,6 +33,8 @@ export function CreateTargetModal({ busy, onClose, onCreated, onError }: CreateT
     try {
       const created = await api.createTarget({
         name: name.trim(),
+        platform,
+        external_id: "auto",
         url: url.trim(),
         is_active: true,
       });
