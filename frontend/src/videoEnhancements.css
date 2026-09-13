@@ -1,0 +1,138 @@
+.video-enhancement-block {
+  display: grid;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.video-source-warning {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  border: 1px solid color-mix(in srgb, #f59e0b 45%, var(--border, #dfe5f1));
+  background: color-mix(in srgb, #f59e0b 9%, var(--surface, #fff));
+  border-radius: 14px;
+  padding: 13px 14px;
+}
+
+.video-source-icon {
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  background: color-mix(in srgb, #f59e0b 18%, var(--surface, #fff));
+  color: #b56b00;
+  font-size: 13px;
+}
+
+.video-source-warning strong {
+  display: block;
+  margin-bottom: 3px;
+  color: var(--text, #17223b);
+}
+
+.video-source-warning p {
+  margin: 0;
+  color: var(--muted, #6f7c96);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.uploaded-video-list {
+  display: grid;
+  gap: 12px;
+}
+
+.uploaded-video-card {
+  border: 1px solid var(--border, #dfe5f1);
+  border-radius: 14px;
+  overflow: hidden;
+  background: var(--surface, #fff);
+}
+
+.uploaded-video-card video {
+  display: block;
+  width: 100%;
+  max-height: 320px;
+  background: #0f172a;
+}
+
+.uploaded-video-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+}
+
+.uploaded-video-meta span {
+  font-weight: 600;
+}
+
+.uploaded-video-meta small {
+  color: var(--muted, #6f7c96);
+}
+
+.video-delete {
+  margin-left: auto;
+  border: 1px solid color-mix(in srgb, #ef4444 35%, var(--border, #dfe5f1));
+  color: #d84b55;
+  background: transparent;
+  border-radius: 9px;
+  padding: 7px 10px;
+  cursor: pointer;
+}
+
+.video-upload-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 9px 12px;
+}
+
+.video-upload-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border, #dfe5f1);
+  border-radius: 10px;
+  padding: 9px 13px;
+  font-weight: 600;
+  cursor: pointer;
+  background: var(--surface, #fff);
+  color: var(--text, #17223b);
+}
+
+.video-upload-button:hover {
+  border-color: #7b70f6;
+}
+
+.video-upload-row > small {
+  color: var(--muted, #6f7c96);
+}
+
+.video-upload-status {
+  font-size: 13px;
+  color: var(--muted, #6f7c96);
+}
+
+.video-upload-status.ok {
+  color: #218a57;
+}
+
+.video-upload-status.error,
+.video-enhancement-error {
+  color: #c94c5b;
+  font-size: 13px;
+}
+
+@media (max-width: 720px) {
+  .uploaded-video-meta {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .video-delete {
+    margin-left: 0;
+  }
+}
