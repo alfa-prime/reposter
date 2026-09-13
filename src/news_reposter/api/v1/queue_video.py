@@ -63,6 +63,25 @@ def _uploaded_videos(queue_item_id: int) -> list[dict[str, Any]]:
     return result
 
 
+def _raw_video_payloads(raw_post: dict[str, Any]) -> list[dict[str, Any]]:
+    attachments = raw_post.get("attachments")
+    if not isinstance(attachments, list) or not attachments:
+        copy_history = raw_post.get("copy_history")
+        copied = copy_history[0] if isinstance(copy_history, list) and copy_history else None
+        attachments = copied.get("attachments") if isinstance(copied, dict) else []
+
+    result: list[dict[str, Any]] = []
+    if not isinstance(attachments, list):
+        return result
+    for attachment in attachments:
+        if not isinstance(attachment, dict) or attachment.get("type") != "video":
+            continue
+        payload = attachment.get("video")
+        if isinstance(payload, dict):
+            result.append(payload)
+    return result
+
+
 def _source_videos(item: Any) -> list[dict[str, Any]]:
     post = getattr(item, "post", None)
     if post is None:
@@ -84,6 +103,28 @@ def _source_videos(item: Any) -> list[dict[str, Any]]:
                 "kind": "source",
             }
         )
+
+    # Старые посты могли быть собраны до того, как мы начали сохранять VIDEO в
+    # post_attachments. Для них читаем исходный raw_data, чтобы уведомление в UI
+    # появилось сразу и не требовало повторного сбора публикации.
+    if not result and isinstance(getattr(post, "raw_data", None), dict):
+        for index, payload in enumerate(_raw_video_payloads(post.raw_data)):
+            video_id = payload.get("id")
+            owner_id = payload.get("owner_id")
+            external_id = None
+            if video_id is not None:
+                external_id = str(video_id) if owner_id is None else f"{owner_id}_{video_id}"
+            title = payload.get("title")
+            player = payload.get("player")
+            result.append(
+                {
+                    "attachment_id": -(index + 1),
+                    "external_attachment_id": external_id,
+                    "title": title if isinstance(title, str) and title.strip() else "Видео из VK",
+                    "source_url": player if isinstance(player, str) and player else None,
+                    "kind": "source",
+                }
+            )
     return result
 
 
