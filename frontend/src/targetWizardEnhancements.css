@@ -3,26 +3,32 @@
 }
 
 .target-connect-panel {
+  grid-column: 1 / -1;
+  width: 100%;
+  box-sizing: border-box;
   border: 1px solid var(--border, #dfe5f1);
   border-radius: 14px;
   background: color-mix(in srgb, var(--surface, #fff) 92%, #6675f6 8%);
-  padding: 14px 16px;
+  padding: 16px 18px;
   display: grid;
   gap: 10px;
 }
 
 .target-platform-state {
+  display: none;
   font-size: 13px;
   font-weight: 700;
   color: var(--muted, #6f7c96);
 }
 
-.target-platform-state.ok {
-  color: #218a57;
+.target-platform-state.error {
+  display: block;
+  color: #c94c5b;
 }
 
-.target-platform-state.error {
-  color: #c94c5b;
+.target-connect-help:empty,
+.target-platform-state:empty {
+  display: none;
 }
 
 .target-connect-help {
@@ -37,7 +43,7 @@
 }
 
 .target-connect-help ol {
-  margin: 4px 0 8px 20px;
+  margin: 4px 0 10px 20px;
   padding: 0;
 }
 
@@ -48,6 +54,10 @@
 .target-connect-help p {
   margin: 0;
   color: var(--muted, #6f7c96);
+}
+
+.target-connect-help p b {
+  color: var(--text, #17223b);
 }
 
 .target-connect-help code {
