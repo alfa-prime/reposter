@@ -7,13 +7,17 @@ from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Path, status
 from fastapi.responses import FileResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from news_reposter.api.dependencies import API_KEY_RESPONSES, ApiKeyDep
 from news_reposter.db.models import AttachmentType
 from news_reposter.db.session import get_db_session
 from news_reposter.repositories.queue_item import QueueItemRepository
+from news_reposter.services.media_validation import (
+    MediaValidationError,
+    validate_video_content,
+)
 
 router = APIRouter(
     prefix="/queue",
@@ -36,6 +40,20 @@ class QueueVideoUpload(BaseModel):
     filename: str = Field(min_length=1, max_length=255)
     content_type: str
     data_base64: str = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def validate_real_video_type(self) -> "QueueVideoUpload":
+        try:
+            content = base64.b64decode(self.data_base64, validate=True)
+        except (binascii.Error, ValueError) as exc:
+            raise ValueError("некорректные Base64-данные видео") from exc
+        if not content:
+            raise ValueError("пустой видеофайл")
+        try:
+            validate_video_content(content, self.content_type)
+        except MediaValidationError as exc:
+            raise ValueError(str(exc)) from exc
+        return self
 
 
 def video_directory(queue_item_id: int) -> FilePath:
@@ -104,9 +122,6 @@ def _source_videos(item: Any) -> list[dict[str, Any]]:
             }
         )
 
-    # Старые посты могли быть собраны до того, как мы начали сохранять VIDEO в
-    # post_attachments. Для них читаем исходный raw_data, чтобы уведомление в UI
-    # появилось сразу и не требовало повторного сбора публикации.
     if not result and isinstance(getattr(post, "raw_data", None), dict):
         for index, payload in enumerate(_raw_video_payloads(post.raw_data)):
             video_id = payload.get("id")
@@ -165,7 +180,7 @@ async def get_queue_video_info(
     summary="Загрузить своё видео к публикации",
     description=(
         "Сохраняет загруженное редактором MP4, WebM или MOV видео. "
-        "Максимальный размер одного файла — 50 МБ."
+        "Максимальный размер одного файла — 50 МБ. Тип проверяется по содержимому файла."
     ),
 )
 async def upload_queue_video(
