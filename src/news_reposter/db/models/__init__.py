@@ -7,6 +7,7 @@ from news_reposter.db.models.enums import (
     PublicationStatus,
     QueueItemStatus,
 )
+from news_reposter.db.models.max_channel import MAXChannel
 from news_reposter.db.models.post import Post
 from news_reposter.db.models.publication import Publication
 from news_reposter.db.models.queue_item import QueueItem
@@ -16,6 +17,7 @@ from news_reposter.db.models.target_source import TargetSource
 
 __all__ = [
     "AttachmentType",
+    "MAXChannel",
     "Post",
     "PostAttachment",
     "PostStatus",
