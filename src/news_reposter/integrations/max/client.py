@@ -44,10 +44,7 @@ class MAXClient:
     ) -> dict[str, Any]:
         """Возвращает события бота через тестовый Long Polling MAX."""
 
-        params: dict[str, Any] = {
-            "limit": limit,
-            "timeout": timeout,
-        }
+        params: dict[str, Any] = {"limit": limit, "timeout": timeout}
         if marker is not None:
             params["marker"] = marker
         if types:
@@ -58,6 +55,25 @@ class MAXClient:
         """Возвращает активные webhook-подписки бота MAX."""
 
         return await self._get_json("/subscriptions")
+
+    async def create_subscription(
+        self,
+        *,
+        url: str,
+        secret: str,
+        update_types: list[str],
+    ) -> dict[str, Any]:
+        """Создаёт webhook-подписку MAX."""
+
+        return await self._post_json(
+            "/subscriptions",
+            body={"url": url, "secret": secret, "update_types": update_types},
+        )
+
+    async def get_chat(self, chat_id: int) -> dict[str, Any]:
+        """Возвращает информацию о конкретном чате или канале MAX."""
+
+        return await self._get_json(f"/chats/{chat_id}")
 
     async def publish_post(
         self,
@@ -86,11 +102,7 @@ class MAXClient:
         if self._http_client is not None:
             return await self._send(self._http_client, body)
 
-        ssl_context = self._ssl_context()
-        async with httpx.AsyncClient(
-            timeout=30.0,
-            verify=ssl_context,
-        ) as client:
+        async with httpx.AsyncClient(timeout=30.0, verify=self._ssl_context()) as client:
             return await self._send(client, body)
 
     def _ssl_context(self) -> ssl.SSLContext:
@@ -112,11 +124,17 @@ class MAXClient:
         if self._http_client is not None:
             return await self._request_get(self._http_client, path, params=params)
 
-        async with httpx.AsyncClient(
-            timeout=95.0,
-            verify=self._ssl_context(),
-        ) as client:
+        async with httpx.AsyncClient(timeout=95.0, verify=self._ssl_context()) as client:
             return await self._request_get(client, path, params=params)
+
+    async def _post_json(self, path: str, *, body: dict[str, Any]) -> dict[str, Any]:
+        """Выполняет авторизованный POST-запрос к MAX и возвращает JSON-объект."""
+
+        if self._http_client is not None:
+            return await self._request_post(self._http_client, path, body=body)
+
+        async with httpx.AsyncClient(timeout=30.0, verify=self._ssl_context()) as client:
+            return await self._request_post(client, path, body=body)
 
     async def _request_get(
         self,
@@ -132,6 +150,30 @@ class MAXClient:
                 f"{self._api_url}{path}",
                 params=params,
                 headers={"Authorization": self._access_token},
+            )
+            response.raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            detail = exc.response.text or str(exc)
+            raise MAXAPIError(detail, exc.response.status_code) from exc
+        except httpx.HTTPError as exc:
+            raise MAXAPIError(f"Не удалось выполнить запрос к MAX: {exc}") from exc
+
+        return self._decode_dict(response)
+
+    async def _request_post(
+        self,
+        client: httpx.AsyncClient,
+        path: str,
+        *,
+        body: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Отправляет POST-запрос к MAX."""
+
+        try:
+            response = await client.post(
+                f"{self._api_url}{path}",
+                headers={"Authorization": self._access_token},
+                json=body,
             )
             response.raise_for_status()
         except httpx.HTTPStatusError as exc:
