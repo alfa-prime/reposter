@@ -1,0 +1,59 @@
+.target-auto-hidden {
+  display: none !important;
+}
+
+.target-connect-panel {
+  border: 1px solid var(--border, #dfe5f1);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--surface, #fff) 92%, #6675f6 8%);
+  padding: 14px 16px;
+  display: grid;
+  gap: 10px;
+}
+
+.target-platform-state {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--muted, #6f7c96);
+}
+
+.target-platform-state.ok {
+  color: #218a57;
+}
+
+.target-platform-state.error {
+  color: #c94c5b;
+}
+
+.target-connect-help {
+  color: var(--text, #17223b);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.target-connect-help strong {
+  display: block;
+  margin-bottom: 6px;
+}
+
+.target-connect-help ol {
+  margin: 4px 0 8px 20px;
+  padding: 0;
+}
+
+.target-connect-help li + li {
+  margin-top: 4px;
+}
+
+.target-connect-help p {
+  margin: 0;
+  color: var(--muted, #6f7c96);
+}
+
+.target-connect-help code {
+  font: inherit;
+  font-weight: 700;
+  background: color-mix(in srgb, var(--surface, #fff) 80%, #6675f6 20%);
+  border-radius: 6px;
+  padding: 1px 5px;
+}
