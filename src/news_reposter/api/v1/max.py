@@ -1,5 +1,4 @@
 from typing import Any
-from urllib.parse import urlsplit
 
 from fastapi import APIRouter, HTTPException, Query, status
 
@@ -12,52 +11,8 @@ from news_reposter.schemas import MAXPublishResponse
 router = APIRouter(prefix="/max", tags=["MAX"], responses=API_KEY_RESPONSES)
 
 
-def extract_max_chat_link(value: str) -> str:
-    """Извлекает короткое имя публичного канала из ссылки MAX."""
-
-    raw = value.strip()
-    if not raw:
-        raise ValueError("Ссылка на канал MAX не указана")
-
-    if "://" not in raw:
-        return raw.lstrip("@/")
-
-    parsed = urlsplit(raw)
-    if parsed.scheme not in {"http", "https"} or parsed.netloc.lower() not in {
-        "max.ru",
-        "www.max.ru",
-    }:
-        raise ValueError("Ожидается публичная ссылка вида https://max.ru/channel_name")
-
-    chat_link = parsed.path.strip("/").split("/")[-1]
-    if not chat_link:
-        raise ValueError("В ссылке не найдено короткое имя канала")
-    return chat_link.lstrip("@")
-
-
-@router.get(
-    "/channel/by-link",
-    summary="Тест: получить MAX chat_id по публичной ссылке",
-    description=(
-        "Тестовый метод. Принимает публичную ссылку MAX, извлекает короткое имя "
-        "канала и вызывает официальный GET /chats/{chatLink}. Возвращает ответ MAX, "
-        "в том числе chat_id."
-    ),
-    response_description="Информация о публичном канале MAX",
-    responses={
-        422: {"description": "Некорректная ссылка"},
-        502: {"description": "MAX API вернул ошибку"},
-        503: {"description": "MAX_ACCESS_TOKEN не настроен"},
-    },
-)
-async def get_max_channel_by_link(
-    _api_key: ApiKeyDep,
-    link: str = Query(
-        description="Публичная ссылка или короткое имя канала MAX",
-        examples=["https://max.ru/channel_news51", "channel_news51"],
-    ),
-) -> dict[str, Any]:
-    """Проверяет возможность получить chat_id публичного канала по ссылке."""
+def max_client_from_settings() -> MAXClient:
+    """Создаёт MAX-клиент из текущих настроек приложения."""
 
     settings = get_settings()
     if not settings.max_access_token:
@@ -65,32 +20,100 @@ async def get_max_channel_by_link(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="MAX_ACCESS_TOKEN не задан в .env",
         )
+    return MAXClient(
+        access_token=settings.max_access_token,
+        api_url=settings.max_api_url,
+        ca_file=settings.max_ca_file,
+    )
+
+
+def max_bad_gateway(exc: MAXAPIError) -> HTTPException:
+    """Преобразует ошибку MAX API в единый ответ нашего API."""
+
+    suffix = f" (HTTP {exc.status_code})" if exc.status_code else ""
+    return HTTPException(
+        status_code=status.HTTP_502_BAD_GATEWAY,
+        detail=f"Ошибка MAX{suffix}: {exc}",
+    )
+
+
+@router.get(
+    "/updates",
+    summary="Тест: получить последние события MAX",
+    description=(
+        "Тестовый Long Polling через официальный GET /updates. Нужен для поиска "
+        "chat_id после добавления бота администратором канала. Если marker не "
+        "передан, MAX возвращает последнее доступное обновление. Метод не работает, "
+        "если у бота уже активен Webhook."
+    ),
+    response_description="Список событий MAX и marker для следующего запроса",
+    responses={
+        502: {"description": "MAX API вернул ошибку"},
+        503: {"description": "MAX_ACCESS_TOKEN не настроен"},
+    },
+)
+async def get_max_updates(
+    _api_key: ApiKeyDep,
+    limit: int = Query(
+        default=100,
+        ge=1,
+        le=1000,
+        description="Максимальное количество событий",
+    ),
+    timeout: int = Query(
+        default=0,
+        ge=0,
+        le=90,
+        description="Ожидание Long Polling в секундах; для теста по умолчанию 0",
+    ),
+    marker: int | None = Query(
+        default=None,
+        description="Marker из предыдущего ответа; без него вернётся последнее событие",
+    ),
+    types: list[str] | None = Query(
+        default=None,
+        description=(
+            "Необязательный фильтр типов событий. Например: bot_added,bot_started. "
+            "Параметр можно передать несколько раз."
+        ),
+    ),
+) -> dict[str, Any]:
+    """Возвращает последние события MAX, в которых можно увидеть chat_id."""
 
     try:
-        chat_link = extract_max_chat_link(link)
-        client = MAXClient(
-            access_token=settings.max_access_token,
-            api_url=settings.max_api_url,
-            ca_file=settings.max_ca_file,
+        return await max_client_from_settings().get_updates(
+            limit=limit,
+            timeout=timeout,
+            marker=marker,
+            types=types,
         )
-        result = await client.get_channel_by_link(chat_link)
-    except ValueError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=str(exc),
-        ) from exc
     except MAXAPIError as exc:
-        suffix = f" (HTTP {exc.status_code})" if exc.status_code else ""
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=f"Ошибка MAX{suffix}: {exc}",
-        ) from exc
+        raise max_bad_gateway(exc) from exc
 
-    return {
-        "requested_link": link,
-        "chat_link": chat_link,
-        **result,
-    }
+
+@router.get(
+    "/subscriptions",
+    summary="Тест: посмотреть Webhook-подписки MAX",
+    description=(
+        "Вызывает официальный GET /subscriptions и показывает активные Webhook-"
+        "подписки бота. Полезно для диагностики: при активном Webhook тестовый "
+        "GET /updates через Long Polling использовать нельзя."
+    ),
+    response_description="Текущие Webhook-подписки бота MAX",
+    responses={
+        502: {"description": "MAX API вернул ошибку"},
+        503: {"description": "MAX_ACCESS_TOKEN не настроен"},
+    },
+)
+async def get_max_subscriptions(
+    _api_key: ApiKeyDep,
+) -> dict[str, Any]:
+    """Возвращает Webhook-подписки текущего MAX-бота."""
+
+    try:
+        return await max_client_from_settings().get_subscriptions()
+    except MAXAPIError as exc:
+        raise max_bad_gateway(exc) from exc
 
 
 @router.post(
@@ -183,11 +206,7 @@ async def publish_latest_vk_post(
             detail=f"Ошибка VK{suffix}: {exc}",
         ) from exc
     except MAXAPIError as exc:
-        suffix = f" (HTTP {exc.status_code})" if exc.status_code else ""
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=f"Ошибка MAX{suffix}: {exc}",
-        ) from exc
+        raise max_bad_gateway(exc) from exc
 
     return {
         "source_url": post.source_url,
