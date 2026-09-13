@@ -11,11 +11,16 @@ function enhanceTargetForm(form: HTMLFormElement) {
   if (form.getAttribute(ENHANCED_ATTR) === "true") return;
   form.setAttribute(ENHANCED_ATTR, "true");
 
-  const platform = form.elements.namedItem("platform") as HTMLSelectElement | null;
-  const externalId = form.elements.namedItem("external_id") as HTMLInputElement | null;
-  const url = form.elements.namedItem("url") as HTMLInputElement | null;
-  const submit = form.querySelector<HTMLButtonElement>('button[type="submit"], button.primary');
-  if (!platform || !externalId || !url || !submit) return;
+  const platformCandidate = form.elements.namedItem("platform") as HTMLSelectElement | null;
+  const externalIdCandidate = form.elements.namedItem("external_id") as HTMLInputElement | null;
+  const urlCandidate = form.elements.namedItem("url") as HTMLInputElement | null;
+  const submitCandidate = form.querySelector<HTMLButtonElement>('button[type="submit"], button.primary');
+  if (!platformCandidate || !externalIdCandidate || !urlCandidate || !submitCandidate) return;
+
+  const platform = platformCandidate;
+  const externalId = externalIdCandidate;
+  const url = urlCandidate;
+  const submit = submitCandidate;
 
   const platformLabel = labelByField(form, "platform");
   const externalIdLabel = labelByField(form, "external_id");
