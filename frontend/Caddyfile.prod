@@ -1,34 +1,32 @@
 {$SITE_ADDRESS} {
     encode zstd gzip
 
-    @protected not path /api/v1/max/webhook
-    basic_auth @protected {
-        {$ADMIN_USER} {$ADMIN_PASSWORD_HASH}
-    }
-
+    # Единственный публичный endpoint: webhook MAX. Он защищён собственным
+    # секретом X-Max-Bot-Api-Secret внутри FastAPI и не должен требовать Basic Auth.
     handle /api/v1/max/webhook {
         reverse_proxy app:8000
     }
 
-    handle /api/* {
-        reverse_proxy app:8000 {
+    # Всё остальное приложение остаётся под Basic Auth.
+    handle {
+        basic_auth {
+            {$ADMIN_USER} {$ADMIN_PASSWORD_HASH}
+        }
+
+        @api path /api/*
+        reverse_proxy @api app:8000 {
             header_up X-API-Key {$API_KEY}
         }
-    }
 
-    handle /health* {
-        reverse_proxy app:8000
-    }
+        @health path /health*
+        reverse_proxy @health app:8000
 
-    handle /docs* {
-        reverse_proxy app:8000
-    }
+        @docs path /docs*
+        reverse_proxy @docs app:8000
 
-    handle /openapi.json {
-        reverse_proxy app:8000
-    }
+        @openapi path /openapi.json
+        reverse_proxy @openapi app:8000
 
-    handle {
         root * /srv
         try_files {path} /index.html
         file_server
