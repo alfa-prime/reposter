@@ -12,6 +12,28 @@ function findButton(root: ParentNode, text: string) {
     .find((button) => button.textContent?.trim().includes(text)) ?? null;
 }
 
+function waitForStatusAndNavigate(drawer: HTMLElement, expectedStatus: string, tabLabel: string) {
+  const startedAt = Date.now();
+  const timer = window.setInterval(() => {
+    const status = drawer.querySelector<HTMLElement>(".editorial-status")?.textContent?.trim();
+    if (status === expectedStatus) {
+      window.clearInterval(timer);
+      const tabButton = Array.from(document.querySelectorAll<HTMLButtonElement>(".editorial-tabs button"))
+        .find((button) => button.textContent?.includes(tabLabel));
+      if (tabButton) {
+        tabButton.click();
+        return;
+      }
+      drawer.querySelector<HTMLButtonElement>(".drawer-close")?.click();
+      return;
+    }
+
+    if (!document.documentElement.contains(drawer) || Date.now() - startedAt > 15_000) {
+      window.clearInterval(timer);
+    }
+  }, 100);
+}
+
 function enhanceApprovedDrawer(drawer: HTMLElement) {
   const schedulePanel = drawer.querySelector<HTMLElement>(".schedule-panel");
   const footer = drawer.querySelector<HTMLElement>(".drawer-footer");
@@ -69,7 +91,10 @@ function enhanceApprovedDrawer(drawer: HTMLElement) {
   const nowButton = panel.querySelector<HTMLButtonElement>(".publication-now-button")!;
   const scheduleButton = panel.querySelector<HTMLButtonElement>(".publication-schedule-button")!;
 
-  nowButton.addEventListener("click", () => originalPublishButton.click());
+  nowButton.addEventListener("click", () => {
+    originalPublishButton.click();
+    waitForStatusAndNavigate(drawer, "Опубликован", "Архив");
+  });
 
   scheduleButton.addEventListener("click", () => {
     errorBox.hidden = true;
@@ -86,7 +111,10 @@ function enhanceApprovedDrawer(drawer: HTMLElement) {
       return;
     }
     setReactInputValue(originalScheduleInput, dateInput.value);
-    requestAnimationFrame(() => originalScheduleButton.click());
+    requestAnimationFrame(() => {
+      originalScheduleButton.click();
+      waitForStatusAndNavigate(drawer, "Запланирован", "Очередь публикаций");
+    });
   });
 
   footer.before(panel);
