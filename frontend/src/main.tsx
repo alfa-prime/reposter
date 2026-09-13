@@ -21,8 +21,6 @@ import "./targetWizardEnhancements";
 import "./sourceWizardEnhancements";
 import "./videoEnhancements";
 import "./publicationActionsEnhancements";
-import "./aboutEnhancements";
-import "./dashboardEnhancements";
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
