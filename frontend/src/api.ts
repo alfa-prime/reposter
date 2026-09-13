@@ -20,6 +20,7 @@ export type QueueItem = {
   source_url?: string | null;
   source_published_at?: string | null;
   scheduled_at?: string | null;
+  error_message?: string | null;
   status: string;
   photos: QueuePhoto[];
 };
