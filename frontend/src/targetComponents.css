@@ -1,0 +1,58 @@
+.target-connect-panel {
+  grid-column: 1 / -1;
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid var(--border, #dfe5f1);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--surface, #fff) 92%, #6675f6 8%);
+  padding: 16px 18px;
+}
+
+.target-connect-help {
+  color: var(--text, #17223b);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.target-connect-help strong {
+  display: block;
+  margin-bottom: 6px;
+}
+
+.target-connect-help ol {
+  margin: 4px 0 10px 20px;
+  padding: 0;
+}
+
+.target-connect-help li + li {
+  margin-top: 4px;
+}
+
+.target-connect-help p {
+  margin: 0;
+  color: var(--muted, #6f7c96);
+}
+
+.target-connect-help p b {
+  color: var(--text, #17223b);
+}
+
+.target-connect-help code {
+  font: inherit;
+  font-weight: 700;
+  background: color-mix(in srgb, var(--surface, #fff) 80%, #6675f6 20%);
+  border-radius: 6px;
+  padding: 1px 5px;
+}
+
+.target-link-error {
+  display: block;
+  margin-top: 7px;
+  color: #c95d5d;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+html[data-theme="light"] .target-link-error {
+  color: #b94a4a;
+}
