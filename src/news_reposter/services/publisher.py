@@ -1,3 +1,4 @@
+import asyncio
 import mimetypes
 import os
 import re
@@ -144,6 +145,36 @@ async def _max_attachments(item: QueueItem, client: MAXClient) -> list[dict[str,
     return result
 
 
+async def _publish_with_media_retry(
+    client: MAXClient,
+    *,
+    text: str,
+    attachments: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Повторяет отправку, пока MAX завершает обработку загруженного видео."""
+
+    delays = (2, 4, 8, 12)
+    for attempt in range(len(delays) + 1):
+        try:
+            return await client.publish_post(
+                text=text,
+                attachments=attachments,
+                text_format="markdown",
+            )
+        except MAXAPIError as exc:
+            detail = str(exc).lower()
+            media_not_ready = (
+                "attachment.not.ready" in detail
+                or "file.not.processed" in detail
+                or "attachment.file.not.processed" in detail
+            )
+            if not media_not_ready or attempt >= len(delays):
+                raise
+            await asyncio.sleep(delays[attempt])
+
+    raise RuntimeError("unreachable")
+
+
 def _message_fields(response: dict[str, Any]) -> tuple[str | None, str | None]:
     message = response.get("message")
     if not isinstance(message, dict):
@@ -226,10 +257,10 @@ async def publish_queue_item(
         attachments = await _max_attachments(item, client)
         if not text and not attachments:
             raise PublicationError("Публикация не содержит текста или медиа")
-        response = await client.publish_post(
+        response = await _publish_with_media_retry(
+            client,
             text=text,
             attachments=attachments,
-            text_format="markdown",
         )
         mid, url = _message_fields(response)
     except (PublicationError, MAXAPIError, ValueError, OSError) as exc:
