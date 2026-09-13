@@ -1,12 +1,8 @@
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Archive,
   ChevronRight,
-  Database,
   ExternalLink,
-  Link2,
-  Plus,
-  Radio,
   RefreshCw,
   Trash2,
   X,
@@ -16,9 +12,9 @@ import { AboutPage } from "./components/AboutPage";
 import { Dashboard } from "./components/Dashboard";
 import { Sidebar } from "./components/Sidebar";
 import { SourcesPage } from "./components/SourcesPage";
+import { TargetsPage } from "./components/TargetsPage";
 import type { Section } from "./navigation";
 
-type ModalKind = "target" | null;
 type ConfirmDialog = {
   title: string;
   message: string;
@@ -55,13 +51,6 @@ function shortDate(value?: string | null): string {
   }).format(new Date(value));
 }
 
-function ensureFormValid(form: HTMLFormElement, setError: (message: string) => void): boolean {
-  if (form.checkValidity()) return true;
-  setError("Заполните обязательные поля, отмеченные звёздочкой.");
-  form.reportValidity();
-  return false;
-}
-
 export function App() {
   const [section, setSection] = useState<Section>("queue");
   const [queue, setQueue] = useState<QueueItem[]>([]);
@@ -74,7 +63,6 @@ export function App() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
-  const [modal, setModal] = useState<ModalKind>(null);
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialog>(null);
 
   const activeTargets = useMemo(() => targets.filter((item) => item.is_active).length, [targets]);
@@ -103,7 +91,11 @@ export function App() {
       if (selectedTarget) {
         const updatedTarget = targetData.find((item) => item.target_id === selectedTarget.target_id) ?? null;
         setSelectedTarget(updatedTarget);
-        if (updatedTarget) setTargetSources(await api.targetSources(updatedTarget.target_id));
+        if (updatedTarget) {
+          setTargetSources(await api.targetSources(updatedTarget.target_id));
+        } else {
+          setTargetSources([]);
+        }
       }
     } catch (exc) {
       setError(exc instanceof Error ? exc.message : "Не удалось загрузить данные");
@@ -180,48 +172,6 @@ export function App() {
     }
   }
 
-  async function createTarget(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const form = event.currentTarget;
-    if (!ensureFormValid(form, setError)) return;
-    const data = new FormData(form);
-    setBusy(true);
-    setError("");
-    try {
-      const created = await api.createTarget({
-        name: String(data.get("name") ?? "").trim(),
-        platform: String(data.get("platform") ?? "max"),
-        external_id: String(data.get("external_id") ?? "").trim(),
-        url: String(data.get("url") ?? "").trim() || null,
-        is_active: true,
-      });
-      setModal(null);
-      setNotice("Канал добавлен. Теперь подключите к нему источник.");
-      await loadAll();
-      setSection("targets");
-      await openTarget(created);
-    } catch (exc) {
-      setError(exc instanceof Error ? exc.message : "Не удалось добавить канал");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function attachSource(sourceId: number) {
-    if (!selectedTarget) return;
-    setBusy(true);
-    setError("");
-    try {
-      await api.attachSource(selectedTarget.target_id, sourceId);
-      setTargetSources(await api.targetSources(selectedTarget.target_id));
-      setNotice("Источник подключён к каналу. Теперь его можно собирать.");
-    } catch (exc) {
-      setError(exc instanceof Error ? exc.message : "Не удалось подключить источник");
-    } finally {
-      setBusy(false);
-    }
-  }
-
   function askDeleteTarget(target: Target) {
     setConfirmDialog({
       title: "Удалить канал?",
@@ -265,7 +215,6 @@ export function App() {
     }
   }
 
-  const attachedSourceIds = new Set(targetSources.map((item) => item.source_id));
   const pageTitle = section === "queue" ? "Редакционная очередь" : section === "targets" ? "Целевые каналы" : section === "sources" ? "Источники" : "Обзор";
 
   return (
@@ -298,10 +247,19 @@ export function App() {
           <div className="editor-panel">{!selected ? <div className="empty large"><Archive size={34}/><h3>Выберите пост</h3><p>Здесь появятся исходник, фотографии и редакционный текст.</p></div> : <><div className="editor-head"><div><span className={`badge status-${selected.status}`}>{statusLabels[selected.status] ?? selected.status}</span><h2>{selected.target_name ?? `Канал #${selected.target_id}`}</h2></div>{selected.source_url && <a href={selected.source_url} target="_blank" rel="noreferrer">VK <ExternalLink size={14}/></a>}</div>{selected.photos.length > 0 && <div className="photo-strip">{selected.photos.map((photo) => <img key={photo.attachment_id} src={photo.source_url} alt="Вложение поста" />)}</div>}<div className="text-block"><label>Исходный текст</label><div className="original-text">{selected.original_text || "—"}</div></div><div className="text-block"><label>Текст для публикации</label><textarea value={draftText} onChange={(event) => setDraftText(event.target.value)} rows={11} /></div><div className="actions"><button className="secondary" onClick={() => void runAction(() => api.updateQueueText(selected.queue_item_id, draftText), "Текст сохранён")}>Сохранить</button>{selected.status === "pending" && <button className="primary" onClick={() => void runAction(async () => { await api.updateQueueText(selected.queue_item_id, draftText); return api.submit(selected.queue_item_id); }, "Отправлено на модерацию")}>На модерацию</button>}{selected.status === "awaiting_moderation" && <><button className="danger" onClick={() => void runAction(() => api.reject(selected.queue_item_id), "Пост отклонён")}>Отклонить</button><button className="primary" onClick={() => void runAction(() => api.approve(selected.queue_item_id), "Пост одобрен")}>Одобрить</button></>}{["rejected", "approved", "scheduled", "awaiting_moderation"].includes(selected.status) && <button className="secondary" onClick={() => void runAction(() => api.reopen(selected.queue_item_id), "Пост возвращён в работу")}>Вернуть в работу</button>}</div></>}</div>
         </section>}
 
-        {section === "targets" && <section className="split-admin">
-          <div className="table-card"><div className="table-head"><h2>Каналы</h2><div className="table-actions"><span>{targets.length} всего</span><button className="primary compact" onClick={() => { setError(""); setModal("target"); }}><Plus size={15}/>Добавить</button></div></div>{targets.length === 0 && <div className="empty">Каналов пока нет</div>}{targets.map((item) => <button className={`entity-row entity-button ${selectedTarget?.target_id === item.target_id ? "selected" : ""}`} key={item.target_id} onClick={() => void openTarget(item)}><div className="entity-icon"><Radio size={18}/></div><div className="entity-main"><strong>{item.name}</strong><span>{item.platform} · {item.external_id}</span></div><span className={item.is_active ? "switch-label on" : "switch-label"}>{item.is_active ? "Активен" : "Выключен"}</span><ChevronRight size={16}/></button>)}</div>
-          <div className="editor-panel channel-panel">{!selectedTarget ? <div className="empty large"><Radio size={34}/><h3>Выберите канал</h3><p>Здесь будут настройки канала и его источники.</p></div> : <><div className="editor-head"><div><span className="badge">{selectedTarget.platform}</span><h2>{selectedTarget.name}</h2></div>{selectedTarget.url && <a href={selectedTarget.url} target="_blank" rel="noreferrer">Открыть <ExternalLink size={14}/></a>}</div><div className="actions"><button className="secondary" onClick={async () => { await api.updateTarget(selectedTarget.target_id, { is_active: !selectedTarget.is_active }); await loadAll(); }}>{selectedTarget.is_active ? "Отключить" : "Включить"}</button><button className="danger" onClick={() => askDeleteTarget(selectedTarget)}><Trash2 size={15}/>Удалить</button></div><div className="section-divider" /><div className="table-head embedded"><h2>Источники канала</h2><span>{targetSources.length}</span></div>{targetSources.length === 0 && <div className="setup-hint"><strong>Подключите источник</strong><span>Без этой связи сборщик не знает, в какой канал положить найденный пост.</span></div>}{targetSources.map((link) => { const source = sources.find((item) => item.source_id === link.source_id); return <div className="entity-row" key={link.target_source_id}><div className="entity-icon"><Database size={17}/></div><div className="entity-main"><strong>{source?.name ?? `Источник #${link.source_id}`}</strong><span>{source?.url}</span></div><button className="icon-button" title="Отключить источник" onClick={async () => { await api.detachSource(selectedTarget.target_id, link.target_source_id); setTargetSources(await api.targetSources(selectedTarget.target_id)); }}><X size={16}/></button></div>; })}<div className="attach-list"><label>Подключить источник</label>{sources.filter((item) => !attachedSourceIds.has(item.source_id)).map((source) => <button key={source.source_id} className="attach-source" onClick={() => void attachSource(source.source_id)}><Link2 size={15}/><span>{source.name}</span><small>{source.platform}</small></button>)}{sources.length === 0 && <div className="empty">Сначала добавьте источник в разделе «Источники»</div>}{sources.length > 0 && sources.every((item) => attachedSourceIds.has(item.source_id)) && <div className="empty">Все источники уже подключены</div>}</div></>}</div>
-        </section>}
+        {section === "targets" && <TargetsPage
+          targets={targets}
+          sources={sources}
+          selectedTarget={selectedTarget}
+          targetSources={targetSources}
+          busy={busy}
+          onOpenTarget={openTarget}
+          onChanged={loadAll}
+          onTargetSourcesChanged={setTargetSources}
+          onDelete={askDeleteTarget}
+          onError={setError}
+          onNotice={setNotice}
+        />}
 
         {section === "sources" && <SourcesPage
           sources={sources}
@@ -312,8 +270,6 @@ export function App() {
           onNotice={setNotice}
         />}
       </main>
-
-      {modal === "target" && <div className="modal-backdrop" onMouseDown={() => setModal(null)}><div className="modal-card" onMouseDown={(event) => event.stopPropagation()}><div className="modal-head"><div><p className="eyebrow">НАСТРОЙКА</p><h2>Новый канал</h2></div><button className="icon-button" onClick={() => setModal(null)}><X size={18}/></button></div><p className="form-note"><span>*</span> обязательные поля</p><form noValidate onSubmit={(event) => void createTarget(event)} className="form-grid"><label>Название <b>*</b><input name="name" required minLength={1} placeholder="Новости 51 региона" /></label><label>Платформа <b>*</b><select name="platform" defaultValue="max" required><option value="max">MAX</option><option value="telegram">Telegram</option><option value="vk">VK</option></select></label><label>ID канала <b>*</b><input name="external_id" required minLength={1} placeholder="-77162942582085" /></label><label>Ссылка <small>необязательно</small><input name="url" type="url" placeholder="https://max.ru/..." /></label><button className="primary" disabled={busy}>Создать канал</button></form></div></div>}
 
       {confirmDialog && <div className="modal-backdrop" onMouseDown={() => setConfirmDialog(null)}><div className="modal-card confirm-card" onMouseDown={(event) => event.stopPropagation()}><div className="modal-head"><div><p className="eyebrow">ПОДТВЕРЖДЕНИЕ</p><h2>{confirmDialog.title}</h2></div><button className="icon-button" onClick={() => setConfirmDialog(null)}><X size={18}/></button></div><p className="confirm-message">{confirmDialog.message}</p><div className="actions confirm-actions"><button className="secondary" onClick={() => setConfirmDialog(null)}>Отмена</button><button className="danger" disabled={busy} onClick={() => void confirmAction()}><Trash2 size={15}/>{confirmDialog.confirmLabel}</button></div></div></div>}
     </div>
