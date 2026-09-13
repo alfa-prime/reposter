@@ -83,6 +83,26 @@
   cursor: pointer;
 }
 
+.video-processing-note {
+  display: grid;
+  gap: 4px;
+  padding: 11px 13px;
+  border: 1px solid color-mix(in srgb, #6385ff 28%, var(--border, #dfe5f1));
+  border-radius: 12px;
+  background: color-mix(in srgb, #6385ff 7%, var(--surface, #fff));
+}
+
+.video-processing-note strong {
+  color: var(--text, #17223b);
+  font-size: 12px;
+}
+
+.video-processing-note span {
+  color: var(--muted, #6f7c96);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
 .video-upload-row {
   display: block;
 }
