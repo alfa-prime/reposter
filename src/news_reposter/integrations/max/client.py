@@ -89,23 +89,36 @@ class MAXClient:
             raise MAXAPIError("MAX не вернул URL для загрузки медиа")
 
         initial_token = upload.get("token")
-        if self._http_client is not None:
-            result = await self._upload_to_url(
-                self._http_client,
-                upload_url,
-                filename,
-                content,
-                content_type,
-            )
-        else:
-            async with httpx.AsyncClient(timeout=120.0, verify=self._ssl_context()) as client:
+        try:
+            if self._http_client is not None:
                 result = await self._upload_to_url(
-                    client,
+                    self._http_client,
                     upload_url,
                     filename,
                     content,
                     content_type,
                 )
+            else:
+                async with httpx.AsyncClient(timeout=120.0, verify=self._ssl_context()) as client:
+                    result = await self._upload_to_url(
+                        client,
+                        upload_url,
+                        filename,
+                        content,
+                        content_type,
+                    )
+        except MAXAPIError as exc:
+            # Для видео MAX выдаёт token ещё на шаге POST /uploads. Некоторые
+            # upload-хосты при успешной загрузке отвечают пустым телом или не-JSON.
+            # В этом случае HTTP-загрузка уже успешна, и можно использовать token
+            # из первого ответа. HTTP-ошибки загрузки по-прежнему пробрасываем.
+            non_json_upload_response = str(exc) in {
+                "MAX вернул ответ не в формате JSON",
+                "MAX вернул неожиданный формат ответа",
+            }
+            if not (isinstance(initial_token, str) and initial_token and non_json_upload_response):
+                raise
+            result = {}
 
         token = result.get("token") if isinstance(result, dict) else None
         if not isinstance(token, str) or not token:
