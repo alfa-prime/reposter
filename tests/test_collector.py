@@ -2,8 +2,8 @@ from news_reposter.db.models import AttachmentType
 from news_reposter.services.collector import build_post_attachments
 
 
-def test_build_post_attachments_keeps_only_photos_in_order() -> None:
-    """Для MVP сохраняет только фотографии, не меняя их порядок."""
+def test_build_post_attachments_keeps_photos_and_videos_in_order() -> None:
+    """Сохраняет фотографии и видео, не меняя их порядок."""
 
     attachments = build_post_attachments(
         [
@@ -20,7 +20,12 @@ def test_build_post_attachments_keeps_only_photos_in_order() -> None:
             },
             {
                 "type": "video",
-                "video": {"id": 20, "owner_id": -123, "title": "Видео"},
+                "video": {
+                    "id": 20,
+                    "owner_id": -123,
+                    "title": "Видео",
+                    "player": "https://vk.com/video_ext.php?oid=-123&id=20",
+                },
             },
             {
                 "type": "photo",
@@ -37,16 +42,19 @@ def test_build_post_attachments_keeps_only_photos_in_order() -> None:
         ]
     )
 
-    assert len(attachments) == 2
-    assert [item.position for item in attachments] == [0, 1]
+    assert len(attachments) == 3
+    assert [item.position for item in attachments] == [0, 1, 2]
     assert [item.attachment_type for item in attachments] == [
         AttachmentType.PHOTO,
+        AttachmentType.VIDEO,
         AttachmentType.PHOTO,
     ]
     assert attachments[0].external_attachment_id == "-123_10"
     assert attachments[0].source_url == "https://img/1-big.jpg"
-    assert attachments[1].external_attachment_id == "-123_11"
-    assert attachments[1].source_url == "https://img/2-original.jpg"
+    assert attachments[1].external_attachment_id == "-123_20"
+    assert attachments[1].source_url == "https://vk.com/video_ext.php?oid=-123&id=20"
+    assert attachments[2].external_attachment_id == "-123_11"
+    assert attachments[2].source_url == "https://img/2-original.jpg"
 
 
 def test_build_post_attachments_keeps_ten_photos() -> None:
