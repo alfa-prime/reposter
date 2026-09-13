@@ -34,22 +34,30 @@ class MAXClient:
         self._ca_file = ca_file
         self._http_client = http_client
 
-    async def get_channel_by_link(self, chat_link: str) -> dict[str, Any]:
-        """Возвращает информацию о публичном канале по короткой ссылке MAX."""
+    async def get_updates(
+        self,
+        *,
+        limit: int = 100,
+        timeout: int = 0,
+        marker: int | None = None,
+        types: list[str] | None = None,
+    ) -> dict[str, Any]:
+        """Возвращает события бота через тестовый Long Polling MAX."""
 
-        clean_link = chat_link.strip().lstrip("@")
-        if not clean_link:
-            raise ValueError("Публичная ссылка канала не указана")
+        params: dict[str, Any] = {
+            "limit": limit,
+            "timeout": timeout,
+        }
+        if marker is not None:
+            params["marker"] = marker
+        if types:
+            params["types"] = ",".join(types)
+        return await self._get_json("/updates", params=params)
 
-        if self._http_client is not None:
-            return await self._get_channel(self._http_client, clean_link)
+    async def get_subscriptions(self) -> dict[str, Any]:
+        """Возвращает активные webhook-подписки бота MAX."""
 
-        ssl_context = ssl.create_default_context()
-        if self._ca_file:
-            ssl_context.load_verify_locations(cafile=self._ca_file)
-
-        async with httpx.AsyncClient(timeout=30.0, verify=ssl_context) as client:
-            return await self._get_channel(client, clean_link)
+        return await self._get_json("/subscriptions")
 
     async def publish_post(
         self,
@@ -78,26 +86,51 @@ class MAXClient:
         if self._http_client is not None:
             return await self._send(self._http_client, body)
 
-        ssl_context = ssl.create_default_context()
-        if self._ca_file:
-            ssl_context.load_verify_locations(cafile=self._ca_file)
-
+        ssl_context = self._ssl_context()
         async with httpx.AsyncClient(
             timeout=30.0,
             verify=ssl_context,
         ) as client:
             return await self._send(client, body)
 
-    async def _get_channel(
+    def _ssl_context(self) -> ssl.SSLContext:
+        """Создаёт SSL-контекст с дополнительным CA MAX при необходимости."""
+
+        ssl_context = ssl.create_default_context()
+        if self._ca_file:
+            ssl_context.load_verify_locations(cafile=self._ca_file)
+        return ssl_context
+
+    async def _get_json(
+        self,
+        path: str,
+        *,
+        params: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Выполняет авторизованный GET-запрос к MAX и возвращает JSON-объект."""
+
+        if self._http_client is not None:
+            return await self._request_get(self._http_client, path, params=params)
+
+        async with httpx.AsyncClient(
+            timeout=95.0,
+            verify=self._ssl_context(),
+        ) as client:
+            return await self._request_get(client, path, params=params)
+
+    async def _request_get(
         self,
         client: httpx.AsyncClient,
-        chat_link: str,
+        path: str,
+        *,
+        params: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        """Запрашивает канал по его публичной ссылке."""
+        """Отправляет GET-запрос к MAX."""
 
         try:
             response = await client.get(
-                f"{self._api_url}/chats/{chat_link}",
+                f"{self._api_url}{path}",
+                params=params,
                 headers={"Authorization": self._access_token},
             )
             response.raise_for_status()
@@ -106,6 +139,12 @@ class MAXClient:
             raise MAXAPIError(detail, exc.response.status_code) from exc
         except httpx.HTTPError as exc:
             raise MAXAPIError(f"Не удалось выполнить запрос к MAX: {exc}") from exc
+
+        return self._decode_dict(response)
+
+    @staticmethod
+    def _decode_dict(response: httpx.Response) -> dict[str, Any]:
+        """Проверяет, что MAX вернул JSON-объект."""
 
         try:
             result = response.json()
@@ -137,11 +176,4 @@ class MAXClient:
         except httpx.HTTPError as exc:
             raise MAXAPIError(f"Не удалось выполнить запрос к MAX: {exc}") from exc
 
-        try:
-            result = response.json()
-        except ValueError as exc:
-            raise MAXAPIError("MAX вернул ответ не в формате JSON") from exc
-
-        if not isinstance(result, dict):
-            raise MAXAPIError("MAX вернул неожиданный формат ответа")
-        return result
+        return self._decode_dict(response)
