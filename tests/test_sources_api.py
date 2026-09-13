@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import AsyncIterator
+from datetime import UTC, datetime
 from typing import Any
 
 import httpx
@@ -47,12 +48,15 @@ class MemorySourceRepository:
         ):
             raise SourceAlreadyExistsError("Источник с такой ссылкой уже существует")
 
+        now = datetime.now(UTC)
         item = {
             "source_id": self.next_id,
             "name": data.name,
             "platform": data.platform,
             "url": str(data.url),
             "is_active": data.is_active,
+            "created_at": now,
+            "updated_at": now,
         }
         self.items[self.next_id] = item
         self.next_id += 1
@@ -67,6 +71,7 @@ class MemorySourceRepository:
         if "url" in payload and payload["url"] is not None:
             payload["url"] = str(payload["url"])
         source.update(payload)
+        source["updated_at"] = datetime.now(UTC)
         return source
 
     async def delete(self, source: dict[str, Any]) -> None:
@@ -75,26 +80,26 @@ class MemorySourceRepository:
 
 @pytest.fixture
 def memory_repository(monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[None]:
-    """Подменяет API-ключ, SQLAlchemy-сессию и репозиторий in-memory реализацией."""
+    """Подменяет API-key, SQLAlchemy-сессию и репозиторий in-memory реализацией."""
 
     repository = MemorySourceRepository()
-
-    async def fake_api_key() -> None:
-        return None
 
     async def fake_session() -> AsyncIterator[object]:
         yield object()
 
-    app.dependency_overrides[require_api_key] = fake_api_key
+    async def allow_api_key() -> None:
+        return None
+
     app.dependency_overrides[get_db_session] = fake_session
+    app.dependency_overrides[require_api_key] = allow_api_key
     monkeypatch.setattr(
         "news_reposter.api.v1.sources.SourceRepository",
         lambda _session: repository,
     )
 
     yield
-    app.dependency_overrides.pop(require_api_key, None)
     app.dependency_overrides.pop(get_db_session, None)
+    app.dependency_overrides.pop(require_api_key, None)
 
 
 def test_sources_crud(memory_repository: None) -> None:
@@ -120,6 +125,8 @@ def test_sources_crud(memory_repository: None) -> None:
             assert source["name"] == "Полуостров 51"
             assert source["platform"] == "vk"
             assert source["is_active"] is True
+            assert source["created_at"]
+            assert source["updated_at"]
 
             duplicate = await client.post(
                 "/api/v1/sources",
