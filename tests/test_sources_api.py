@@ -9,7 +9,7 @@ import httpx
 import pytest
 
 from news_reposter.main import app
-from news_reposter.repositories.sources import SourceRepository
+from news_reposter.repositories.source import SourceRepository
 from news_reposter.schemas.source import SourceCreate, SourceUpdate
 
 
