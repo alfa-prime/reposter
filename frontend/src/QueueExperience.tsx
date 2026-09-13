@@ -413,7 +413,20 @@ export function QueueExperience() {
       setError("Укажите корректную дату публикации");
       return;
     }
-    await action(() => api.schedule(selected.queue_item_id, date.toISOString()), "Публикация запланирована");
+    setBusy(true);
+    setError("");
+    setNotice("");
+    try {
+      const updated = await api.schedule(selected.queue_item_id, date.toISOString());
+      applyUpdated(updated);
+      setSelectedId(null);
+      setTab("scheduled");
+      setNotice("Публикация запланирована");
+    } catch (exc) {
+      setError(exc instanceof Error ? exc.message : "Не удалось поставить публикацию в очередь");
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function publishNow() {
@@ -424,6 +437,7 @@ export function QueueExperience() {
     try {
       const updated = await api.publishNow(selected.queue_item_id);
       applyUpdated(updated);
+      setSelectedId(null);
       setTab("archive");
       setNotice("Пост опубликован в MAX");
     } catch (exc) {
