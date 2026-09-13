@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Path, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from news_reposter.api.dependencies import API_KEY_RESPONSES, ApiKeyDep
+from news_reposter.api.v1.queue import queue_item_response
 from news_reposter.db.session import get_db_session
 from news_reposter.schemas.queue_item import QueueItemRead
 from news_reposter.services.publisher import PublicationError, publish_queue_item
@@ -51,6 +52,4 @@ async def publish_now(
         )
         raise HTTPException(status_code=code, detail=detail) from exc
 
-    # QueueItemRead умеет читать ORM-объект. Расширенные поля исходника/канала
-    # фронтенд получит при следующем обычном GET /queue, статус обновится сразу.
-    return QueueItemRead.model_validate(item)
+    return queue_item_response(item)
