@@ -6,6 +6,7 @@ from fastapi import FastAPI
 from news_reposter.api.v1.max import router as max_router
 from news_reposter.api.v1.queue import router as queue_router
 from news_reposter.api.v1.queue_media_state import router as queue_media_state_router
+from news_reposter.api.v1.queue_publish import router as queue_publish_router
 from news_reposter.api.v1.queue_video import router as queue_video_router
 from news_reposter.api.v1.sources import router as sources_router
 from news_reposter.api.v1.system import router as system_router
@@ -14,10 +15,12 @@ from news_reposter.api.v1.targets import router as targets_router
 from news_reposter.api.v1.vk import router as vk_router
 from news_reposter.config import get_settings
 from news_reposter.db.session import close_database
+from news_reposter.services.publication_scheduler import PublicationScheduler
 from news_reposter.services.scheduler import CollectionScheduler
 
 settings = get_settings()
 collection_scheduler = CollectionScheduler(settings)
+publication_scheduler = PublicationScheduler()
 
 OPENAPI_TAGS = [
     {
@@ -42,8 +45,8 @@ OPENAPI_TAGS = [
     {
         "name": "Очередь постов",
         "description": (
-            "Редактирование подготовленных постов, модерация и планирование "
-            "публикаций по целевым каналам."
+            "Редактирование подготовленных постов, модерация, планирование "
+            "и публикация в целевые каналы."
         ),
     },
     {
@@ -52,7 +55,7 @@ OPENAPI_TAGS = [
     },
     {
         "name": "MAX",
-        "description": "Отправка текста и фотографий в канал MAX.",
+        "description": "Отправка текста, фотографий и видео в канал MAX.",
     },
 ]
 
@@ -62,9 +65,11 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     """Запускает фоновые задачи и освобождает ресурсы при остановке."""
 
     collection_scheduler.start()
+    publication_scheduler.start()
     try:
         yield
     finally:
+        await publication_scheduler.stop()
         await collection_scheduler.stop()
         await close_database()
 
@@ -88,4 +93,5 @@ app.include_router(target_sources_router, prefix="/api/v1")
 app.include_router(queue_router, prefix="/api/v1")
 app.include_router(queue_media_state_router, prefix="/api/v1")
 app.include_router(queue_video_router, prefix="/api/v1")
+app.include_router(queue_publish_router, prefix="/api/v1")
 app.include_router(system_router)
