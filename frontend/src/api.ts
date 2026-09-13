@@ -28,6 +28,27 @@ export type QueueMediaState = {
   media_order: string[];
 };
 
+export type UploadedVideo = {
+  media_id: string;
+  filename: string;
+  source_url: string;
+  size: number;
+};
+
+export type SourceVideo = {
+  attachment_id: number;
+  external_attachment_id?: string | null;
+  title: string;
+  source_url?: string | null;
+};
+
+export type QueueVideoInfo = {
+  source_video_count: number;
+  source_videos: SourceVideo[];
+  uploaded_videos: UploadedVideo[];
+  source_video_import_supported: boolean;
+};
+
 export type Target = {
   target_id: number;
   name: string;
@@ -197,6 +218,12 @@ export const api = {
     method: "PUT",
     body: JSON.stringify({ media_order: mediaOrder }),
   }),
+  queueVideoInfo: (id: number) => request<QueueVideoInfo>(`/api/v1/queue/${id}/video-info`),
+  uploadQueueVideo: async (id: number, file: File) => request<QueueVideoInfo>(`/api/v1/queue/${id}/video`, {
+    method: "POST",
+    body: JSON.stringify({ filename: file.name, content_type: file.type, data_base64: await fileToBase64(file) }),
+  }),
+  deleteQueueVideo: (id: number, mediaId: string) => request<QueueVideoInfo>(`/api/v1/queue/${id}/video/${encodeURIComponent(mediaId)}`, { method: "DELETE" }),
   targets: () => request<Target[]>("/api/v1/targets?limit=100"),
   target: (id: number) => request<Target>(`/api/v1/targets/${id}`),
   sources: () => request<Source[]>("/api/v1/sources?limit=100"),
