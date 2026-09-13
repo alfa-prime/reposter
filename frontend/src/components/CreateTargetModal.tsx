@@ -80,7 +80,7 @@ export function CreateTargetModal({ busy, onClose, onCreated, onError }: CreateT
                 setUrl(event.target.value);
                 setUrlError("");
               }}
-              type="url"
+              type="text"
               inputMode="url"
               required
               placeholder="https://max.ru/channel_51_news"
