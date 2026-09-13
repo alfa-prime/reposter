@@ -16,13 +16,33 @@
 .about-project-hero {
   position: relative;
   overflow: hidden;
-  padding: 34px 36px;
+  padding: 30px 34px;
   border: 1px solid rgba(255,255,255,.08);
   border-radius: 24px;
   background:
     radial-gradient(circle at 85% 15%, rgba(111,137,255,.22), transparent 34%),
     linear-gradient(145deg, rgba(16,27,48,.96), rgba(10,18,32,.9));
   box-shadow: 0 24px 80px rgba(0,0,0,.16);
+}
+
+.about-project-hero-main {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+}
+
+.about-project-logo {
+  width: 118px;
+  height: 118px;
+  flex: 0 0 118px;
+  object-fit: cover;
+  border-radius: 24px;
+  border: 1px solid rgba(125,145,255,.20);
+  box-shadow: 0 18px 45px rgba(34,48,86,.18);
+}
+
+.about-project-hero-copy {
+  min-width: 0;
 }
 
 .about-project-kicker,
@@ -35,23 +55,23 @@
 }
 
 .about-project-hero h1 {
-  margin: 8px 0 14px;
-  font-size: clamp(32px, 5vw, 58px);
-  line-height: 1;
-  letter-spacing: -.035em;
+  margin: 8px 0 12px;
+  font-size: clamp(30px, 3.8vw, 46px);
+  line-height: 1.06;
+  letter-spacing: -.03em;
 }
 
 .about-project-lead {
   max-width: 780px;
   margin: 0;
   color: #a6b3c8;
-  font-size: 17px;
-  line-height: 1.7;
+  font-size: 16px;
+  line-height: 1.65;
 }
 
 .about-project-slogan {
   display: inline-flex;
-  margin-top: 22px;
+  margin-top: 20px;
   padding: 9px 12px;
   border: 1px solid rgba(125,145,255,.18);
   border-radius: 999px;
@@ -224,6 +244,11 @@ html[data-theme="light"] .about-project-hero {
     #fff;
 }
 
+html[data-theme="light"] .about-project-logo {
+  border-color: rgba(72,91,174,.14);
+  box-shadow: 0 16px 36px rgba(52,68,108,.12);
+}
+
 html[data-theme="light"] .about-project-lead,
 html[data-theme="light"] .about-card p {
   color: #66758d;
@@ -269,11 +294,23 @@ html[data-theme="light"] .about-project-footer-note {
 
 @media (max-width: 680px) {
   .about-project-hero {
-    padding: 26px 20px;
+    padding: 24px 20px;
+  }
+
+  .about-project-hero-main {
+    align-items: flex-start;
+    gap: 16px;
+  }
+
+  .about-project-logo {
+    width: 76px;
+    height: 76px;
+    flex-basis: 76px;
+    border-radius: 18px;
   }
 
   .about-project-hero h1 {
-    font-size: 34px;
+    font-size: 30px;
   }
 
   .about-project-lead {
@@ -289,5 +326,16 @@ html[data-theme="light"] .about-project-footer-note {
   .about-roadmap-head {
     align-items: flex-start;
     flex-direction: column;
+  }
+}
+
+@media (max-width: 520px) {
+  .about-project-hero-main {
+    display: grid;
+  }
+
+  .about-project-logo {
+    width: 70px;
+    height: 70px;
   }
 }
