@@ -45,7 +45,7 @@ const statusLabels: Record<string, string> = {
   rejected: "Отклонён",
   scheduled: "Запланирован",
   published: "Опубликован",
-  failed: "Ошибка",
+  failed: "Ошибка публикации",
 };
 
 const tabConfig: Record<QueueTab, { label: string; statuses: string[] }> = {
@@ -83,6 +83,32 @@ function normalizeUrl(value: string) {
   if (!trimmed) return "";
   if (/^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed)) return trimmed;
   return `https://${trimmed}`;
+}
+
+function publicationErrorMessage(value?: string | null) {
+  const raw = (value ?? "").trim();
+  const normalized = raw.toLowerCase();
+  if (
+    normalized.includes("attachment.not.ready")
+    || normalized.includes("file.not.processed")
+    || normalized.includes("attachment.file.not.processed")
+  ) {
+    return "MAX не успел подготовить видео к отправке. Публикация не потеряна — попробуйте повторить её немного позже.";
+  }
+  if (normalized.includes("timeout") || normalized.includes("timed out")) {
+    return "MAX слишком долго отвечал. Попробуйте повторить публикацию немного позже.";
+  }
+  if (normalized.includes("сертифик") || normalized.includes("ssl")) {
+    return "Не удалось установить защищённое соединение с MAX. Повторите публикацию позже или обратитесь к администратору.";
+  }
+  return raw || "MAX не принял публикацию. Попробуйте повторить отправку позже.";
+}
+
+function drawerTitle(status: string) {
+  if (status === "published") return "Опубликованный пост";
+  if (status === "scheduled") return "Публикация в очереди";
+  if (status === "failed") return "Не удалось опубликовать";
+  return "Публикация на модерации";
 }
 
 export function QueueExperience() {
@@ -443,7 +469,7 @@ export function QueueExperience() {
             <div className="editorial-card-body">
               <div className="editorial-card-meta"><span>{item.target_name ?? `Канал #${item.target_id}`}</span><time>{shortDate(item.source_published_at)}</time></div>
               <strong>{(item.rewritten_text ?? item.original_text ?? "Пост без текста").slice(0, 120)}</strong>
-              <p>{item.original_text || "Пост без исходного текста"}</p>
+              <p>{item.status === "failed" ? publicationErrorMessage(item.error_message) : item.original_text || "Пост без исходного текста"}</p>
               <div className={`editorial-status status-${item.status}`}>{statusLabels[item.status] ?? item.status}</div>
             </div>
           </button>
@@ -456,10 +482,15 @@ export function QueueExperience() {
           <aside className="editorial-drawer" onMouseDown={(event) => event.stopPropagation()}>
             <header className="editorial-drawer-head">
               <button className="drawer-close" onClick={() => setSelectedId(null)}><X size={22}/></button>
-              <div><h2>{selected.status === "published" ? "Опубликованный пост" : selected.status === "scheduled" ? "Публикация в очереди" : "Публикация на модерации"}</h2><div className={`editorial-status status-${selected.status}`}>{statusLabels[selected.status] ?? selected.status}</div></div>
+              <div><h2>{drawerTitle(selected.status)}</h2><div className={`editorial-status status-${selected.status}`}>{statusLabels[selected.status] ?? selected.status}</div></div>
             </header>
 
             {selected.status === "scheduled" && selected.scheduled_at && <div className="scheduled-banner"><CalendarClock size={18}/> Запланировано на {shortDate(selected.scheduled_at)}</div>}
+            {selected.status === "failed" && (
+              <div className="editorial-message error">
+                <span><strong>Публикация не отправлена.</strong> {publicationErrorMessage(selected.error_message)}</span>
+              </div>
+            )}
 
             <div className="drawer-source-row">
               <div><strong>{selected.target_name ?? `Канал #${selected.target_id}`}</strong><span>Источник публикации</span></div>
