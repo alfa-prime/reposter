@@ -1,7 +1,7 @@
 .video-enhancement-block {
   display: grid;
   gap: 12px;
-  margin-top: 14px;
+  margin-top: 10px;
 }
 
 .video-source-warning {
@@ -84,36 +84,49 @@
 }
 
 .video-upload-row {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 9px 12px;
+  display: block;
 }
 
 .video-upload-button {
+  margin-top: 0;
+  width: fit-content;
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  border: 1px solid var(--border, #dfe5f1);
-  border-radius: 10px;
-  padding: 9px 13px;
-  font-weight: 600;
+  gap: 8px;
+  border: 0;
+  padding: 0;
+  color: #9ab0ff;
+  background: transparent;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.4;
   cursor: pointer;
-  background: var(--surface, #fff);
-  color: var(--text, #17223b);
 }
 
 .video-upload-button:hover {
-  border-color: #7b70f6;
+  color: #7b8fff;
 }
 
-.video-upload-row > small {
+.video-upload-button svg {
+  flex: 0 0 auto;
+}
+
+.video-upload-hint {
+  display: block;
+  margin-top: 6px;
   color: var(--muted, #6f7c96);
+  font-size: 10px;
 }
 
 .video-upload-status {
-  font-size: 13px;
+  display: block;
+  margin-top: 6px;
+  font-size: 11px;
   color: var(--muted, #6f7c96);
+}
+
+.video-upload-status:empty {
+  display: none;
 }
 
 .video-upload-status.ok {
@@ -123,7 +136,7 @@
 .video-upload-status.error,
 .video-enhancement-error {
   color: #c94c5b;
-  font-size: 13px;
+  font-size: 11px;
 }
 
 @media (max-width: 720px) {
