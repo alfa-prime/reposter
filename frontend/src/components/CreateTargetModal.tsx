@@ -1,4 +1,4 @@
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useState } from "react";
 import { X } from "lucide-react";
 import { api, detectTargetPlatform, Target } from "../api";
 
@@ -13,7 +13,7 @@ export function CreateTargetModal({ busy, onClose, onCreated, onError }: CreateT
   const [name, setName] = useState("");
   const [url, setUrl] = useState("");
   const [urlError, setUrlError] = useState("");
-  const platform = useMemo(() => detectTargetPlatform(url), [url]);
+  const platform = detectTargetPlatform(url);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -23,8 +23,8 @@ export function CreateTargetModal({ busy, onClose, onCreated, onError }: CreateT
       return;
     }
 
-    if (!platform) {
-      setUrlError("Укажите ссылку на канал MAX, Telegram или VK.");
+    if (platform !== "max") {
+      setUrlError("Укажите ссылку на канал MAX, например: https://max.ru/имя_канала");
       return;
     }
 
@@ -33,7 +33,7 @@ export function CreateTargetModal({ busy, onClose, onCreated, onError }: CreateT
     try {
       const created = await api.createTarget({
         name: name.trim(),
-        platform,
+        platform: "max",
         external_id: "auto",
         url: url.trim(),
         is_active: true,
