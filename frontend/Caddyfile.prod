@@ -1,8 +1,13 @@
 {$SITE_ADDRESS} {
     encode zstd gzip
 
-    basic_auth {
+    @protected not path /api/v1/max/webhook
+    basic_auth @protected {
         {$ADMIN_USER} {$ADMIN_PASSWORD_HASH}
+    }
+
+    handle /api/v1/max/webhook {
+        reverse_proxy app:8000
     }
 
     handle /api/* {
