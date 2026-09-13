@@ -12,6 +12,12 @@ function aboutIcon() {
   `;
 }
 
+function clearRegularNavActive() {
+  document
+    .querySelectorAll<HTMLButtonElement>(".sidebar nav button:not(.about-nav-button).active")
+    .forEach((button) => button.classList.remove("active"));
+}
+
 function closeAbout() {
   const workspace = document.querySelector<HTMLElement>(".workspace");
   const button = document.querySelector<HTMLButtonElement>(".about-nav-button");
@@ -23,6 +29,8 @@ function openAbout() {
   const workspace = document.querySelector<HTMLElement>(".workspace");
   const button = document.querySelector<HTMLButtonElement>(".about-nav-button");
   if (!workspace) return;
+
+  clearRegularNavActive();
   workspace.classList.add(ABOUT_ACTIVE_CLASS);
   button?.classList.add("active");
   workspace.querySelector<HTMLElement>(".about-project-page")?.scrollTo({ top: 0 });
@@ -48,7 +56,6 @@ function createAboutPage(workspace: HTMLElement) {
 
     <div class="about-project-grid">
       <article class="about-card about-card-intro">
-        <div class="about-card-icon">✦</div>
         <div>
           <span class="about-card-label">Что это</span>
           <h2>Рабочее место редактора</h2>
@@ -127,6 +134,11 @@ function install() {
     button.innerHTML = `${aboutIcon()}<span>О проекте</span>`;
     button.addEventListener("click", openAbout);
     nav.append(button);
+  }
+
+  if (workspace.classList.contains(ABOUT_ACTIVE_CLASS)) {
+    clearRegularNavActive();
+    button.classList.add("active");
   }
 
   nav.querySelectorAll<HTMLButtonElement>("button:not(.about-nav-button)").forEach((navButton) => {
