@@ -57,7 +57,7 @@ export function QueueVideoSection({
     onError("");
     try {
       setInfo(await api.uploadQueueVideo(queueItemId, file));
-      onNotice("Видео загружено");
+      onNotice("Видео загружено. При публикации MAX подготовит файл и отправит пост автоматически, как только видео будет готово.");
     } catch (exc) {
       onError(exc instanceof Error ? exc.message : "Не удалось загрузить видео");
     } finally {
@@ -97,22 +97,30 @@ export function QueueVideoSection({
       )}
 
       {info.uploaded_videos.length > 0 && (
-        <div className="uploaded-video-list">
-          {info.uploaded_videos.map((video) => (
-            <div className="uploaded-video-card" key={video.media_id}>
-              <video controls preload="metadata" src={video.source_url} />
-              <div className="uploaded-video-meta">
-                <span>Видео добавлено вручную</span>
-                <small>{humanSize(video.size)}</small>
-                {!readonly && (
-                  <button className="video-delete" type="button" disabled={busy} onClick={() => void remove(video.media_id)}>
-                    <Trash2 size={14} />Удалить видео
-                  </button>
-                )}
+        <>
+          <div className="uploaded-video-list">
+            {info.uploaded_videos.map((video) => (
+              <div className="uploaded-video-card" key={video.media_id}>
+                <video controls preload="metadata" src={video.source_url} />
+                <div className="uploaded-video-meta">
+                  <span>Видео добавлено вручную</span>
+                  <small>{humanSize(video.size)}</small>
+                  {!readonly && (
+                    <button className="video-delete" type="button" disabled={busy} onClick={() => void remove(video.media_id)}>
+                      <Trash2 size={14} />Удалить видео
+                    </button>
+                  )}
+                </div>
               </div>
+            ))}
+          </div>
+          {!readonly && (
+            <div className="video-processing-note">
+              <strong>Видео готово к публикации</strong>
+              <span>После отправки MAX может несколько секунд обрабатывать файл. Пост опубликуется автоматически, как только видео будет готово.</span>
             </div>
-          ))}
-        </div>
+          )}
+        </>
       )}
 
       {!readonly && (
