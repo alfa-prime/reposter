@@ -56,7 +56,10 @@ export function QueueVideoSection({
     setBusy(true);
     onError("");
     try {
-      setInfo(await api.uploadQueueVideo(queueItemId, file));
+      // POST /video возвращает только данные загруженного файла, а экрану нужен
+      // полный video-info. Поэтому после успешной загрузки перечитываем состояние.
+      await api.uploadQueueVideo(queueItemId, file);
+      setInfo(await api.queueVideoInfo(queueItemId));
       onNotice("Видео загружено. При публикации MAX подготовит файл и отправит пост автоматически, как только видео будет готово.");
     } catch (exc) {
       onError(exc instanceof Error ? exc.message : "Не удалось загрузить видео");
@@ -69,7 +72,9 @@ export function QueueVideoSection({
     setBusy(true);
     onError("");
     try {
-      setInfo(await api.deleteQueueVideo(queueItemId, mediaId));
+      // DELETE возвращает 204 без тела, поэтому после удаления также перечитываем video-info.
+      await api.deleteQueueVideo(queueItemId, mediaId);
+      setInfo(await api.queueVideoInfo(queueItemId));
       onNotice("Видео удалено");
     } catch (exc) {
       onError(exc instanceof Error ? exc.message : "Не удалось удалить видео");
