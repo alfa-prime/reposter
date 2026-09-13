@@ -24,6 +24,7 @@ class QueueItemStatus(StrEnum):
     APPROVED = "approved"
     REJECTED = "rejected"
     SCHEDULED = "scheduled"
+    PUBLISHED = "published"
     FAILED = "failed"
 
 
