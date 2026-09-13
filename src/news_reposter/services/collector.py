@@ -134,7 +134,7 @@ async def _get_last_external_post_id(session, source_id: int) -> int | None:
 
 
 def _effective_vk_content(vk_post: VKPost) -> tuple[str, list[dict[str, Any]]]:
-    """Возвращает текст и вложения, пригодные для публикации.
+    """Возвращает текст и вложения, пригодные для редакционной очереди.
 
     У репостов VK верхний уровень записи может быть пустым, а исходный текст и
     вложения лежат в copy_history. В таком случае берём содержимое первого
@@ -174,7 +174,7 @@ async def _store_post_and_queue_items(
     vk_post: VKPost,
     target_sources: list[TargetSource],
 ) -> tuple[bool, int]:
-    """Сохраняет один пост, его фотографии и создаёт QueueItem для целей."""
+    """Сохраняет пост, фото/видео и создаёт QueueItem для целей."""
 
     external_post_id = str(vk_post.id)
     post = await session.scalar(
@@ -205,13 +205,13 @@ async def _store_post_and_queue_items(
             attachment.post_id = post.post_id
             session.add(attachment)
 
-    # Пост всё равно сохраняем, чтобы продвинуть маркер сбора. Но если после
-    # нормализации в нём нет ни текста, ни поддерживаемых фотографий, в
-    # редакционную очередь его не кладём: пользователю с ним нечего делать.
+    # Пустую запись без текста, фото и видео сохраняем только как маркер,
+    # чтобы следующий сбор не забирал её снова. Видеопосты, напротив, должны
+    # попасть в очередь даже если импорт самого видео из VK пока не реализован.
     if not post.original_text.strip() and not post_attachments:
         post.status = PostStatus.PROCESSED
         logger.info(
-            "Пост VK %s источника %s пропущен: нет текста и поддерживаемых фото",
+            "Пост VK %s источника %s пропущен: нет текста, фото или видео",
             external_post_id,
             source_id,
         )
@@ -244,26 +244,39 @@ async def _store_post_and_queue_items(
 
 
 def build_post_attachments(raw_attachments: list[dict[str, Any]]) -> list[PostAttachment]:
-    """Преобразует фотографии VK в PostAttachment в исходном порядке."""
+    """Преобразует фотографии и видео VK во вложения в исходном порядке."""
 
     result: list[PostAttachment] = []
     for raw_attachment in raw_attachments:
-        if raw_attachment.get("type") != "photo":
-            # Для MVP обрабатываем только фотографии. Полный ответ VK всё равно
-            # остаётся в Post.raw_data, поэтому к видео можно вернуться позже.
+        attachment_type = raw_attachment.get("type")
+        if attachment_type == "photo":
+            payload = raw_attachment.get("photo")
+            photo = payload if isinstance(payload, dict) else {}
+            result.append(
+                PostAttachment(
+                    attachment_type=AttachmentType.PHOTO,
+                    external_attachment_id=_external_attachment_id(photo),
+                    source_url=_best_photo_url(photo),
+                    position=len(result),
+                    raw_data=raw_attachment,
+                )
+            )
             continue
 
-        payload = raw_attachment.get("photo")
-        photo = payload if isinstance(payload, dict) else {}
-        result.append(
-            PostAttachment(
-                attachment_type=AttachmentType.PHOTO,
-                external_attachment_id=_external_attachment_id(photo),
-                source_url=_best_photo_url(photo),
-                position=len(result),
-                raw_data=raw_attachment,
+        if attachment_type == "video":
+            payload = raw_attachment.get("video")
+            video = payload if isinstance(payload, dict) else {}
+            player = video.get("player")
+            result.append(
+                PostAttachment(
+                    attachment_type=AttachmentType.VIDEO,
+                    external_attachment_id=_external_attachment_id(video),
+                    source_url=player if isinstance(player, str) and player else None,
+                    position=len(result),
+                    raw_data=raw_attachment,
+                )
             )
-        )
+
     return result
 
 
