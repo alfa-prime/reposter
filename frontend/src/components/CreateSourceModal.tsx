@@ -1,12 +1,6 @@
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useState } from "react";
 import { X } from "lucide-react";
 import { api, detectSourcePlatform } from "../api";
-
-const platformLabels = {
-  vk: "VK",
-  telegram: "Telegram",
-  max: "MAX",
-} as const;
 
 type CreateSourceModalProps = {
   busy: boolean;
@@ -19,7 +13,6 @@ export function CreateSourceModal({ busy, onClose, onCreated, onError }: CreateS
   const [name, setName] = useState("");
   const [url, setUrl] = useState("");
   const [urlError, setUrlError] = useState("");
-  const platform = useMemo(() => detectSourcePlatform(url), [url]);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -29,8 +22,9 @@ export function CreateSourceModal({ busy, onClose, onCreated, onError }: CreateS
       return;
     }
 
-    if (!platform) {
-      setUrlError("Укажите корректную ссылку на источник VK, Telegram или MAX.");
+    const platform = detectSourcePlatform(url);
+    if (platform !== "vk") {
+      setUrlError("Укажите корректную ссылку на источник VK, например https://vk.com/example");
       return;
     }
 
@@ -39,7 +33,7 @@ export function CreateSourceModal({ busy, onClose, onCreated, onError }: CreateS
     try {
       await api.createSource({
         name: name.trim(),
-        platform,
+        platform: "vk",
         url: url.trim(),
         is_active: true,
       });
@@ -91,9 +85,7 @@ export function CreateSourceModal({ busy, onClose, onCreated, onError }: CreateS
               placeholder="https://vk.com/peninsula51"
               aria-invalid={Boolean(urlError)}
             />
-            <small className={urlError ? "source-link-error" : "source-platform-hint"}>
-              {urlError || (platform ? `Платформа определена автоматически: ${platformLabels[platform]}` : "Поддерживаются ссылки VK, Telegram и MAX")}
-            </small>
+            {urlError && <small className="source-link-error">{urlError}</small>}
           </label>
 
           <button className="primary" disabled={busy}>Добавить источник</button>
