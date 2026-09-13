@@ -24,7 +24,7 @@ export function CreateSourceModal({ busy, onClose, onCreated, onError }: CreateS
 
     const platform = detectSourcePlatform(url);
     if (platform !== "vk") {
-      setUrlError("Укажите корректную ссылку на источник VK, например https://vk.com/example");
+      setUrlError("Укажите ссылку на источник VK, например: https://vk.com/имя_канала");
       return;
     }
 
