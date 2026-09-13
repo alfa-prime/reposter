@@ -15,9 +15,10 @@ import { api, QueueItem, Source, Target, TargetSource } from "./api";
 import { AboutPage } from "./components/AboutPage";
 import { Dashboard } from "./components/Dashboard";
 import { Sidebar } from "./components/Sidebar";
+import { SourcesPage } from "./components/SourcesPage";
 import type { Section } from "./navigation";
 
-type ModalKind = "target" | "source" | null;
+type ModalKind = "target" | null;
 type ConfirmDialog = {
   title: string;
   message: string;
@@ -206,30 +207,6 @@ export function App() {
     }
   }
 
-  async function createSource(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const form = event.currentTarget;
-    if (!ensureFormValid(form, setError)) return;
-    const data = new FormData(form);
-    setBusy(true);
-    setError("");
-    try {
-      await api.createSource({
-        name: String(data.get("name") ?? "").trim(),
-        platform: String(data.get("platform") ?? "vk"),
-        url: String(data.get("url") ?? "").trim(),
-        is_active: true,
-      });
-      setModal(null);
-      setNotice("Источник добавлен. Чтобы он участвовал в сборе, подключите его к каналу.");
-      await loadAll();
-    } catch (exc) {
-      setError(exc instanceof Error ? exc.message : "Не удалось добавить источник");
-    } finally {
-      setBusy(false);
-    }
-  }
-
   async function attachSource(sourceId: number) {
     if (!selectedTarget) return;
     setBusy(true);
@@ -326,10 +303,17 @@ export function App() {
           <div className="editor-panel channel-panel">{!selectedTarget ? <div className="empty large"><Radio size={34}/><h3>Выберите канал</h3><p>Здесь будут настройки канала и его источники.</p></div> : <><div className="editor-head"><div><span className="badge">{selectedTarget.platform}</span><h2>{selectedTarget.name}</h2></div>{selectedTarget.url && <a href={selectedTarget.url} target="_blank" rel="noreferrer">Открыть <ExternalLink size={14}/></a>}</div><div className="actions"><button className="secondary" onClick={async () => { await api.updateTarget(selectedTarget.target_id, { is_active: !selectedTarget.is_active }); await loadAll(); }}>{selectedTarget.is_active ? "Отключить" : "Включить"}</button><button className="danger" onClick={() => askDeleteTarget(selectedTarget)}><Trash2 size={15}/>Удалить</button></div><div className="section-divider" /><div className="table-head embedded"><h2>Источники канала</h2><span>{targetSources.length}</span></div>{targetSources.length === 0 && <div className="setup-hint"><strong>Подключите источник</strong><span>Без этой связи сборщик не знает, в какой канал положить найденный пост.</span></div>}{targetSources.map((link) => { const source = sources.find((item) => item.source_id === link.source_id); return <div className="entity-row" key={link.target_source_id}><div className="entity-icon"><Database size={17}/></div><div className="entity-main"><strong>{source?.name ?? `Источник #${link.source_id}`}</strong><span>{source?.url}</span></div><button className="icon-button" title="Отключить источник" onClick={async () => { await api.detachSource(selectedTarget.target_id, link.target_source_id); setTargetSources(await api.targetSources(selectedTarget.target_id)); }}><X size={16}/></button></div>; })}<div className="attach-list"><label>Подключить источник</label>{sources.filter((item) => !attachedSourceIds.has(item.source_id)).map((source) => <button key={source.source_id} className="attach-source" onClick={() => void attachSource(source.source_id)}><Link2 size={15}/><span>{source.name}</span><small>{source.platform}</small></button>)}{sources.length === 0 && <div className="empty">Сначала добавьте источник в разделе «Источники»</div>}{sources.length > 0 && sources.every((item) => attachedSourceIds.has(item.source_id)) && <div className="empty">Все источники уже подключены</div>}</div></>}</div>
         </section>}
 
-        {section === "sources" && <section className="table-card"><div className="table-head"><h2>Источники</h2><div className="table-actions"><span>{sources.length} всего</span><button className="primary compact" onClick={() => { setError(""); setModal("source"); }}><Plus size={15}/>Добавить</button></div></div>{sources.length === 0 && <div className="empty">Источников пока нет</div>}{sources.map((item) => <div className="entity-row" key={item.source_id}><div className="entity-icon"><Database size={18}/></div><div className="entity-main"><strong>{item.name}</strong><span>{item.platform} · {item.url}</span></div><button className={item.is_active ? "switch-label on clickable" : "switch-label clickable"} onClick={async () => { await api.updateSource(item.source_id, { is_active: !item.is_active }); await loadAll(); }}>{item.is_active ? "Активен" : "Выключен"}</button><button className="icon-button danger-icon" title="Удалить" onClick={() => askDeleteSource(item)}><Trash2 size={16}/></button></div>)}</section>}
+        {section === "sources" && <SourcesPage
+          sources={sources}
+          busy={busy}
+          onChanged={loadAll}
+          onDelete={askDeleteSource}
+          onError={setError}
+          onNotice={setNotice}
+        />}
       </main>
 
-      {modal && <div className="modal-backdrop" onMouseDown={() => setModal(null)}><div className="modal-card" onMouseDown={(event) => event.stopPropagation()}><div className="modal-head"><div><p className="eyebrow">НАСТРОЙКА</p><h2>{modal === "target" ? "Новый канал" : "Новый источник"}</h2></div><button className="icon-button" onClick={() => setModal(null)}><X size={18}/></button></div><p className="form-note"><span>*</span> обязательные поля</p>{modal === "target" ? <form noValidate onSubmit={(event) => void createTarget(event)} className="form-grid"><label>Название <b>*</b><input name="name" required minLength={1} placeholder="Новости 51 региона" /></label><label>Платформа <b>*</b><select name="platform" defaultValue="max" required><option value="max">MAX</option><option value="telegram">Telegram</option><option value="vk">VK</option></select></label><label>ID канала <b>*</b><input name="external_id" required minLength={1} placeholder="-77162942582085" /></label><label>Ссылка <small>необязательно</small><input name="url" type="url" placeholder="https://max.ru/..." /></label><button className="primary" disabled={busy}>Создать канал</button></form> : <form noValidate onSubmit={(event) => void createSource(event)} className="form-grid"><label>Название <b>*</b><input name="name" required minLength={1} placeholder="Полуостров 51" /></label><label>Платформа <b>*</b><select name="platform" defaultValue="vk" required><option value="vk">VK</option></select></label><label className="wide">Ссылка <b>*</b><input name="url" type="url" required placeholder="https://vk.com/peninsula51" /></label><button className="primary" disabled={busy}>Добавить источник</button></form>}</div></div>}
+      {modal === "target" && <div className="modal-backdrop" onMouseDown={() => setModal(null)}><div className="modal-card" onMouseDown={(event) => event.stopPropagation()}><div className="modal-head"><div><p className="eyebrow">НАСТРОЙКА</p><h2>Новый канал</h2></div><button className="icon-button" onClick={() => setModal(null)}><X size={18}/></button></div><p className="form-note"><span>*</span> обязательные поля</p><form noValidate onSubmit={(event) => void createTarget(event)} className="form-grid"><label>Название <b>*</b><input name="name" required minLength={1} placeholder="Новости 51 региона" /></label><label>Платформа <b>*</b><select name="platform" defaultValue="max" required><option value="max">MAX</option><option value="telegram">Telegram</option><option value="vk">VK</option></select></label><label>ID канала <b>*</b><input name="external_id" required minLength={1} placeholder="-77162942582085" /></label><label>Ссылка <small>необязательно</small><input name="url" type="url" placeholder="https://max.ru/..." /></label><button className="primary" disabled={busy}>Создать канал</button></form></div></div>}
 
       {confirmDialog && <div className="modal-backdrop" onMouseDown={() => setConfirmDialog(null)}><div className="modal-card confirm-card" onMouseDown={(event) => event.stopPropagation()}><div className="modal-head"><div><p className="eyebrow">ПОДТВЕРЖДЕНИЕ</p><h2>{confirmDialog.title}</h2></div><button className="icon-button" onClick={() => setConfirmDialog(null)}><X size={18}/></button></div><p className="confirm-message">{confirmDialog.message}</p><div className="actions confirm-actions"><button className="secondary" onClick={() => setConfirmDialog(null)}>Отмена</button><button className="danger" disabled={busy} onClick={() => void confirmAction()}><Trash2 size={15}/>{confirmDialog.confirmLabel}</button></div></div></div>}
     </div>
