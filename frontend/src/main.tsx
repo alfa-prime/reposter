@@ -11,10 +11,12 @@ import "./brand.css";
 import "./mediaControls.css";
 import "./queueExperiencePatch.css";
 import "./targetWizardEnhancements.css";
+import "./videoEnhancements.css";
 import "./queueEnhancements";
 import "./brandEnhancements";
 import "./signatureEnhancements";
 import "./targetWizardEnhancements";
+import "./videoEnhancements";
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
