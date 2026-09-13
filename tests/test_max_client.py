@@ -23,6 +23,7 @@ def test_publish_post_with_images() -> None:
                         "payload": {"url": "https://example.com/photo.jpg"},
                     }
                 ],
+                "format": "markdown",
             }
             return httpx.Response(
                 200,
@@ -41,6 +42,43 @@ def test_publish_post_with_images() -> None:
             )
 
         assert result["message"]["url"] == "https://max.ru/channel/post"
+
+    asyncio.run(scenario())
+
+
+def test_upload_video_returns_token() -> None:
+    """Проверяет двухшаговую загрузку видео через /uploads MAX."""
+
+    async def scenario() -> None:
+        calls: list[str] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            calls.append(request.url.path)
+            if request.url.path == "/uploads":
+                assert request.url.params["type"] == "video"
+                return httpx.Response(
+                    200,
+                    json={
+                        "url": "https://upload.example/video",
+                        "token": "video-token",
+                    },
+                )
+            if request.url.host == "upload.example":
+                assert b"movie.mp4" in request.content
+                return httpx.Response(200, json={"retval": {"ok": True}})
+            return httpx.Response(404)
+
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http_client:
+            client = MAXClient(access_token="secret", http_client=http_client)
+            token = await client.upload_media(
+                media_type="video",
+                filename="movie.mp4",
+                content=b"video-bytes",
+                content_type="video/mp4",
+            )
+
+        assert token == "video-token"
+        assert calls == ["/uploads", "/video"]
 
     asyncio.run(scenario())
 
