@@ -18,6 +18,7 @@ import "./queueEnhancements";
 import "./brandEnhancements";
 import "./signatureEnhancements";
 import "./targetWizardEnhancements";
+import "./sourceWizardEnhancements";
 import "./videoEnhancements";
 import "./publicationActionsEnhancements";
 import "./aboutEnhancements";
