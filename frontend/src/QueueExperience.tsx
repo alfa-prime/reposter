@@ -27,6 +27,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { api, QueueItem, QueuePhoto } from "./api";
+import { QueueVideoSection } from "./components/QueueVideoSection";
 import "./queueExperience.css";
 
 type QueueTab = "storage" | "scheduled" | "archive";
@@ -505,6 +506,16 @@ export function QueueExperience() {
 
               {selected.status !== "published" && <><label className="upload-media-button"><Upload size={17}/>Добавить фото<input type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={(event) => void uploadPhotos(event)} disabled={busy}/></label>
               <small>«Убрать» исключает исходное фото только из публикации — сам оригинал остаётся. Загруженные вручную файлы можно удалить полностью · JPEG, PNG или WebP · до 10 МБ на файл.</small></>}
+
+              <QueueVideoSection
+                queueItemId={selected.queue_item_id}
+                readonly={selected.status === "published"}
+                onError={setError}
+                onNotice={(message) => {
+                  setError("");
+                  setNotice(message);
+                }}
+              />
             </div>
 
             <div className="drawer-text-section">
