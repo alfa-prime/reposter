@@ -4,6 +4,33 @@ from urllib.parse import urlsplit
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
+SOURCE_HOST_PLATFORMS = {
+    "vk.com": "vk",
+    "vk.ru": "vk",
+    "t.me": "telegram",
+    "telegram.me": "telegram",
+    "max.ru": "max",
+}
+
+
+def source_platform_from_url(value: str) -> str:
+    """Определяет поддерживаемую платформу по ссылке на источник."""
+
+    parsed = urlsplit(value)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        raise ValueError("url должен быть абсолютной HTTP-ссылкой")
+
+    host = (parsed.hostname or "").lower()
+    if host.startswith("www."):
+        host = host[4:]
+    platform = SOURCE_HOST_PLATFORMS.get(host)
+    if platform is None:
+        raise ValueError("поддерживаются ссылки источников VK, Telegram и MAX")
+    if not parsed.path.strip("/"):
+        raise ValueError("ссылка должна вести на конкретный источник, а не на главную страницу")
+    return platform
+
+
 class SourceBase(BaseModel):
     """Общие поля источника."""
 
@@ -48,12 +75,19 @@ class SourceBase(BaseModel):
     @field_validator("url")
     @classmethod
     def validate_url(cls, value: str) -> str:
-        """Разрешает только абсолютные HTTP-ссылки на источник."""
+        """Разрешает только ссылки на поддерживаемые источники."""
 
-        parsed = urlsplit(value)
-        if parsed.scheme not in {"http", "https"} or not parsed.netloc:
-            raise ValueError("url должен быть абсолютной HTTP-ссылкой")
+        source_platform_from_url(value)
         return value
+
+    @model_validator(mode="after")
+    def validate_platform_matches_url(self) -> "SourceBase":
+        """Не позволяет сохранить платформу, не соответствующую ссылке."""
+
+        detected = source_platform_from_url(self.url)
+        if self.platform != detected:
+            raise ValueError(f"для этой ссылки платформа должна быть {detected}")
+        return self
 
 
 class SourceCreate(SourceBase):
@@ -119,19 +153,23 @@ class SourceUpdate(BaseModel):
 
         if value is None:
             return None
-        parsed = urlsplit(value)
-        if parsed.scheme not in {"http", "https"} or not parsed.netloc:
-            raise ValueError("url должен быть абсолютной HTTP-ссылкой")
+        source_platform_from_url(value)
         return value
 
     @model_validator(mode="after")
     def validate_changes(self) -> "SourceUpdate":
-        """Не допускает пустой запрос на изменение источника."""
+        """Не допускает пустой запрос и несогласованные платформу со ссылкой."""
 
         if not self.model_fields_set:
             raise ValueError("нужно передать хотя бы одно поле")
         if any(getattr(self, field) is None for field in self.model_fields_set):
             raise ValueError("поля источника не могут быть null")
+        if "url" in self.model_fields_set and "platform" in self.model_fields_set:
+            assert self.url is not None
+            assert self.platform is not None
+            detected = source_platform_from_url(self.url)
+            if self.platform != detected:
+                raise ValueError(f"для этой ссылки платформа должна быть {detected}")
         return self
 
 
