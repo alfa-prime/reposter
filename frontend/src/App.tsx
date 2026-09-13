@@ -1,24 +1,22 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import {
   Archive,
-  Bot,
   ChevronRight,
-  CircleDot,
   Database,
   ExternalLink,
-  FileText,
-  LayoutDashboard,
   Link2,
   Plus,
   Radio,
   RefreshCw,
-  Sparkles,
   Trash2,
   X,
 } from "lucide-react";
 import { api, QueueItem, Source, Target, TargetSource } from "./api";
+import { AboutPage } from "./components/AboutPage";
+import { Dashboard } from "./components/Dashboard";
+import { Sidebar } from "./components/Sidebar";
+import type { Section } from "./navigation";
 
-type Section = "dashboard" | "queue" | "targets" | "sources";
 type ModalKind = "target" | "source" | null;
 type ConfirmDialog = {
   title: string;
@@ -34,8 +32,17 @@ const statusLabels: Record<string, string> = {
   approved: "Одобрено",
   rejected: "Отклонено",
   scheduled: "Запланировано",
+  published: "Опубликовано",
   failed: "Ошибка",
 };
+
+const activeQueueStatuses = new Set([
+  "pending",
+  "rewriting",
+  "awaiting_moderation",
+  "approved",
+  "scheduled",
+]);
 
 function shortDate(value?: string | null): string {
   if (!value) return "—";
@@ -71,6 +78,7 @@ export function App() {
 
   const activeTargets = useMemo(() => targets.filter((item) => item.is_active).length, [targets]);
   const activeSources = useMemo(() => sources.filter((item) => item.is_active).length, [sources]);
+  const activeQueue = useMemo(() => queue.filter((item) => activeQueueStatuses.has(item.status)).length, [queue]);
 
   async function loadAll() {
     setBusy(true);
@@ -281,37 +289,32 @@ export function App() {
   }
 
   const attachedSourceIds = new Set(targetSources.map((item) => item.source_id));
+  const pageTitle = section === "queue" ? "Редакционная очередь" : section === "targets" ? "Целевые каналы" : section === "sources" ? "Источники" : "Обзор";
 
   return (
     <div className="shell">
-      <aside className="sidebar">
-        <div className="brand">
-          <div className="brand-mark"><Sparkles size={19} /></div>
-          <div><strong>Дядя Влад</strong><span>читает новости</span></div>
-        </div>
-        <nav>
-          <button onClick={() => setSection("dashboard")} className={section === "dashboard" ? "active" : ""}><LayoutDashboard size={18} />Обзор</button>
-          <button onClick={() => setSection("queue")} className={section === "queue" ? "active" : ""}><FileText size={18} />Очередь</button>
-          <button onClick={() => setSection("targets")} className={section === "targets" ? "active" : ""}><Radio size={18} />Каналы</button>
-          <button onClick={() => setSection("sources")} className={section === "sources" ? "active" : ""}><Database size={18} />Источники</button>
-        </nav>
-        <div className="sidebar-foot"><div className="system-state"><CircleDot size={14} /> Backend connected</div></div>
-      </aside>
+      <Sidebar section={section} onSectionChange={setSection} />
 
       <main className="workspace">
-        <header className="topbar">
-          <div><p className="eyebrow">ДЯДЯ ВЛАД · ЧИТАЕТ НОВОСТИ</p><h1>{section === "queue" ? "Редакционная очередь" : section === "targets" ? "Целевые каналы" : section === "sources" ? "Источники" : "Обзор"}</h1></div>
-          <button className="primary" onClick={() => void collectNow()} disabled={busy}><RefreshCw size={17} className={busy ? "spin" : ""} />Собрать сейчас</button>
-        </header>
+        {section !== "about" && <>
+          <header className="topbar">
+            <div><p className="eyebrow">ДЯДЯ ВЛАД · ЧИТАЕТ НОВОСТИ</p><h1>{pageTitle}</h1></div>
+            <button className="primary" onClick={() => void collectNow()} disabled={busy}><RefreshCw size={17} className={busy ? "spin" : ""} />Собрать сейчас</button>
+          </header>
 
-        {(error || notice) && <div className={error ? "toast error" : "toast"}>{error || notice}<button onClick={() => { setError(""); setNotice(""); }}>×</button></div>}
+          {(error || notice) && <div className={error ? "toast error" : "toast"}>{error || notice}<button onClick={() => { setError(""); setNotice(""); }}>×</button></div>}
+        </>}
 
-        {section === "dashboard" && <section className="dashboard-grid">
-          <article className="metric"><span>Активные каналы</span><strong>{activeTargets}</strong><small>из {targets.length}</small></article>
-          <article className="metric"><span>Источники</span><strong>{activeSources}</strong><small>из {sources.length}</small></article>
-          <article className="metric"><span>В очереди</span><strong>{queue.length}</strong><small>постов</small></article>
-          <article className="hero-card"><Bot size={24}/><div><h3>Рерайт подключим следующим этапом</h3><p>Сейчас прототип уже собирает посты и фото, раскладывает по каналам и даёт редактору управлять очередью.</p></div></article>
-        </section>}
+        {section === "about" && <AboutPage />}
+
+        {section === "dashboard" && <Dashboard
+          activeTargets={activeTargets}
+          totalTargets={targets.length}
+          activeSources={activeSources}
+          totalSources={sources.length}
+          activeQueue={activeQueue}
+          totalQueue={queue.length}
+        />}
 
         {section === "queue" && <section className="queue-layout">
           <div className="queue-list">{queue.length === 0 && <div className="empty">Очередь пока пуста</div>}{queue.map((item) => <button key={item.queue_item_id} className={`queue-card ${selected?.queue_item_id === item.queue_item_id ? "selected" : ""}`} onClick={() => openItem(item)}><div className="queue-card-head"><span className={`badge status-${item.status}`}>{statusLabels[item.status] ?? item.status}</span><time>{shortDate(item.source_published_at)}</time></div><h3>{item.target_name ?? `Канал #${item.target_id}`}</h3><p>{item.original_text || "Пост без текста"}</p><div className="queue-card-bottom"><span>{item.photos.length ? `${item.photos.length} фото` : "без фото"}</span><ChevronRight size={16}/></div></button>)}</div>
