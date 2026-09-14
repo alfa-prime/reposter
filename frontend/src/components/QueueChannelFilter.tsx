@@ -18,7 +18,7 @@ export function QueueChannelFilter({ channels, value, onChange }: QueueChannelFi
     <label className="queue-channel-filter">
       <span className="queue-channel-filter-label">
         <Radio size={15} />
-        Канал
+        Канал для работы
       </span>
       <select
         value={value === null ? "all" : String(value)}
@@ -26,7 +26,7 @@ export function QueueChannelFilter({ channels, value, onChange }: QueueChannelFi
           const next = event.target.value;
           onChange(next === "all" ? null : Number(next));
         }}
-        aria-label="Фильтр очереди по каналу"
+        aria-label="Канал для работы"
       >
         <option value="all">Все каналы</option>
         {channels.map((channel) => (
