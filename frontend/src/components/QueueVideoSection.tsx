@@ -1,6 +1,7 @@
 import { ChangeEvent, useEffect, useState } from "react";
 import { Play, Trash2, Upload } from "lucide-react";
 import { api, QueueVideoInfo } from "../api";
+import "../queueVideo.css";
 
 type QueueVideoSectionProps = {
   queueItemId: number;
