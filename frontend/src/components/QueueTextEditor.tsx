@@ -169,7 +169,7 @@ export function QueueTextEditor({
           {canRewrite && onRewrite && (
             <button className="ai-rewrite-action" onClick={onRewrite} disabled={busy}>
               <Sparkles size={16}/>
-              {rewriteBusy ? "Переписываю…" : value ? "Переписать с ИИ ещё раз" : "Переписать с ИИ"}
+              {rewriteBusy ? "Переписываю…" : "Переписать с ИИ"}
             </button>
           )}
           {!readonly && <button onClick={() => onEditingChange(!editing)} disabled={busy}><Pencil size={16}/>{editing ? "Закончить редактирование" : "Редактировать"}</button>}
