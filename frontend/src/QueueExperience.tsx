@@ -6,12 +6,10 @@ import {
   Bold,
   CalendarClock,
   CheckCircle2,
-  Clock3,
   ExternalLink,
   Eye,
   EyeOff,
   FileImage,
-  Inbox,
   Italic,
   Link as LinkIcon,
   Pencil,
@@ -27,11 +25,11 @@ import {
   XCircle,
 } from "lucide-react";
 import { api, QueueItem, QueuePhoto } from "./api";
+import { QueuePostCard } from "./components/QueuePostCard";
+import { QueueTabs, QueueTab, queueTabConfig } from "./components/QueueTabs";
 import { PostSignatureSection } from "./components/SignatureSections";
 import { QueueVideoSection } from "./components/QueueVideoSection";
 import "./queueExperience.css";
-
-type QueueTab = "storage" | "scheduled" | "archive";
 
 type LinkSelection = {
   start: number;
@@ -47,12 +45,6 @@ const statusLabels: Record<string, string> = {
   scheduled: "Запланирован",
   published: "Опубликован",
   failed: "Ошибка публикации",
-};
-
-const tabConfig: Record<QueueTab, { label: string; statuses: string[] }> = {
-  storage: { label: "Хранилище постов", statuses: ["pending", "rewriting", "awaiting_moderation"] },
-  scheduled: { label: "Очередь публикаций", statuses: ["approved", "scheduled"] },
-  archive: { label: "Архив", statuses: ["published", "rejected", "failed"] },
 };
 
 const emojis = ["😀", "🙂", "😉", "😍", "🔥", "✨", "👍", "👏", "❤️", "📌", "📣", "⚡", "❗", "✅", "➡️", "🎉", "📷", "🚀"];
@@ -140,14 +132,14 @@ export function QueueExperience() {
   );
 
   const visibleItems = useMemo(
-    () => items.filter((item) => tabConfig[tab].statuses.includes(item.status)),
+    () => items.filter((item) => queueTabConfig[tab].statuses.includes(item.status)),
     [items, tab],
   );
 
   const counts = useMemo(() => ({
-    storage: items.filter((item) => tabConfig.storage.statuses.includes(item.status)).length,
-    scheduled: items.filter((item) => tabConfig.scheduled.statuses.includes(item.status)).length,
-    archive: items.filter((item) => tabConfig.archive.statuses.includes(item.status)).length,
+    storage: items.filter((item) => queueTabConfig.storage.statuses.includes(item.status)).length,
+    scheduled: items.filter((item) => queueTabConfig.scheduled.statuses.includes(item.status)).length,
+    archive: items.filter((item) => queueTabConfig.archive.statuses.includes(item.status)).length,
   }), [items]);
 
   const orderedPhotos = useMemo(() => {
@@ -469,29 +461,29 @@ export function QueueExperience() {
 
   return (
     <section className="editorial-queue">
-      <div className="editorial-tabs" role="tablist" aria-label="Разделы очереди">
-        {(Object.keys(tabConfig) as QueueTab[]).map((key) => (
-          <button key={key} className={tab === key ? "active" : ""} onClick={() => { setTab(key); setSelectedId(null); }} role="tab">
-            {key === "storage" ? <Inbox size={17}/> : key === "scheduled" ? <Clock3 size={17}/> : <Archive size={17}/>} 
-            <span>{tabConfig[key].label}</span><b>{counts[key]}</b>
-          </button>
-        ))}
-        <button className="editorial-refresh" onClick={() => void load()} disabled={busy} title="Обновить"><RefreshCw size={17} className={busy ? "spin" : ""}/></button>
-      </div>
+      <QueueTabs
+        tab={tab}
+        counts={counts}
+        busy={busy}
+        onChange={(nextTab) => {
+          setTab(nextTab);
+          setSelectedId(null);
+        }}
+        onRefresh={() => void load()}
+      />
 
       {(error || notice) && <div className={error ? "editorial-message error" : "editorial-message"}><span>{error || notice}</span><button onClick={() => { setError(""); setNotice(""); }}>×</button></div>}
 
       <div className="editorial-card-grid">
         {visibleItems.map((item) => (
-          <button className="editorial-post-card" key={item.queue_item_id} onClick={() => setSelectedId(item.queue_item_id)}>
-            {item.photos[0] && <img src={item.photos[0].source_url} alt=""/>}
-            <div className="editorial-card-body">
-              <div className="editorial-card-meta"><span>{item.target_name ?? `Канал #${item.target_id}`}</span><time>{shortDate(item.source_published_at)}</time></div>
-              <strong>{(item.rewritten_text ?? item.original_text ?? "Пост без текста").slice(0, 120)}</strong>
-              <p>{item.status === "failed" ? publicationErrorMessage(item.error_message) : item.original_text || "Пост без исходного текста"}</p>
-              <div className={`editorial-status status-${item.status}`}>{statusLabels[item.status] ?? item.status}</div>
-            </div>
-          </button>
+          <QueuePostCard
+            key={item.queue_item_id}
+            item={item}
+            statusLabel={statusLabels[item.status] ?? item.status}
+            dateLabel={shortDate(item.source_published_at)}
+            detailText={item.status === "failed" ? publicationErrorMessage(item.error_message) : item.original_text || "Пост без исходного текста"}
+            onOpen={() => setSelectedId(item.queue_item_id)}
+          />
         ))}
         {!visibleItems.length && <div className="editorial-empty"><Archive size={30}/><strong>Здесь пока пусто</strong><span>Посты появятся здесь по мере прохождения редакционного процесса.</span></div>}
       </div>
