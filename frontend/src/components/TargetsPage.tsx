@@ -16,7 +16,6 @@ type TargetsPageProps = {
   onTargetSourcesChanged: (items: TargetSource[]) => void;
   onDelete: (target: Target) => void;
   onError: (message: string) => void;
-  onNotice: (message: string) => void;
 };
 
 export function TargetsPage({
@@ -30,7 +29,6 @@ export function TargetsPage({
   onTargetSourcesChanged,
   onDelete,
   onError,
-  onNotice,
 }: TargetsPageProps) {
   const [createOpen, setCreateOpen] = useState(false);
   const attachedSourceIds = new Set(targetSources.map((item) => item.source_id));
@@ -51,7 +49,6 @@ export function TargetsPage({
     try {
       await api.attachSource(selectedTarget.target_id, sourceId);
       onTargetSourcesChanged(await api.targetSources(selectedTarget.target_id));
-      onNotice("Источник подключён к каналу. Теперь его можно собирать.");
     } catch (exc) {
       onError(exc instanceof Error ? exc.message : "Не удалось подключить источник");
     }
@@ -150,14 +147,12 @@ export function TargetsPage({
                 target={selectedTarget}
                 onChanged={onChanged}
                 onError={onError}
-                onNotice={onNotice}
               />
 
               <ChannelSignatureSection
                 target={selectedTarget}
                 onChanged={onChanged}
                 onError={onError}
-                onNotice={onNotice}
               />
 
               <div className="section-divider" />
@@ -228,7 +223,6 @@ export function TargetsPage({
           onCreated={async (target) => {
             await onChanged();
             await onOpenTarget(target);
-            onNotice("Канал добавлен. Теперь подключите к нему источник.");
           }}
         />
       )}
