@@ -2,6 +2,7 @@ import { useState } from "react";
 import { ChevronRight, Database, ExternalLink, Link2, Plus, Radio, Trash2, X } from "lucide-react";
 import { api, Source, Target, TargetSource } from "../api";
 import { CreateTargetModal } from "./CreateTargetModal";
+import { ChannelSignatureSection } from "./SignatureSections";
 
 type TargetsPageProps = {
   targets: Target[];
@@ -143,6 +144,13 @@ export function TargetsPage({
                   <Trash2 size={15} />Удалить
                 </button>
               </div>
+
+              <ChannelSignatureSection
+                target={selectedTarget}
+                onChanged={onChanged}
+                onError={onError}
+                onNotice={onNotice}
+              />
 
               <div className="section-divider" />
               <div className="table-head embedded">
