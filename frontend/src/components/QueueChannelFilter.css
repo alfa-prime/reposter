@@ -26,11 +26,20 @@
   white-space: nowrap;
 }
 
-.queue-channel-filter select {
+.queue-channel-select {
+  position: relative;
   min-width: 0;
+  flex: 1;
+}
+
+.queue-channel-select-trigger {
   width: 100%;
   height: 40px;
-  padding: 0 34px 0 11px;
+  padding: 0 10px 0 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
   border: 1px solid rgba(255,255,255,.09);
   border-radius: 10px;
   outline: none;
@@ -38,13 +47,86 @@
   background: #091220;
   font: inherit;
   font-size: 12px;
+  text-align: left;
   cursor: pointer;
-  color-scheme: dark;
 }
 
-.queue-channel-filter select:focus {
+.queue-channel-select-trigger span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.queue-channel-select-trigger svg {
+  flex: 0 0 auto;
+  color: #8290a8;
+  transition: transform .16s ease;
+}
+
+.queue-channel-select-trigger.open,
+.queue-channel-select-trigger:focus-visible {
   border-color: rgba(125,145,255,.50);
   box-shadow: 0 0 0 3px rgba(119,145,255,.10);
+}
+
+.queue-channel-select-trigger.open svg {
+  transform: rotate(180deg);
+}
+
+.queue-channel-options {
+  position: absolute;
+  z-index: 60;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  max-height: 320px;
+  padding: 6px;
+  overflow-y: auto;
+  border: 1px solid rgba(255,255,255,.10);
+  border-radius: 11px;
+  background: #0d1728;
+  box-shadow: 0 18px 45px rgba(0,0,0,.32);
+}
+
+.queue-channel-options button {
+  width: 100%;
+  min-height: 36px;
+  padding: 8px 9px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border: 0;
+  border-radius: 8px;
+  color: #c8d2e3;
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.queue-channel-options button:hover,
+.queue-channel-options button:focus-visible {
+  color: #eef2ff;
+  background: rgba(104,126,236,.16);
+  outline: none;
+}
+
+.queue-channel-options button.selected {
+  color: #eef2ff;
+  background: rgba(104,126,236,.24);
+}
+
+.queue-channel-options button.selected svg {
+  flex: 0 0 auto;
+  color: #8ea1ff;
+}
+
+.queue-channel-options small {
+  color: #7e8ba1;
+  font-size: 11px;
 }
 
 html[data-theme="light"] .queue-channel-filter {
@@ -57,11 +139,39 @@ html[data-theme="light"] .queue-channel-filter-label {
   color: #6f7d93;
 }
 
-html[data-theme="light"] .queue-channel-filter select {
+html[data-theme="light"] .queue-channel-select-trigger {
   color: #24324a;
   background: #fff;
   border-color: rgba(42,58,88,.13);
-  color-scheme: light;
+}
+
+html[data-theme="light"] .queue-channel-options {
+  border-color: rgba(42,58,88,.12);
+  background: #fff;
+  box-shadow: 0 18px 45px rgba(43,58,88,.16);
+}
+
+html[data-theme="light"] .queue-channel-options button {
+  color: #445168;
+}
+
+html[data-theme="light"] .queue-channel-options button:hover,
+html[data-theme="light"] .queue-channel-options button:focus-visible {
+  color: #24324a;
+  background: #eef2ff;
+}
+
+html[data-theme="light"] .queue-channel-options button.selected {
+  color: #24324a;
+  background: #e8edff;
+}
+
+html[data-theme="light"] .queue-channel-options button.selected svg {
+  color: #5f72df;
+}
+
+html[data-theme="light"] .queue-channel-options small {
+  color: #7a8799;
 }
 
 @media (max-width: 1180px) {
