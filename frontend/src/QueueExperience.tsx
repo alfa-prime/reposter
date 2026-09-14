@@ -1,15 +1,10 @@
 import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
   Archive,
-  ArrowLeft,
-  ArrowRight,
   Bold,
   CalendarClock,
   CheckCircle2,
   ExternalLink,
-  Eye,
-  EyeOff,
-  FileImage,
   Italic,
   Link as LinkIcon,
   Pencil,
@@ -20,15 +15,14 @@ import {
   Strikethrough,
   Trash2,
   Underline,
-  Upload,
   X,
   XCircle,
 } from "lucide-react";
 import { api, QueueItem, QueuePhoto } from "./api";
+import { QueueMediaSection } from "./components/QueueMediaSection";
 import { QueuePostCard } from "./components/QueuePostCard";
 import { QueueTabs, QueueTab, queueTabConfig } from "./components/QueueTabs";
 import { PostSignatureSection } from "./components/SignatureSections";
-import { QueueVideoSection } from "./components/QueueVideoSection";
 import "./queueExperience.css";
 
 type LinkSelection = {
@@ -508,57 +502,28 @@ export function QueueExperience() {
               {selected.source_url && <a href={selected.source_url} target="_blank" rel="noreferrer">Перейти к посту <ExternalLink size={14}/></a>}
             </div>
 
-            <div className="drawer-media">
-              <div className="drawer-section-title media-section-title">
-                <span>Медиа публикации</span>
-                <div className="media-summary-actions">
-                  <span>В публикации {mediaOrder.length} из {selected.photos.length}</span>
-                  {selected.photos.length > 0 && selected.status !== "published" && (
-                    <div className="media-bulk-actions">
-                      <button type="button" onClick={() => void removeAllPhotos()} disabled={busy || mediaOrder.length === 0}>Убрать все</button>
-                      <button type="button" onClick={() => void restoreAllPhotos()} disabled={busy || mediaOrder.length === selected.photos.length}>Вернуть все</button>
-                    </div>
-                  )}
-                </div>
-              </div>
-              {selected.photos.length > 0 ? (
-                <div className="drawer-photo-grid">
-                  {orderedPhotos.map((photo) => {
-                    const key = mediaKey(photo);
-                    const included = mediaOrder.includes(key);
-                    const orderIndex = mediaOrder.indexOf(key);
-                    return (
-                      <div className={`drawer-photo ${included ? "included" : "excluded"}`} key={key}>
-                        <img src={photo.source_url} alt="Фото публикации" onClick={() => setLightbox(photo)}/>
-                        {!included && <div className="media-excluded-label">Не попадёт в публикацию</div>}
-                        {selected.status !== "published" && <div className="media-controls media-controls-readable">
-                          <button className={included ? "media-remove" : "media-restore"} title={included ? "Убрать фото из публикации" : "Вернуть фото в публикацию"} onClick={() => void togglePhoto(photo)}>
-                            {included ? <EyeOff size={14}/> : <Eye size={14}/>}<span>{included ? "Убрать" : "Вернуть"}</span>
-                          </button>
-                          {included && <button title="Сдвинуть левее" disabled={orderIndex <= 0} onClick={() => void movePhoto(photo, -1)}><ArrowLeft size={14}/></button>}
-                          {included && <button title="Сдвинуть правее" disabled={orderIndex < 0 || orderIndex >= mediaOrder.length - 1} onClick={() => void movePhoto(photo, 1)}><ArrowRight size={14}/></button>}
-                          {photo.kind === "uploaded" && photo.media_id && <button className="media-delete-file" title="Удалить загруженный файл" onClick={() => void removeUploadedPhoto(photo)}><Trash2 size={14}/><span>Удалить файл</span></button>}
-                        </div>}
-                        <span>{photo.kind === "uploaded" ? "Добавлено вручную" : included ? `№ ${orderIndex + 1}` : "Исключено"}</span>
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : <div className="no-media"><FileImage size={28}/><span>У публикации пока нет фотографий</span></div>}
-
-              {selected.status !== "published" && <><label className="upload-media-button"><Upload size={17}/>Добавить фото<input type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={(event) => void uploadPhotos(event)} disabled={busy}/></label>
-              <small>«Убрать» исключает исходное фото только из публикации — сам оригинал остаётся. Загруженные вручную файлы можно удалить полностью · JPEG, PNG или WebP · до 10 МБ на файл.</small></>}
-
-              <QueueVideoSection
-                queueItemId={selected.queue_item_id}
-                readonly={selected.status === "published"}
-                onError={setError}
-                onNotice={(message) => {
-                  setError("");
-                  setNotice(message);
-                }}
-              />
-            </div>
+            <QueueMediaSection
+              item={selected}
+              orderedPhotos={orderedPhotos}
+              mediaOrder={mediaOrder}
+              busy={busy}
+              mediaKey={mediaKey}
+              onRemoveAll={() => void removeAllPhotos()}
+              onRestoreAll={() => void restoreAllPhotos()}
+              onTogglePhoto={(photo) => void togglePhoto(photo)}
+              onMovePhoto={(photo, direction) => void movePhoto(photo, direction)}
+              onRemoveUploadedPhoto={(photo) => void removeUploadedPhoto(photo)}
+              onOpenPhoto={setLightbox}
+              onUploadPhotos={(event) => void uploadPhotos(event)}
+              onError={(message) => {
+                setNotice("");
+                setError(message);
+              }}
+              onNotice={(message) => {
+                setError("");
+                setNotice(message);
+              }}
+            />
 
             <div className="drawer-text-section">
               <div className="drawer-section-title"><span>Текст поста</span><span>{draft.length} знаков</span></div>
