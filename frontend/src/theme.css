@@ -184,6 +184,24 @@ html[data-theme="light"] .status-awaiting_moderation {
   background: rgba(220,158,62,.10);
 }
 
+html[data-theme="light"] .editorial-status.status-approved,
+html[data-theme="light"] .editorial-status.status-scheduled {
+  color: #216a46;
+  background: #e9f6ef;
+  border-color: rgba(33,106,70,.18);
+}
+
+html[data-theme="light"] .scheduled-banner {
+  color: #216a46;
+  font-weight: 650;
+}
+
+html[data-theme="light"] .editorial-message:not(.error) {
+  color: #245f42;
+  border-color: rgba(36,123,78,.22);
+  background: #edf8f2;
+}
+
 html[data-theme="light"] .entity-icon {
   color: #5b70d8;
   background: rgba(92,112,219,.09);
