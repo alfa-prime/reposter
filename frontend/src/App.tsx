@@ -139,7 +139,6 @@ export function App() {
         setSelectedTarget(null);
         setTargetSources([]);
         await loadAll();
-        setNotice("Канал удалён");
       },
     });
   }
@@ -152,7 +151,6 @@ export function App() {
       onConfirm: async () => {
         await api.deleteSource(source.source_id);
         await loadAll();
-        setNotice("Источник удалён");
       },
     });
   }
@@ -234,7 +232,6 @@ export function App() {
             onTargetSourcesChanged={setTargetSources}
             onDelete={askDeleteTarget}
             onError={setError}
-            onNotice={setNotice}
           />
         )}
 
@@ -245,7 +242,6 @@ export function App() {
             onChanged={loadAll}
             onDelete={askDeleteSource}
             onError={setError}
-            onNotice={setNotice}
           />
         )}
       </main>
