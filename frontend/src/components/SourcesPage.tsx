@@ -9,7 +9,6 @@ type SourcesPageProps = {
   onChanged: () => Promise<void>;
   onDelete: (source: Source) => void;
   onError: (message: string) => void;
-  onNotice: (message: string) => void;
 };
 
 export function SourcesPage({
@@ -18,7 +17,6 @@ export function SourcesPage({
   onChanged,
   onDelete,
   onError,
-  onNotice,
 }: SourcesPageProps) {
   const [createOpen, setCreateOpen] = useState(false);
 
@@ -88,7 +86,6 @@ export function SourcesPage({
           onError={onError}
           onCreated={async () => {
             await onChanged();
-            onNotice("Источник добавлен. Чтобы он участвовал в сборе, подключите его к каналу.");
           }}
         />
       )}
