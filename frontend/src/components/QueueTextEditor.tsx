@@ -26,6 +26,7 @@ type QueueTextEditorProps = {
   readonly?: boolean;
   editing: boolean;
   busy?: boolean;
+  rewriteBusy?: boolean;
   canRewrite?: boolean;
   onEditingChange: (editing: boolean) => void;
   onChange: (value: string) => void;
@@ -43,6 +44,7 @@ export function QueueTextEditor({
   readonly = false,
   editing,
   busy = false,
+  rewriteBusy = false,
   canRewrite = false,
   onEditingChange,
   onChange,
@@ -167,7 +169,7 @@ export function QueueTextEditor({
           {canRewrite && onRewrite && (
             <button className="ai-rewrite-action" onClick={onRewrite} disabled={busy}>
               <Sparkles size={16}/>
-              {busy ? "Переписываю…" : value ? "Переписать с ИИ ещё раз" : "Переписать с ИИ"}
+              {rewriteBusy ? "Переписываю…" : value ? "Переписать с ИИ ещё раз" : "Переписать с ИИ"}
             </button>
           )}
           {!readonly && <button onClick={() => onEditingChange(!editing)} disabled={busy}><Pencil size={16}/>{editing ? "Закончить редактирование" : "Редактировать"}</button>}
