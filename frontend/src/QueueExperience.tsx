@@ -2,16 +2,11 @@ import { ChangeEvent, useEffect, useMemo, useState } from "react";
 import {
   Archive,
   CalendarClock,
-  CheckCircle2,
   ExternalLink,
-  RefreshCw,
-  RotateCcw,
-  Send,
-  Trash2,
   X,
-  XCircle,
 } from "lucide-react";
 import { api, QueueItem, QueuePhoto } from "./api";
+import { QueueActionsFooter } from "./components/QueueActionsFooter";
 import { QueueMediaSection } from "./components/QueueMediaSection";
 import { QueuePostCard } from "./components/QueuePostCard";
 import { QueueTabs, QueueTab, queueTabConfig } from "./components/QueueTabs";
@@ -449,16 +444,18 @@ export function QueueExperience() {
 
             {selected.status === "approved" && <div className="schedule-panel"><label>Дата и время публикации<input type="datetime-local" value={scheduleAt} onChange={(event) => setScheduleAt(event.target.value)}/></label><button className="primary" onClick={() => void schedule()} disabled={busy}><CalendarClock size={17}/>Поставить в очередь</button></div>}
 
-            <footer className="drawer-footer">
-              <div className="drawer-main-actions">
-                {editing && <button className="secondary" onClick={() => void saveText()} disabled={busy}>Сохранить текст</button>}
-                {["pending", "rewriting", "rejected"].includes(selected.status) && <button className="primary" onClick={() => void submit()} disabled={busy}><Send size={17}/>На модерацию</button>}
-                {selected.status === "awaiting_moderation" && <><button className="primary" onClick={() => void action(() => api.approve(selected.queue_item_id), "Пост согласован")} disabled={busy}><CheckCircle2 size={17}/>Согласовать пост</button><button className="danger" onClick={() => void action(() => api.reject(selected.queue_item_id), "Пост отклонён")} disabled={busy}><XCircle size={17}/>Отклонить</button></>}
-                {["approved", "scheduled", "failed"].includes(selected.status) && selected.target_platform === "max" && <button className="primary" onClick={() => void publishNow()} disabled={busy}>{selected.status === "failed" ? <RefreshCw size={17}/> : <Send size={17}/>} {selected.status === "failed" ? "Повторить публикацию" : "Опубликовать сейчас"}</button>}
-                {["approved", "scheduled", "rejected"].includes(selected.status) && <button className="secondary" onClick={() => void action(() => api.reopen(selected.queue_item_id), "Пост возвращён в работу")} disabled={busy}><RotateCcw size={17}/>Вернуть в работу</button>}
-              </div>
-              <button className="drawer-delete" onClick={() => void removeItem()} disabled={busy}><Trash2 size={16}/>Удалить</button>
-            </footer>
+            <QueueActionsFooter
+              item={selected}
+              editing={editing}
+              busy={busy}
+              onSaveText={() => void saveText()}
+              onSubmit={() => void submit()}
+              onApprove={() => void action(() => api.approve(selected.queue_item_id), "Пост согласован")}
+              onReject={() => void action(() => api.reject(selected.queue_item_id), "Пост отклонён")}
+              onPublishNow={() => void publishNow()}
+              onReopen={() => void action(() => api.reopen(selected.queue_item_id), "Пост возвращён в работу")}
+              onDelete={() => void removeItem()}
+            />
           </aside>
         </div>
       )}
