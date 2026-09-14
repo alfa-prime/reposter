@@ -1,8 +1,12 @@
+import logging
+import time
 from dataclasses import dataclass
 
 from news_reposter.config import Settings, get_settings
 from news_reposter.db.models import QueueItem
 from news_reposter.llm import LLMProvider, RewriteRequest, RewriteResult
+
+logger = logging.getLogger(__name__)
 
 
 class RewriteServiceError(RuntimeError):
@@ -40,9 +44,34 @@ class RewriteService:
 
     async def rewrite(self, item: QueueItem) -> RewriteResult:
         context = self.context_for(item)
-        return await self.provider.rewrite(
-            RewriteRequest(
-                text=context.source_text,
-                system_prompt=context.system_prompt,
+        started_at = time.perf_counter()
+        provider_name = str(getattr(self.provider, "name", type(self.provider).__name__))
+
+        try:
+            result = await self.provider.rewrite(
+                RewriteRequest(
+                    text=context.source_text,
+                    system_prompt=context.system_prompt,
+                )
             )
+        except Exception as exc:
+            logger.warning(
+                "action=rewrite status=failed queue_item_id=%s target_id=%s provider=%s duration_ms=%s error_type=%s",
+                item.queue_item_id,
+                item.target_id,
+                provider_name,
+                round((time.perf_counter() - started_at) * 1000),
+                type(exc).__name__,
+            )
+            raise
+
+        logger.info(
+            "action=rewrite status=success queue_item_id=%s target_id=%s provider=%s model=%s duration_ms=%s total_tokens=%s",
+            item.queue_item_id,
+            item.target_id,
+            result.provider,
+            result.model,
+            round((time.perf_counter() - started_at) * 1000),
+            result.usage.get("total_tokens", 0),
         )
+        return result
