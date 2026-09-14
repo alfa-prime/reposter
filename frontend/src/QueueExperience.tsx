@@ -145,6 +145,12 @@ export function QueueExperience() {
   }, []);
 
   useEffect(() => {
+    if (!notice) return;
+    const timer = window.setTimeout(() => setNotice(""), 3500);
+    return () => window.clearTimeout(timer);
+  }, [notice]);
+
+  useEffect(() => {
     if (!selected) return;
     setDraft(selected.rewritten_text ?? selected.original_text ?? "");
     setScheduleAt(toLocalInput(selected.scheduled_at));
