@@ -16,7 +16,6 @@ import "./publicationActionsEnhancements.css";
 import "./aboutEnhancements.css";
 import "./sourceComponents.css";
 import "./brandEnhancements";
-import "./signatureEnhancements";
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
