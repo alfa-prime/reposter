@@ -85,6 +85,7 @@ export function QueueExperience() {
   const [draft, setDraft] = useState("");
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [rewritingId, setRewritingId] = useState<number | null>(null);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [scheduleAt, setScheduleAt] = useState("");
@@ -242,6 +243,25 @@ export function QueueExperience() {
     } catch (exc) {
       setError(exc instanceof Error ? exc.message : "Операция не выполнена");
     } finally {
+      setBusy(false);
+    }
+  }
+
+  async function rewriteNow() {
+    if (!selected) return;
+    setBusy(true);
+    setRewritingId(selected.queue_item_id);
+    setError("");
+    setNotice("");
+    try {
+      const updated = await api.rewriteQueueItem(selected.queue_item_id);
+      applyUpdated(updated);
+      setEditing(false);
+      setNotice("ИИ подготовил новый вариант текста");
+    } catch (exc) {
+      setError(exc instanceof Error ? exc.message : "Не удалось переписать пост с помощью ИИ");
+    } finally {
+      setRewritingId(null);
       setBusy(false);
     }
   }
@@ -499,8 +519,12 @@ export function QueueExperience() {
               originalText={selected.original_text}
               readonly={selected.status === "published"}
               editing={editing}
+              busy={busy}
+              rewriteBusy={rewritingId === selected.queue_item_id}
+              canRewrite={!editing && ["pending", "rewriting", "rejected"].includes(selected.status) && Boolean(selected.original_text?.trim())}
               onEditingChange={setEditing}
               onChange={setDraft}
+              onRewrite={() => void rewriteNow()}
             />
 
             <PostSignatureSection
