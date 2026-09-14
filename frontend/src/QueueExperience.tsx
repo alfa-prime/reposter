@@ -1,14 +1,14 @@
 import { ChangeEvent, useEffect, useMemo, useState } from "react";
 import {
   Archive,
-  CalendarClock,
-  ExternalLink,
   X,
 } from "lucide-react";
 import { api, QueueItem, QueuePhoto } from "./api";
 import { QueueActionsFooter } from "./components/QueueActionsFooter";
+import { QueueDrawerHeader } from "./components/QueueDrawerHeader";
 import { QueueMediaSection } from "./components/QueueMediaSection";
 import { QueuePostCard } from "./components/QueuePostCard";
+import { QueueSchedulePanel } from "./components/QueueSchedulePanel";
 import { QueueTabs, QueueTab, queueTabConfig } from "./components/QueueTabs";
 import { QueueTextEditor } from "./components/QueueTextEditor";
 import { PostSignatureSection } from "./components/SignatureSections";
@@ -64,13 +64,6 @@ function publicationErrorMessage(value?: string | null) {
     return "Не удалось установить защищённое соединение с MAX. Повторите публикацию позже или обратитесь к администратору.";
   }
   return raw || "MAX не принял публикацию. Попробуйте повторить отправку позже.";
-}
-
-function drawerTitle(status: string) {
-  if (status === "published") return "Опубликованный пост";
-  if (status === "scheduled") return "Публикация в очереди";
-  if (status === "failed") return "Не удалось опубликовать";
-  return "Публикация на модерации";
 }
 
 export function QueueExperience() {
@@ -379,22 +372,13 @@ export function QueueExperience() {
       {selected && (
         <div className="editorial-drawer-backdrop" onMouseDown={() => setSelectedId(null)}>
           <aside className="editorial-drawer" onMouseDown={(event) => event.stopPropagation()}>
-            <header className="editorial-drawer-head">
-              <button className="drawer-close" onClick={() => setSelectedId(null)}><X size={22}/></button>
-              <div><h2>{drawerTitle(selected.status)}</h2><div className={`editorial-status status-${selected.status}`}>{statusLabels[selected.status] ?? selected.status}</div></div>
-            </header>
-
-            {selected.status === "scheduled" && selected.scheduled_at && <div className="scheduled-banner"><CalendarClock size={18}/> Запланировано на {shortDate(selected.scheduled_at)}</div>}
-            {selected.status === "failed" && (
-              <div className="editorial-message error">
-                <span><strong>Публикация не отправлена.</strong> {publicationErrorMessage(selected.error_message)}</span>
-              </div>
-            )}
-
-            <div className="drawer-source-row">
-              <div><strong>{selected.target_name ?? `Канал #${selected.target_id}`}</strong><span>Источник публикации</span></div>
-              {selected.source_url && <a href={selected.source_url} target="_blank" rel="noreferrer">Перейти к посту <ExternalLink size={14}/></a>}
-            </div>
+            <QueueDrawerHeader
+              item={selected}
+              statusLabel={statusLabels[selected.status] ?? selected.status}
+              scheduledLabel={selected.scheduled_at ? shortDate(selected.scheduled_at) : undefined}
+              errorMessage={selected.status === "failed" ? publicationErrorMessage(selected.error_message) : undefined}
+              onClose={() => setSelectedId(null)}
+            />
 
             <QueueMediaSection
               item={selected}
@@ -442,7 +426,14 @@ export function QueueExperience() {
               }}
             />
 
-            {selected.status === "approved" && <div className="schedule-panel"><label>Дата и время публикации<input type="datetime-local" value={scheduleAt} onChange={(event) => setScheduleAt(event.target.value)}/></label><button className="primary" onClick={() => void schedule()} disabled={busy}><CalendarClock size={17}/>Поставить в очередь</button></div>}
+            {selected.status === "approved" && (
+              <QueueSchedulePanel
+                value={scheduleAt}
+                busy={busy}
+                onChange={setScheduleAt}
+                onSchedule={() => void schedule()}
+              />
+            )}
 
             <QueueActionsFooter
               item={selected}
