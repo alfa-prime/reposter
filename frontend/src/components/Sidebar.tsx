@@ -5,8 +5,8 @@ import {
   Info,
   LayoutDashboard,
   Radio,
-  Sparkles,
 } from "lucide-react";
+import { projectLogo } from "../logoData";
 import type { Section } from "../navigation";
 
 type SidebarProps = {
@@ -18,7 +18,9 @@ export function Sidebar({ section, onSectionChange }: SidebarProps) {
   return (
     <aside className="sidebar">
       <div className="brand">
-        <div className="brand-mark"><Sparkles size={19} /></div>
+        <div className="brand-mark brand-portrait">
+          <img src={projectLogo} alt="Дядя Влад" decoding="async" />
+        </div>
         <div><strong>Дядя Влад</strong><span>читает новости</span></div>
       </div>
 
