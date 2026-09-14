@@ -232,14 +232,13 @@ export function QueueExperience() {
     setSelectedId(null);
   }
 
-  async function action(run: () => Promise<QueueItem>, success: string) {
+  async function action(run: () => Promise<QueueItem>) {
     setBusy(true);
     setError("");
     setNotice("");
     try {
       const updated = await run();
       applyUpdated(updated);
-      setNotice(success);
     } catch (exc) {
       setError(exc instanceof Error ? exc.message : "Операция не выполнена");
     } finally {
@@ -257,7 +256,6 @@ export function QueueExperience() {
       const updated = await api.rewriteQueueItem(selected.queue_item_id);
       applyUpdated(updated);
       setEditing(false);
-      setNotice("ИИ подготовил новый вариант текста");
     } catch (exc) {
       setError(exc instanceof Error ? exc.message : "Не удалось переписать пост с помощью ИИ");
     } finally {
@@ -266,14 +264,14 @@ export function QueueExperience() {
     }
   }
 
-  async function saveMediaOrder(next: string[], success?: string) {
+  async function saveMediaOrder(next: string[]) {
     if (!selected) return;
     setBusy(true);
     setError("");
+    setNotice("");
     try {
       const state = await api.updateQueueMediaState(selected.queue_item_id, next);
       setMediaOrder(state.media_order);
-      if (success) setNotice(success);
     } catch (exc) {
       setError(exc instanceof Error ? exc.message : "Не удалось изменить фотографии публикации");
     } finally {
@@ -285,17 +283,17 @@ export function QueueExperience() {
     const key = mediaKey(photo);
     const included = mediaOrder.includes(key);
     const next = included ? mediaOrder.filter((item) => item !== key) : [...mediaOrder, key];
-    await saveMediaOrder(next, included ? "Фото исключено из публикации" : "Фото добавлено в публикацию");
+    await saveMediaOrder(next);
   }
 
   async function removeAllPhotos() {
     if (!selected || mediaOrder.length === 0) return;
-    await saveMediaOrder([], "Все фото исключены из публикации");
+    await saveMediaOrder([]);
   }
 
   async function restoreAllPhotos() {
     if (!selected) return;
-    await saveMediaOrder(orderedPhotos.map(mediaKey), "Все фото возвращены в публикацию");
+    await saveMediaOrder(orderedPhotos.map(mediaKey));
   }
 
   async function movePhoto(photo: QueuePhoto, direction: -1 | 1) {
@@ -310,7 +308,7 @@ export function QueueExperience() {
 
   async function saveText() {
     if (!selected) return;
-    await action(() => api.updateQueueText(selected.queue_item_id, draft), "Текст сохранён");
+    await action(() => api.updateQueueText(selected.queue_item_id, draft));
     setEditing(false);
   }
 
@@ -318,11 +316,11 @@ export function QueueExperience() {
     if (!selected) return;
     setBusy(true);
     setError("");
+    setNotice("");
     try {
       await api.updateQueueText(selected.queue_item_id, draft);
       const updated = await api.submit(selected.queue_item_id);
       applyUpdated(updated);
-      setNotice("Пост отправлен на модерацию");
       setEditing(false);
     } catch (exc) {
       setError(exc instanceof Error ? exc.message : "Не удалось отправить на модерацию");
@@ -344,6 +342,7 @@ export function QueueExperience() {
 
     setBusy(true);
     setError("");
+    setNotice("");
     try {
       let updated = selected;
       for (const file of files) updated = await api.uploadQueuePhoto(selected.queue_item_id, file);
@@ -352,7 +351,6 @@ export function QueueExperience() {
       const newKeys = allKeys.filter((key) => !selected.photos.some((photo) => mediaKey(photo) === key));
       const state = await api.updateQueueMediaState(selected.queue_item_id, [...mediaOrder, ...newKeys]);
       setMediaOrder(state.media_order);
-      setNotice(files.length === 1 ? "Фото добавлено" : `Добавлено фото: ${files.length}`);
     } catch (exc) {
       setError(exc instanceof Error ? exc.message : "Не удалось загрузить фото");
     } finally {
@@ -364,13 +362,13 @@ export function QueueExperience() {
     if (!selected || !photo.media_id) return;
     setBusy(true);
     setError("");
+    setNotice("");
     try {
       const updated = await api.deleteQueuePhoto(selected.queue_item_id, photo.media_id);
       applyUpdated(updated);
       const key = mediaKey(photo);
       const state = await api.updateQueueMediaState(selected.queue_item_id, mediaOrder.filter((item) => item !== key));
       setMediaOrder(state.media_order);
-      setNotice("Фото удалено");
     } catch (exc) {
       setError(exc instanceof Error ? exc.message : "Не удалось удалить фото");
     } finally {
@@ -422,11 +420,12 @@ export function QueueExperience() {
   async function removeItem() {
     if (!selected || !window.confirm("Удалить эту публикацию из очереди?")) return;
     setBusy(true);
+    setError("");
+    setNotice("");
     try {
       await api.deleteQueueItem(selected.queue_item_id);
       setItems((current) => current.filter((item) => item.queue_item_id !== selected.queue_item_id));
       setSelectedId(null);
-      setNotice("Публикация удалена");
     } catch (exc) {
       setError(exc instanceof Error ? exc.message : "Не удалось удалить публикацию");
     } finally {
@@ -507,10 +506,7 @@ export function QueueExperience() {
                 setNotice("");
                 setError(message);
               }}
-              onNotice={(message) => {
-                setError("");
-                setNotice(message);
-              }}
+              onNotice={() => undefined}
             />
 
             <QueueTextEditor
@@ -534,10 +530,6 @@ export function QueueExperience() {
                 setNotice("");
                 setError(message);
               }}
-              onNotice={(message) => {
-                setError("");
-                setNotice(message);
-              }}
             />
 
             {selected.status === "approved" && (
@@ -555,10 +547,10 @@ export function QueueExperience() {
               busy={busy}
               onSaveText={() => void saveText()}
               onSubmit={() => void submit()}
-              onApprove={() => void action(() => api.approve(selected.queue_item_id), "Пост согласован")}
-              onReject={() => void action(() => api.reject(selected.queue_item_id), "Пост отклонён")}
+              onApprove={() => void action(() => api.approve(selected.queue_item_id))}
+              onReject={() => void action(() => api.reject(selected.queue_item_id))}
               onPublishNow={() => void publishNow()}
-              onReopen={() => void action(() => api.reopen(selected.queue_item_id), "Пост возвращён в работу")}
+              onReopen={() => void action(() => api.reopen(selected.queue_item_id))}
               onDelete={() => void removeItem()}
             />
           </aside>
