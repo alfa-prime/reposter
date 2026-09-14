@@ -1,4 +1,5 @@
 import { projectLogo } from "../logoData";
+import "../about.css";
 
 export function AboutPage() {
   return (
