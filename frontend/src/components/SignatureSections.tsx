@@ -135,10 +135,9 @@ type ChannelSignatureSectionProps = {
   target: Target;
   onChanged?: () => Promise<void> | void;
   onError?: (message: string) => void;
-  onNotice?: (message: string) => void;
 };
 
-export function ChannelSignatureSection({ target, onChanged, onError, onNotice }: ChannelSignatureSectionProps) {
+export function ChannelSignatureSection({ target, onChanged, onError }: ChannelSignatureSectionProps) {
   const [current, setCurrent] = useState(target.default_signature ?? "");
 
   useEffect(() => {
@@ -158,7 +157,6 @@ export function ChannelSignatureSection({ target, onChanged, onError, onNotice }
           const updated = await api.updateTarget(target.target_id, { default_signature: value.trim() || null });
           setCurrent(updated.default_signature ?? "");
           await onChanged?.();
-          onNotice?.("Подпись канала сохранена");
         }}
       />
     </section>
@@ -169,10 +167,9 @@ type PostSignatureSectionProps = {
   item: QueueItem;
   onUpdated?: (item: QueueItem) => void;
   onError?: (message: string) => void;
-  onNotice?: (message: string) => void;
 };
 
-export function PostSignatureSection({ item, onUpdated, onError, onNotice }: PostSignatureSectionProps) {
+export function PostSignatureSection({ item, onUpdated, onError }: PostSignatureSectionProps) {
   const [targetSignature, setTargetSignature] = useState("");
   const [signature, setSignature] = useState(item.signature_text ?? "");
   const [isInherited, setInherited] = useState(item.signature_text == null);
@@ -209,14 +206,12 @@ export function PostSignatureSection({ item, onUpdated, onError, onNotice }: Pos
           setSignature(updated.signature_text ?? "");
           setInherited(false);
           onUpdated?.(updated);
-          onNotice?.("Подпись поста сохранена");
         }}
         onReset={async () => {
           const updated = await api.updateQueueSignature(item.queue_item_id, null);
           setSignature(targetSignature);
           setInherited(true);
           onUpdated?.(updated);
-          onNotice?.("Используется подпись канала");
         }}
       />
     </section>
