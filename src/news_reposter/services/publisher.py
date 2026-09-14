@@ -1,7 +1,9 @@
 import asyncio
+import logging
 import mimetypes
 import os
 import re
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -24,6 +26,7 @@ from news_reposter.db.models import (
 from news_reposter.integrations.max import MAXAPIError, MAXClient
 
 MEDIA_ROOT = Path(os.getenv("MEDIA_ROOT", "/app/data/media"))
+logger = logging.getLogger(__name__)
 
 
 class PublicationError(RuntimeError):
@@ -246,6 +249,7 @@ async def publish_queue_item(
     item.error_message = None
     await session.commit()
 
+    started_at = time.perf_counter()
     client = MAXClient(
         access_token=settings.max_access_token,
         chat_id=chat_id,
@@ -270,6 +274,14 @@ async def publish_queue_item(
         item.status = QueueItemStatus.FAILED
         item.error_message = str(exc)
         await session.commit()
+        logger.warning(
+            "action=publish status=failed queue_item_id=%s target_id=%s platform=max attempt=%s duration_ms=%s error_type=%s",
+            item.queue_item_id,
+            item.target_id,
+            publication.attempts,
+            round((time.perf_counter() - started_at) * 1000),
+            type(exc).__name__,
+        )
         raise PublicationError(str(exc)) from exc
 
     publication.status = PublicationStatus.PUBLISHED
@@ -281,6 +293,15 @@ async def publish_queue_item(
     item.scheduled_at = None
     item.error_message = None
     await session.commit()
+
+    logger.info(
+        "action=publish status=success queue_item_id=%s target_id=%s platform=max attempt=%s media_count=%s duration_ms=%s",
+        item.queue_item_id,
+        item.target_id,
+        publication.attempts,
+        len(attachments),
+        round((time.perf_counter() - started_at) * 1000),
+    )
 
     refreshed = await _loaded_item(session, queue_item_id)
     assert refreshed is not None
