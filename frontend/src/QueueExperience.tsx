@@ -27,6 +27,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { api, QueueItem, QueuePhoto } from "./api";
+import { PostSignatureSection } from "./components/SignatureSections";
 import { QueueVideoSection } from "./components/QueueVideoSection";
 import "./queueExperience.css";
 
@@ -207,6 +208,10 @@ export function QueueExperience() {
   function applyUpdated(updated: QueueItem) {
     setItems((current) => current.map((item) => item.queue_item_id === updated.queue_item_id ? updated : item));
     setDraft(updated.rewritten_text ?? updated.original_text ?? "");
+  }
+
+  function applyQueueItemOnly(updated: QueueItem) {
+    setItems((current) => current.map((item) => item.queue_item_id === updated.queue_item_id ? updated : item));
   }
 
   async function action(run: () => Promise<QueueItem>, success: string) {
@@ -591,6 +596,19 @@ export function QueueExperience() {
               </div>
               {showSource && <div className="source-text-preview">{selected.original_text || "—"}</div>}
             </div>
+
+            <PostSignatureSection
+              item={selected}
+              onUpdated={applyQueueItemOnly}
+              onError={(message) => {
+                setNotice("");
+                setError(message);
+              }}
+              onNotice={(message) => {
+                setError("");
+                setNotice(message);
+              }}
+            />
 
             {selected.status === "approved" && <div className="schedule-panel"><label>Дата и время публикации<input type="datetime-local" value={scheduleAt} onChange={(event) => setScheduleAt(event.target.value)}/></label><button className="primary" onClick={() => void schedule()} disabled={busy}><CalendarClock size={17}/>Поставить в очередь</button></div>}
 
