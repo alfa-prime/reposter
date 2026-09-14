@@ -221,11 +221,11 @@ export const api = {
     body: JSON.stringify({ media_order: mediaOrder }),
   }),
   queueVideoInfo: (id: number) => request<QueueVideoInfo>(`/api/v1/queue/${id}/video-info`),
-  uploadQueueVideo: async (id: number, file: File) => request<QueueVideoInfo>(`/api/v1/queue/${id}/video`, {
+  uploadQueueVideo: async (id: number, file: File) => request<UploadedVideo>(`/api/v1/queue/${id}/video`, {
     method: "POST",
     body: JSON.stringify({ filename: file.name, content_type: file.type, data_base64: await fileToBase64(file) }),
   }),
-  deleteQueueVideo: (id: number, mediaId: string) => request<QueueVideoInfo>(`/api/v1/queue/${id}/video/${encodeURIComponent(mediaId)}`, { method: "DELETE" }),
+  deleteQueueVideo: (id: number, mediaId: string) => request<void>(`/api/v1/queue/${id}/video/${encodeURIComponent(mediaId)}`, { method: "DELETE" }),
   targets: () => request<Target[]>("/api/v1/targets?limit=100"),
   target: (id: number) => request<Target>(`/api/v1/targets/${id}`),
   sources: () => request<Source[]>("/api/v1/sources?limit=100"),
