@@ -10,8 +10,6 @@ import "./brand.css";
 import "./mediaControls.css";
 import "./queueExperiencePatch.css";
 import "./targetComponents.css";
-import "./videoEnhancements.css";
-import "./aboutEnhancements.css";
 import "./sourceComponents.css";
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
