@@ -98,6 +98,11 @@
   background: rgba(177,64,83,.88);
 }
 
+.scheduled-banner {
+  flex-wrap: wrap;
+  color: #79d9aa;
+}
+
 .link-dialog-backdrop {
   position: fixed;
   inset: 0;
@@ -209,6 +214,10 @@ html[data-theme="light"] .media-bulk-actions button {
   color: #5369c7;
   border-color: rgba(72,91,174,.15);
   background: #f1f4ff;
+}
+
+html[data-theme="light"] .scheduled-banner {
+  color: #2f6f58;
 }
 
 html[data-theme="light"] .link-dialog {
