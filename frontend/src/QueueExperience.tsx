@@ -3,8 +3,9 @@ import {
   Archive,
   X,
 } from "lucide-react";
-import { api, QueueItem, QueuePhoto } from "./api";
+import { api, QueueItem, QueuePhoto, Target } from "./api";
 import { QueueActionsFooter } from "./components/QueueActionsFooter";
+import { QueueChannelFilter, QueueChannelOption } from "./components/QueueChannelFilter";
 import { QueueDrawerHeader } from "./components/QueueDrawerHeader";
 import { QueueMediaSection } from "./components/QueueMediaSection";
 import { QueuePostCard } from "./components/QueuePostCard";
@@ -13,6 +14,8 @@ import { QueueTabs, QueueTab, queueTabConfig } from "./components/QueueTabs";
 import { QueueTextEditor } from "./components/QueueTextEditor";
 import { PostSignatureSection } from "./components/SignatureSections";
 import "./queueExperience.css";
+
+const QUEUE_TARGET_FILTER_KEY = "uncle-vlad-queue-target";
 
 const statusLabels: Record<string, string> = {
   pending: "В работе",
@@ -24,6 +27,13 @@ const statusLabels: Record<string, string> = {
   published: "Опубликован",
   failed: "Ошибка публикации",
 };
+
+function initialQueueTargetFilter(): number | null {
+  const saved = localStorage.getItem(QUEUE_TARGET_FILTER_KEY);
+  if (!saved || saved === "all") return null;
+  const targetId = Number(saved);
+  return Number.isInteger(targetId) && targetId > 0 ? targetId : null;
+}
 
 function shortDate(value?: string | null) {
   if (!value) return "—";
@@ -68,7 +78,9 @@ function publicationErrorMessage(value?: string | null) {
 
 export function QueueExperience() {
   const [items, setItems] = useState<QueueItem[]>([]);
+  const [targets, setTargets] = useState<Target[]>([]);
   const [tab, setTab] = useState<QueueTab>("storage");
+  const [targetFilter, setTargetFilter] = useState<number | null>(initialQueueTargetFilter);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [draft, setDraft] = useState("");
   const [editing, setEditing] = useState(false);
@@ -84,16 +96,50 @@ export function QueueExperience() {
     [items, selectedId],
   );
 
+  const availableChannels = useMemo<QueueChannelOption[]>(() => {
+    const channels = new Map<number, QueueChannelOption>();
+
+    targets.forEach((target) => {
+      channels.set(target.target_id, {
+        target_id: target.target_id,
+        name: target.name,
+        is_active: target.is_active,
+      });
+    });
+
+    items.forEach((item) => {
+      if (!channels.has(item.target_id)) {
+        channels.set(item.target_id, {
+          target_id: item.target_id,
+          name: item.target_name ?? `Канал #${item.target_id}`,
+        });
+      }
+    });
+
+    return Array.from(channels.values()).sort((a, b) => {
+      if (a.is_active !== b.is_active) {
+        if (a.is_active === false) return 1;
+        if (b.is_active === false) return -1;
+      }
+      return a.name.localeCompare(b.name, "ru");
+    });
+  }, [items, targets]);
+
+  const channelItems = useMemo(
+    () => targetFilter === null ? items : items.filter((item) => item.target_id === targetFilter),
+    [items, targetFilter],
+  );
+
   const visibleItems = useMemo(
-    () => items.filter((item) => queueTabConfig[tab].statuses.includes(item.status)),
-    [items, tab],
+    () => channelItems.filter((item) => queueTabConfig[tab].statuses.includes(item.status)),
+    [channelItems, tab],
   );
 
   const counts = useMemo(() => ({
-    storage: items.filter((item) => queueTabConfig.storage.statuses.includes(item.status)).length,
-    scheduled: items.filter((item) => queueTabConfig.scheduled.statuses.includes(item.status)).length,
-    archive: items.filter((item) => queueTabConfig.archive.statuses.includes(item.status)).length,
-  }), [items]);
+    storage: channelItems.filter((item) => queueTabConfig.storage.statuses.includes(item.status)).length,
+    scheduled: channelItems.filter((item) => queueTabConfig.scheduled.statuses.includes(item.status)).length,
+    archive: channelItems.filter((item) => queueTabConfig.archive.statuses.includes(item.status)).length,
+  }), [channelItems]);
 
   const orderedPhotos = useMemo(() => {
     if (!selected) return [];
@@ -121,16 +167,39 @@ export function QueueExperience() {
     }
   }
 
+  async function loadTargets(silent = false) {
+    try {
+      setTargets(await api.targets());
+    } catch (exc) {
+      if (!silent) setError(exc instanceof Error ? exc.message : "Не удалось загрузить список каналов");
+    }
+  }
+
   useEffect(() => {
     void load();
+    void loadTargets();
     const timer = window.setInterval(() => void load(true), 8000);
-    const onFocus = () => void load(true);
+    const onFocus = () => {
+      void load(true);
+      void loadTargets(true);
+    };
     window.addEventListener("focus", onFocus);
     return () => {
       window.clearInterval(timer);
       window.removeEventListener("focus", onFocus);
     };
   }, []);
+
+  useEffect(() => {
+    localStorage.setItem(QUEUE_TARGET_FILTER_KEY, targetFilter === null ? "all" : String(targetFilter));
+  }, [targetFilter]);
+
+  useEffect(() => {
+    if (targetFilter === null || availableChannels.length === 0) return;
+    if (!availableChannels.some((channel) => channel.target_id === targetFilter)) {
+      setTargetFilter(null);
+    }
+  }, [availableChannels, targetFilter]);
 
   useEffect(() => {
     if (!notice) return;
@@ -155,6 +224,11 @@ export function QueueExperience() {
 
   function applyQueueItemOnly(updated: QueueItem) {
     setItems((current) => current.map((item) => item.queue_item_id === updated.queue_item_id ? updated : item));
+  }
+
+  function changeTargetFilter(targetId: number | null) {
+    setTargetFilter(targetId);
+    setSelectedId(null);
   }
 
   async function action(run: () => Promise<QueueItem>, success: string) {
@@ -342,16 +416,26 @@ export function QueueExperience() {
 
   return (
     <section className="editorial-queue">
-      <QueueTabs
-        tab={tab}
-        counts={counts}
-        busy={busy}
-        onChange={(nextTab) => {
-          setTab(nextTab);
-          setSelectedId(null);
-        }}
-        onRefresh={() => void load()}
-      />
+      <div className="queue-toolbar">
+        <QueueTabs
+          tab={tab}
+          counts={counts}
+          busy={busy}
+          onChange={(nextTab) => {
+            setTab(nextTab);
+            setSelectedId(null);
+          }}
+          onRefresh={() => {
+            void load();
+            void loadTargets(true);
+          }}
+        />
+        <QueueChannelFilter
+          channels={availableChannels}
+          value={targetFilter}
+          onChange={changeTargetFilter}
+        />
+      </div>
 
       {(error || notice) && <div className={error ? "editorial-message error" : "editorial-message"}><span>{error || notice}</span><button onClick={() => { setError(""); setNotice(""); }}>×</button></div>}
 
@@ -366,7 +450,13 @@ export function QueueExperience() {
             onOpen={() => setSelectedId(item.queue_item_id)}
           />
         ))}
-        {!visibleItems.length && <div className="editorial-empty"><Archive size={30}/><strong>Здесь пока пусто</strong><span>Посты появятся здесь по мере прохождения редакционного процесса.</span></div>}
+        {!visibleItems.length && (
+          <div className="editorial-empty">
+            <Archive size={30}/>
+            <strong>Здесь пока пусто</strong>
+            <span>{targetFilter === null ? "Посты появятся здесь по мере прохождения редакционного процесса." : "Для выбранного канала в этом разделе пока нет постов."}</span>
+          </div>
+        )}
       </div>
 
       {selected && (
