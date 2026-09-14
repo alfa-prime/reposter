@@ -1,12 +1,12 @@
 .queue-toolbar {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr);
   gap: 12px;
   align-items: stretch;
 }
 
 .queue-channel-filter {
-  min-width: 250px;
+  min-width: 300px;
   padding: 8px 10px;
   display: flex;
   align-items: center;
@@ -64,7 +64,7 @@ html[data-theme="light"] .queue-channel-filter select {
   color-scheme: light;
 }
 
-@media (max-width: 980px) {
+@media (max-width: 1180px) {
   .queue-toolbar {
     grid-template-columns: 1fr;
   }
