@@ -7,14 +7,12 @@ type ChannelRewriteSectionProps = {
   target: Target;
   onChanged?: () => Promise<void> | void;
   onError?: (message: string) => void;
-  onNotice?: (message: string) => void;
 };
 
 export function ChannelRewriteSection({
   target,
   onChanged,
   onError,
-  onNotice,
 }: ChannelRewriteSectionProps) {
   const [savedPrompt, setSavedPrompt] = useState(target.rewrite_prompt ?? "");
   const [draft, setDraft] = useState(target.rewrite_prompt ?? "");
@@ -40,7 +38,6 @@ export function ChannelRewriteSection({
       setSavedPrompt(prompt);
       setDraft(prompt);
       await onChanged?.();
-      onNotice?.(prompt ? "Инструкция для ИИ сохранена" : "Канал использует общую инструкцию для ИИ");
     } catch (exc) {
       onError?.(exc instanceof Error ? exc.message : "Не удалось сохранить инструкцию для ИИ");
     } finally {
@@ -56,7 +53,6 @@ export function ChannelRewriteSection({
       setSavedPrompt(updated.rewrite_prompt ?? "");
       setDraft("");
       await onChanged?.();
-      onNotice?.("Канал использует общую инструкцию для ИИ");
     } catch (exc) {
       onError?.(exc instanceof Error ? exc.message : "Не удалось вернуть общую инструкцию");
     } finally {
