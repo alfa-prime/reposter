@@ -1,0 +1,51 @@
+.schedule-datetime-controls {
+  display: grid;
+  grid-template-columns: minmax(190px, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.schedule-time-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.schedule-time-controls select {
+  min-width: 72px;
+  min-height: 42px;
+  padding: 0 30px 0 11px;
+  border: 1px solid rgba(255,255,255,.09);
+  border-radius: 10px;
+  color: #edf2fa;
+  background: #08111f;
+  font: inherit;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.schedule-time-controls span {
+  color: #aebbd0;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+html[data-theme="light"] .schedule-time-controls select {
+  color: #24324a;
+  background: #fff;
+  border-color: rgba(42,58,88,.13);
+}
+
+html[data-theme="light"] .schedule-time-controls span {
+  color: #59687d;
+}
+
+@media (max-width: 620px) {
+  .schedule-datetime-controls {
+    grid-template-columns: 1fr;
+  }
+
+  .schedule-time-controls {
+    justify-content: flex-start;
+  }
+}
