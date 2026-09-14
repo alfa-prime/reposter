@@ -57,6 +57,7 @@ export type Target = {
   external_id: string;
   url?: string | null;
   default_signature?: string | null;
+  rewrite_prompt?: string | null;
   is_active: boolean;
 };
 
@@ -248,6 +249,7 @@ export const api = {
   updateTargetSource: (targetId: number, targetSourceId: number, data: Partial<Pick<TargetSource, "is_active" | "rewrite_enabled">>) => request<TargetSource>(`/api/v1/targets/${targetId}/sources/${targetSourceId}`, { method: "PATCH", body: JSON.stringify(data) }),
   detachSource: (targetId: number, targetSourceId: number) => request<void>(`/api/v1/targets/${targetId}/sources/${targetSourceId}`, { method: "DELETE" }),
 
+  rewriteQueueItem: (id: number) => request<QueueItem>(`/api/v1/queue/${id}/rewrite`, { method: "POST" }),
   updateQueueText: (id: number, rewritten_text: string) => request<QueueItem>(`/api/v1/queue/${id}`, { method: "PATCH", body: JSON.stringify({ rewritten_text }) }),
   updateQueueSignature: (id: number, signature_text: string | null) => request<QueueItem>(`/api/v1/queue/${id}`, { method: "PATCH", body: JSON.stringify({ signature_text }) }),
   submit: (id: number) => request<QueueItem>(`/api/v1/queue/${id}/submit`, { method: "POST" }),
