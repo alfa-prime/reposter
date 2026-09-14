@@ -30,6 +30,7 @@ class Target(Base):
     external_id: Mapped[str] = mapped_column(String(255))
     url: Mapped[str | None] = mapped_column(String(2048))
     default_signature: Mapped[str | None] = mapped_column(Text)
+    rewrite_prompt: Mapped[str | None] = mapped_column(Text)
     is_active: Mapped[bool] = mapped_column(
         Boolean,
         nullable=False,
