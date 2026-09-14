@@ -417,6 +417,11 @@ export function QueueExperience() {
   return (
     <section className="editorial-queue">
       <div className="queue-toolbar">
+        <QueueChannelFilter
+          channels={availableChannels}
+          value={targetFilter}
+          onChange={changeTargetFilter}
+        />
         <QueueTabs
           tab={tab}
           counts={counts}
@@ -429,11 +434,6 @@ export function QueueExperience() {
             void load();
             void loadTargets(true);
           }}
-        />
-        <QueueChannelFilter
-          channels={availableChannels}
-          value={targetFilter}
-          onChange={changeTargetFilter}
         />
       </div>
 
