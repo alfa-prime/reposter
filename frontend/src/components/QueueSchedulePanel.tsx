@@ -1,4 +1,5 @@
 import { CalendarClock } from "lucide-react";
+import "./QueueSchedulePanel.css";
 
 type QueueSchedulePanelProps = {
   value: string;
