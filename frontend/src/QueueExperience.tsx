@@ -1,20 +1,13 @@
-import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { ChangeEvent, useEffect, useMemo, useState } from "react";
 import {
   Archive,
-  Bold,
   CalendarClock,
   CheckCircle2,
   ExternalLink,
-  Italic,
-  Link as LinkIcon,
-  Pencil,
   RefreshCw,
   RotateCcw,
   Send,
-  Smile,
-  Strikethrough,
   Trash2,
-  Underline,
   X,
   XCircle,
 } from "lucide-react";
@@ -22,13 +15,9 @@ import { api, QueueItem, QueuePhoto } from "./api";
 import { QueueMediaSection } from "./components/QueueMediaSection";
 import { QueuePostCard } from "./components/QueuePostCard";
 import { QueueTabs, QueueTab, queueTabConfig } from "./components/QueueTabs";
+import { QueueTextEditor } from "./components/QueueTextEditor";
 import { PostSignatureSection } from "./components/SignatureSections";
 import "./queueExperience.css";
-
-type LinkSelection = {
-  start: number;
-  end: number;
-};
 
 const statusLabels: Record<string, string> = {
   pending: "В работе",
@@ -40,8 +29,6 @@ const statusLabels: Record<string, string> = {
   published: "Опубликован",
   failed: "Ошибка публикации",
 };
-
-const emojis = ["😀", "🙂", "😉", "😍", "🔥", "✨", "👍", "👏", "❤️", "📌", "📣", "⚡", "❗", "✅", "➡️", "🎉", "📷", "🚀"];
 
 function shortDate(value?: string | null) {
   if (!value) return "—";
@@ -63,13 +50,6 @@ function mediaKey(photo: QueuePhoto) {
   return photo.kind === "uploaded" && photo.media_id
     ? `upload:${photo.media_id}`
     : `source:${photo.attachment_id}`;
-}
-
-function normalizeUrl(value: string) {
-  const trimmed = value.trim();
-  if (!trimmed) return "";
-  if (/^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed)) return trimmed;
-  return `https://${trimmed}`;
 }
 
 function publicationErrorMessage(value?: string | null) {
@@ -104,21 +84,12 @@ export function QueueExperience() {
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [draft, setDraft] = useState("");
   const [editing, setEditing] = useState(false);
-  const [showSource, setShowSource] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [scheduleAt, setScheduleAt] = useState("");
   const [lightbox, setLightbox] = useState<QueuePhoto | null>(null);
   const [mediaOrder, setMediaOrder] = useState<string[]>([]);
-  const [emojiOpen, setEmojiOpen] = useState(false);
-  const [linkDialogOpen, setLinkDialogOpen] = useState(false);
-  const [linkText, setLinkText] = useState("");
-  const [linkUrl, setLinkUrl] = useState("");
-  const [linkError, setLinkError] = useState("");
-  const [linkSelection, setLinkSelection] = useState<LinkSelection>({ start: 0, end: 0 });
-  const textRef = useRef<HTMLTextAreaElement | null>(null);
-  const linkTextRef = useRef<HTMLInputElement | null>(null);
 
   const selected = useMemo(
     () => items.find((item) => item.queue_item_id === selectedId) ?? null,
@@ -178,18 +149,10 @@ export function QueueExperience() {
     setDraft(selected.rewritten_text ?? selected.original_text ?? "");
     setScheduleAt(toLocalInput(selected.scheduled_at));
     setEditing(false);
-    setShowSource(false);
-    setEmojiOpen(false);
-    setLinkDialogOpen(false);
     void api.queueMediaState(selected.queue_item_id)
       .then((state) => setMediaOrder(state.media_order))
       .catch(() => setMediaOrder(selected.photos.map(mediaKey)));
   }, [selectedId]);
-
-  useEffect(() => {
-    if (!linkDialogOpen) return;
-    requestAnimationFrame(() => linkTextRef.current?.focus());
-  }, [linkDialogOpen]);
 
   function applyUpdated(updated: QueueItem) {
     setItems((current) => current.map((item) => item.queue_item_id === updated.queue_item_id ? updated : item));
@@ -327,76 +290,6 @@ export function QueueExperience() {
     }
   }
 
-  function replaceSelection(prefix: string, suffix = prefix, placeholder = "текст") {
-    const textarea = textRef.current;
-    if (!textarea) return;
-    const start = textarea.selectionStart;
-    const end = textarea.selectionEnd;
-    const selectedText = draft.slice(start, end) || placeholder;
-    const next = `${draft.slice(0, start)}${prefix}${selectedText}${suffix}${draft.slice(end)}`;
-    setDraft(next);
-    requestAnimationFrame(() => {
-      textarea.focus();
-      textarea.setSelectionRange(start + prefix.length, start + prefix.length + selectedText.length);
-    });
-  }
-
-  function insertAtCursor(value: string) {
-    const textarea = textRef.current;
-    if (!textarea) return;
-    const start = textarea.selectionStart;
-    const end = textarea.selectionEnd;
-    setDraft(`${draft.slice(0, start)}${value}${draft.slice(end)}`);
-    requestAnimationFrame(() => {
-      textarea.focus();
-      textarea.setSelectionRange(start + value.length, start + value.length);
-    });
-  }
-
-  function openLinkDialog() {
-    const textarea = textRef.current;
-    if (!textarea) return;
-    const start = textarea.selectionStart;
-    const end = textarea.selectionEnd;
-    setLinkSelection({ start, end });
-    setLinkText(draft.slice(start, end));
-    setLinkUrl("");
-    setLinkError("");
-    setEmojiOpen(false);
-    setLinkDialogOpen(true);
-  }
-
-  function closeLinkDialog() {
-    setLinkDialogOpen(false);
-    setLinkError("");
-    requestAnimationFrame(() => textRef.current?.focus());
-  }
-
-  function confirmLink(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const label = linkText.trim();
-    const url = normalizeUrl(linkUrl);
-    if (!label) {
-      setLinkError("Укажите текст ссылки");
-      return;
-    }
-    if (!url) {
-      setLinkError("Укажите адрес ссылки");
-      return;
-    }
-
-    const value = `[${label}](${url})`;
-    const { start, end } = linkSelection;
-    setDraft(`${draft.slice(0, start)}${value}${draft.slice(end)}`);
-    setLinkDialogOpen(false);
-    setLinkError("");
-    requestAnimationFrame(() => {
-      const textarea = textRef.current;
-      textarea?.focus();
-      textarea?.setSelectionRange(start + value.length, start + value.length);
-    });
-  }
-
   async function schedule() {
     if (!selected || !scheduleAt) return;
     const date = new Date(scheduleAt);
@@ -525,34 +418,15 @@ export function QueueExperience() {
               }}
             />
 
-            <div className="drawer-text-section">
-              <div className="drawer-section-title"><span>Текст поста</span><span>{draft.length} знаков</span></div>
-
-              {editing ? (
-                <div className="rich-editor">
-                  <div className="rich-toolbar" aria-label="Форматирование текста">
-                    <button type="button" title="Жирный" onClick={() => replaceSelection("**")}><Bold size={17}/></button>
-                    <button type="button" title="Курсив" onClick={() => replaceSelection("_")}><Italic size={17}/></button>
-                    <button type="button" title="Зачёркнутый" onClick={() => replaceSelection("~~")}><Strikethrough size={17}/></button>
-                    <button type="button" title="Подчёркнутый" onClick={() => replaceSelection("<u>", "</u>")}><Underline size={17}/></button>
-                    <span className="toolbar-divider"/>
-                    <button type="button" title="Вставить ссылку" onClick={openLinkDialog}><LinkIcon size={17}/></button>
-                    <div className="emoji-control">
-                      <button type="button" title="Эмодзи" onClick={() => setEmojiOpen((value) => !value)}><Smile size={18}/></button>
-                      {emojiOpen && <div className="emoji-picker">{emojis.map((emoji) => <button type="button" key={emoji} onClick={() => { insertAtCursor(emoji); setEmojiOpen(false); }}>{emoji}</button>)}</div>}
-                    </div>
-                  </div>
-                  <textarea ref={textRef} value={draft} onChange={(event) => setDraft(event.target.value)} rows={12} autoFocus/>
-                  <small className="format-hint">Поддерживается редакторская разметка: жирный, курсив, зачёркивание, подчёркивание, ссылки и эмодзи.</small>
-                </div>
-              ) : <div className="publication-text">{draft || "—"}</div>}
-
-              <div className="drawer-inline-actions">
-                {selected.status !== "published" && <button onClick={() => setEditing((value) => !value)}><Pencil size={16}/>{editing ? "Закончить редактирование" : "Редактировать"}</button>}
-                <button onClick={() => setShowSource((value) => !value)}>{showSource ? "Скрыть исходник" : "Показать текст источника"}</button>
-              </div>
-              {showSource && <div className="source-text-preview">{selected.original_text || "—"}</div>}
-            </div>
+            <QueueTextEditor
+              key={selected.queue_item_id}
+              value={draft}
+              originalText={selected.original_text}
+              readonly={selected.status === "published"}
+              editing={editing}
+              onEditingChange={setEditing}
+              onChange={setDraft}
+            />
 
             <PostSignatureSection
               item={selected}
@@ -580,33 +454,6 @@ export function QueueExperience() {
               <button className="drawer-delete" onClick={() => void removeItem()} disabled={busy}><Trash2 size={16}/>Удалить</button>
             </footer>
           </aside>
-        </div>
-      )}
-
-      {linkDialogOpen && (
-        <div className="link-dialog-backdrop" onMouseDown={closeLinkDialog}>
-          <form className="link-dialog" onSubmit={confirmLink} onMouseDown={(event) => event.stopPropagation()}>
-            <div className="link-dialog-head">
-              <div>
-                <h3>Вставить ссылку</h3>
-                <p>Укажите, какой текст увидит читатель, и адрес страницы.</p>
-              </div>
-              <button type="button" className="link-dialog-close" onClick={closeLinkDialog} aria-label="Закрыть"><X size={19}/></button>
-            </div>
-            <label>
-              <span>Текст ссылки</span>
-              <input ref={linkTextRef} value={linkText} onChange={(event) => { setLinkText(event.target.value); setLinkError(""); }} placeholder="Например: Подробнее на сайте" />
-            </label>
-            <label>
-              <span>Адрес ссылки</span>
-              <input value={linkUrl} onChange={(event) => { setLinkUrl(event.target.value); setLinkError(""); }} placeholder="https://example.com" inputMode="url" />
-            </label>
-            {linkError && <div className="link-dialog-error">{linkError}</div>}
-            <div className="link-dialog-actions">
-              <button type="button" className="secondary" onClick={closeLinkDialog}>Отмена</button>
-              <button type="submit" className="primary"><LinkIcon size={16}/>Вставить ссылку</button>
-            </div>
-          </form>
         </div>
       )}
 
