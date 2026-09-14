@@ -7,6 +7,7 @@ from news_reposter.api.v1.max import router as max_router
 from news_reposter.api.v1.queue import router as queue_router
 from news_reposter.api.v1.queue_media_state import router as queue_media_state_router
 from news_reposter.api.v1.queue_publish import router as queue_publish_router
+from news_reposter.api.v1.queue_rewrite import router as queue_rewrite_router
 from news_reposter.api.v1.queue_video import router as queue_video_router
 from news_reposter.api.v1.sources import router as sources_router
 from news_reposter.api.v1.system import router as system_router
@@ -45,8 +46,8 @@ OPENAPI_TAGS = [
     {
         "name": "Очередь постов",
         "description": (
-            "Редактирование подготовленных постов, модерация, планирование "
-            "и публикация в целевые каналы."
+            "Редактирование подготовленных постов, ИИ-рерайт, модерация, "
+            "планирование и публикация в целевые каналы."
         ),
     },
     {
@@ -94,4 +95,5 @@ app.include_router(queue_router, prefix="/api/v1")
 app.include_router(queue_media_state_router, prefix="/api/v1")
 app.include_router(queue_video_router, prefix="/api/v1")
 app.include_router(queue_publish_router, prefix="/api/v1")
+app.include_router(queue_rewrite_router, prefix="/api/v1")
 app.include_router(system_router)
