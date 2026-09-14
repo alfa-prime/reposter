@@ -1,10 +1,11 @@
 .channel-rewrite-block {
   display: grid;
   gap: 14px;
+  margin-top: 18px;
   padding: 18px;
-  border: 1px solid var(--border-color);
-  border-radius: 18px;
-  background: var(--panel-bg);
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: 14px;
+  background: rgba(255,255,255,.025);
 }
 
 .channel-rewrite-heading {
@@ -27,12 +28,12 @@
 }
 
 .channel-rewrite-title strong {
-  font-size: 15px;
+  font-size: 14px;
 }
 
 .channel-rewrite-title span:not(.channel-rewrite-icon) {
-  color: var(--muted);
-  font-size: 13px;
+  color: #78879d;
+  font-size: 11px;
   line-height: 1.45;
 }
 
@@ -44,31 +45,31 @@
   height: 32px;
   flex: 0 0 32px;
   border-radius: 10px;
-  background: color-mix(in srgb, var(--accent) 12%, transparent);
-  color: var(--accent);
+  color: #8ea5ff;
+  background: rgba(119,145,255,.12);
 }
 
 .channel-rewrite-mode {
   flex: 0 0 auto;
   padding: 5px 9px;
   border-radius: 999px;
-  background: var(--soft-bg);
-  color: var(--muted);
-  font-size: 12px;
+  color: #8998ae;
+  background: rgba(255,255,255,.05);
+  font-size: 11px;
   font-weight: 700;
 }
 
 .channel-rewrite-mode.custom {
-  background: color-mix(in srgb, var(--accent) 12%, transparent);
-  color: var(--accent);
+  color: #aebcff;
+  background: rgba(119,145,255,.14);
 }
 
 .channel-rewrite-inherited {
   padding: 10px 12px;
-  border-radius: 12px;
-  background: var(--soft-bg);
-  color: var(--muted);
-  font-size: 12.5px;
+  border-radius: 11px;
+  color: #8ea5ff;
+  background: rgba(119,145,255,.07);
+  font-size: 11px;
   line-height: 1.5;
 }
 
@@ -78,8 +79,11 @@
 }
 
 .channel-rewrite-field > span {
-  font-size: 13px;
+  color: #8190a8;
+  font-size: 11px;
   font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .06em;
 }
 
 .channel-rewrite-field textarea {
@@ -87,19 +91,19 @@
   min-height: 164px;
   resize: vertical;
   padding: 12px 13px;
-  border: 1px solid var(--border-color);
+  border: 1px solid rgba(255,255,255,.09);
   border-radius: 12px;
-  background: var(--input-bg, var(--panel-bg));
-  color: var(--text-color);
+  color: #edf2fa;
+  background: #091220;
   font: inherit;
-  line-height: 1.5;
+  line-height: 1.55;
   outline: none;
   transition: border-color .15s ease, box-shadow .15s ease;
 }
 
 .channel-rewrite-field textarea:focus {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 10%, transparent);
+  border-color: rgba(116,139,255,.42);
+  box-shadow: 0 0 0 3px rgba(103,128,255,.08);
 }
 
 .channel-rewrite-field textarea:disabled {
@@ -108,8 +112,8 @@
 
 .channel-rewrite-field small {
   justify-self: end;
-  color: var(--muted);
-  font-size: 11.5px;
+  color: #6f7f98;
+  font-size: 11px;
 }
 
 .channel-rewrite-actions {
@@ -123,6 +127,49 @@
   display: inline-flex;
   align-items: center;
   gap: 7px;
+}
+
+html[data-theme="light"] .channel-rewrite-block {
+  border-color: rgba(42,58,88,.1);
+  background: #f8f9fc;
+}
+
+html[data-theme="light"] .channel-rewrite-title span:not(.channel-rewrite-icon) {
+  color: #738199;
+}
+
+html[data-theme="light"] .channel-rewrite-icon {
+  color: #6277f5;
+  background: rgba(98,119,245,.1);
+}
+
+html[data-theme="light"] .channel-rewrite-mode {
+  color: #738199;
+  background: rgba(42,58,88,.055);
+}
+
+html[data-theme="light"] .channel-rewrite-mode.custom {
+  color: #596fe9;
+  background: rgba(98,119,245,.1);
+}
+
+html[data-theme="light"] .channel-rewrite-inherited {
+  color: #6378df;
+  background: rgba(98,119,245,.07);
+}
+
+html[data-theme="light"] .channel-rewrite-field > span {
+  color: #68778f;
+}
+
+html[data-theme="light"] .channel-rewrite-field textarea {
+  color: #24324a;
+  background: #fff;
+  border-color: rgba(42,58,88,.13);
+}
+
+html[data-theme="light"] .channel-rewrite-field small {
+  color: #78869a;
 }
 
 @media (max-width: 700px) {
