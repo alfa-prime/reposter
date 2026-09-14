@@ -72,6 +72,18 @@ export function App() {
 
   useEffect(() => { void loadAll(); }, []);
 
+  useEffect(() => {
+    if (!notice) return;
+    const timer = window.setTimeout(() => setNotice(""), 3500);
+    return () => window.clearTimeout(timer);
+  }, [notice]);
+
+  function changeSection(nextSection: Section) {
+    setError("");
+    setNotice("");
+    setSection(nextSection);
+  }
+
   async function openTarget(item: Target) {
     setSelectedTarget(item);
     setBusy(true);
@@ -172,7 +184,7 @@ export function App() {
 
   return (
     <div className="shell">
-      <Sidebar section={section} onSectionChange={setSection} />
+      <Sidebar section={section} onSectionChange={changeSection} />
 
       <main className="workspace">
         {!standalonePage && <>
