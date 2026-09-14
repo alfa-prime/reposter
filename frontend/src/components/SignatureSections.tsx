@@ -1,7 +1,7 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { Bold, Italic, Link as LinkIcon, Save, Smile, Underline } from "lucide-react";
 import { api, QueueItem, Target } from "../api";
-import "../signatureEnhancements.css";
+import "../signatures.css";
 
 const emojis = ["📣", "👉", "✅", "❤️", "🔥", "✨", "📌", "➡️", "🙂", "👍"];
 
