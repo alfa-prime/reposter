@@ -1,5 +1,6 @@
 import { ImageOff } from "lucide-react";
 import type { QueueItem } from "../api";
+import "./QueuePostCard.css";
 
 type QueuePostCardProps = {
   item: QueueItem;
