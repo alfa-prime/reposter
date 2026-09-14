@@ -9,7 +9,7 @@ from news_reposter.api.dependencies import API_KEY_RESPONSES, ApiKeyDep
 from news_reposter.config import get_settings
 from news_reposter.db.session import get_db_session
 from news_reposter.llm import LLMProviderError, RewriteRequest
-from news_reposter.llm.factory import build_llm_provider
+from news_reposter.llm.factory import get_llm_provider
 from news_reposter.schemas import DatabaseHealthResponse, HealthResponse
 from news_reposter.services.collector import collect_active_sources_once
 
@@ -109,7 +109,7 @@ async def llm_test(_api_key: ApiKeyDep) -> dict[str, object]:
     """Проверяет реальную авторизацию и генерацию ответа у настроенного LLM."""
 
     try:
-        provider = build_llm_provider()
+        provider = get_llm_provider()
     except (RuntimeError, ValueError) as exc:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
