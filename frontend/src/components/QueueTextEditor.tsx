@@ -5,6 +5,7 @@ import {
   Link as LinkIcon,
   Pencil,
   Smile,
+  Sparkles,
   Strikethrough,
   Underline,
   X,
@@ -24,8 +25,11 @@ type QueueTextEditorProps = {
   originalText?: string | null;
   readonly?: boolean;
   editing: boolean;
+  busy?: boolean;
+  canRewrite?: boolean;
   onEditingChange: (editing: boolean) => void;
   onChange: (value: string) => void;
+  onRewrite?: () => void;
 };
 
 type LinkSelection = {
@@ -38,8 +42,11 @@ export function QueueTextEditor({
   originalText,
   readonly = false,
   editing,
+  busy = false,
+  canRewrite = false,
   onEditingChange,
   onChange,
+  onRewrite,
 }: QueueTextEditorProps) {
   const [showSource, setShowSource] = useState(false);
   const [emojiOpen, setEmojiOpen] = useState(false);
@@ -157,7 +164,13 @@ export function QueueTextEditor({
         ) : <div className="publication-text">{value || "—"}</div>}
 
         <div className="drawer-inline-actions">
-          {!readonly && <button onClick={() => onEditingChange(!editing)}><Pencil size={16}/>{editing ? "Закончить редактирование" : "Редактировать"}</button>}
+          {canRewrite && onRewrite && (
+            <button className="ai-rewrite-action" onClick={onRewrite} disabled={busy}>
+              <Sparkles size={16}/>
+              {busy ? "Переписываю…" : value ? "Переписать с ИИ ещё раз" : "Переписать с ИИ"}
+            </button>
+          )}
+          {!readonly && <button onClick={() => onEditingChange(!editing)} disabled={busy}><Pencil size={16}/>{editing ? "Закончить редактирование" : "Редактировать"}</button>}
           <button onClick={() => setShowSource((current) => !current)}>{showSource ? "Скрыть исходник" : "Показать текст источника"}</button>
         </div>
         {showSource && <div className="source-text-preview">{originalText || "—"}</div>}
