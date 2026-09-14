@@ -46,8 +46,12 @@ function MiniSignatureEditor({ value, onSave, inherited, onReset, onError }: Min
     if (!area) return;
     const start = area.selectionStart;
     const end = area.selectionEnd;
+    const caret = start + value.length;
     setDraft(`${draft.slice(0, start)}${value}${draft.slice(end)}`);
-    requestAnimationFrame(() => area.focus());
+    requestAnimationFrame(() => {
+      area.focus();
+      area.setSelectionRange(caret, caret);
+    });
   }
 
   function openLink() {
