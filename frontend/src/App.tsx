@@ -4,6 +4,7 @@ import { api, QueueItem, Source, Target, TargetSource } from "./api";
 import { AboutPage } from "./components/AboutPage";
 import { Dashboard } from "./components/Dashboard";
 import { QueuePage } from "./components/QueuePage";
+import { SettingsPage } from "./components/SettingsPage";
 import { Sidebar } from "./components/Sidebar";
 import { SourcesPage } from "./components/SourcesPage";
 import { TargetsPage } from "./components/TargetsPage";
@@ -167,12 +168,14 @@ export function App() {
         ? "Источники"
         : "Обзор";
 
+  const standalonePage = section === "about" || section === "settings";
+
   return (
     <div className="shell">
       <Sidebar section={section} onSectionChange={setSection} />
 
       <main className="workspace">
-        {section !== "about" && <>
+        {!standalonePage && <>
           <header className="topbar">
             <div>
               <p className="eyebrow">ДЯДЯ ВЛАД · ЧИТАЕТ НОВОСТИ</p>
@@ -192,6 +195,7 @@ export function App() {
         </>}
 
         {section === "about" && <AboutPage />}
+        {section === "settings" && <SettingsPage />}
 
         {section === "dashboard" && (
           <Dashboard
