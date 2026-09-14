@@ -30,6 +30,12 @@ class Settings(BaseSettings):
 
     llm_provider: str = "gigachat"
     llm_timeout_seconds: float = Field(default=60.0, gt=0, le=600)
+    llm_default_rewrite_prompt: str = (
+        "Ты редактор новостного канала. Перепиши исходную новость своими словами, "
+        "сохрани все факты, имена, числа, даты и географические названия. Не добавляй "
+        "факты от себя, не придумывай цитаты и не меняй смысл. Сделай текст естественным, "
+        "понятным и готовым к публикации в социальной сети. Верни только готовый текст поста."
+    )
     gigachat_credentials: str | None = None
     gigachat_scope: str = "GIGACHAT_API_PERS"
     gigachat_model: str = "GigaChat-2-Pro"
