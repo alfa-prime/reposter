@@ -27,6 +27,13 @@ html[data-theme="light"] .editorial-card-no-media {
   border-right-color: rgba(42,58,88,.08);
 }
 
+html[data-theme="light"] .editorial-post-card .editorial-status.status-pending,
+html[data-theme="light"] .editorial-post-card .editorial-status.status-rewriting {
+  color: #3157c7;
+  background: #e8eeff;
+  border-color: #c4d1ff;
+}
+
 @media (max-width: 760px) {
   .editorial-card-no-media {
     min-height: 210px;
