@@ -339,9 +339,21 @@ export function QueueExperience({ collectSignal = 0, targetId }: QueueExperience
   }
 
   async function schedule() {
-    if (!selected || !scheduleAt) return;
+    if (!selected) return;
+
+    if (!scheduleAt) {
+      setError("Укажите дату и время публикации");
+      return;
+    }
+
+    const scheduledDate = new Date(scheduleAt);
+    if (Number.isNaN(scheduledDate.getTime())) {
+      setError("Укажите корректную дату и время публикации");
+      return;
+    }
+
     const updated = await runAction(
-      () => api.schedule(selected.queue_item_id, new Date(scheduleAt).toISOString()),
+      () => api.schedule(selected.queue_item_id, scheduledDate.toISOString()),
       "Публикация запланирована",
     );
     if (updated) closeDrawer();
