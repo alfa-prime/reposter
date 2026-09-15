@@ -197,6 +197,10 @@ export function App() {
         ? "Источники"
         : "Обзор";
 
+  const queueContext = selectedQueueTarget
+    ? `Канал: ${selectedQueueTarget.name}`
+    : "Общая очередь · посты из всех каналов";
+
   const standalonePage = section === "about" || section === "settings";
 
   return (
@@ -215,7 +219,7 @@ export function App() {
             <div>
               <p className="eyebrow">ДЯДЯ ВЛАД · ЧИТАЕТ НОВОСТИ</p>
               <h1>{pageTitle}</h1>
-              {section === "queue" && selectedQueueTarget && <p className="queue-context">{selectedQueueTarget.name}</p>}
+              {section === "queue" && <p className="queue-context">{queueContext}</p>}
             </div>
             <button className="primary" onClick={() => void collectNow()} disabled={busy}>
               <RefreshCw size={17} className={busy ? "spin" : ""} />Собрать сейчас
