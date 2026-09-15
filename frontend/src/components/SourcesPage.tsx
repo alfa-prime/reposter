@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Database, Plus, Trash2 } from "lucide-react";
 import { api, Source } from "../api";
+import "../channelAvatar.css";
 import { CreateSourceModal } from "./CreateSourceModal";
 
 type SourcesPageProps = {
@@ -11,13 +12,7 @@ type SourcesPageProps = {
   onError: (message: string) => void;
 };
 
-export function SourcesPage({
-  sources,
-  busy,
-  onChanged,
-  onDelete,
-  onError,
-}: SourcesPageProps) {
+export function SourcesPage({ sources, busy, onChanged, onDelete, onError }: SourcesPageProps) {
   const [createOpen, setCreateOpen] = useState(false);
 
   async function toggleSource(source: Source) {
@@ -37,14 +32,7 @@ export function SourcesPage({
           <h2>Источники</h2>
           <div className="table-actions">
             <span>{sources.length} всего</span>
-            <button
-              className="primary compact"
-              type="button"
-              onClick={() => {
-                onError("");
-                setCreateOpen(true);
-              }}
-            >
+            <button className="primary compact" type="button" onClick={() => { onError(""); setCreateOpen(true); }}>
               <Plus size={15} />Добавить
             </button>
           </div>
@@ -54,7 +42,9 @@ export function SourcesPage({
 
         {sources.map((item) => (
           <div className="entity-row" key={item.source_id}>
-            <div className="entity-icon"><Database size={18} /></div>
+            <div className={`entity-icon ${item.icon_url ? "channel-avatar" : ""}`}>
+              {item.icon_url ? <img src={item.icon_url} alt="" /> : <Database size={18} />}
+            </div>
             <div className="entity-main">
               <strong>{item.name}</strong>
               <span>{item.platform} · {item.url}</span>
@@ -67,12 +57,7 @@ export function SourcesPage({
             >
               {item.is_active ? "Активен" : "Выключен"}
             </button>
-            <button
-              className="icon-button danger-icon"
-              type="button"
-              title="Удалить"
-              onClick={() => onDelete(item)}
-            >
+            <button className="icon-button danger-icon" type="button" title="Удалить" onClick={() => onDelete(item)}>
               <Trash2 size={16} />
             </button>
           </div>
@@ -84,9 +69,7 @@ export function SourcesPage({
           busy={busy}
           onClose={() => setCreateOpen(false)}
           onError={onError}
-          onCreated={async () => {
-            await onChanged();
-          }}
+          onCreated={onChanged}
         />
       )}
     </>
