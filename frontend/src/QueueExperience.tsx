@@ -103,6 +103,7 @@ export function QueueExperience({ collectSignal = 0, targetId }: QueueExperience
   const [lightbox, setLightbox] = useState<string | null>(null);
   const [scheduleAt, setScheduleAt] = useState("");
   const [scheduleError, setScheduleError] = useState("");
+  const [scheduleTimeTouched, setScheduleTimeTouched] = useState(false);
 
   const selected = useMemo(
     () => items.find((item) => item.queue_item_id === selectedId) ?? null,
@@ -176,6 +177,7 @@ export function QueueExperience({ collectSignal = 0, targetId }: QueueExperience
         setMediaOrder(state.media_order);
         setScheduleAt(item.scheduled_at ? item.scheduled_at.slice(0, 16) : "");
         setScheduleError("");
+        setScheduleTimeTouched(false);
         setEditing(false);
         setError("");
       } catch (exc) {
@@ -194,6 +196,7 @@ export function QueueExperience({ collectSignal = 0, targetId }: QueueExperience
     setEditing(false);
     setLightbox(null);
     setScheduleError("");
+    setScheduleTimeTouched(false);
   }
 
   async function runAction(action: () => Promise<QueueItem>, successMessage = "") {
@@ -468,9 +471,14 @@ export function QueueExperience({ collectSignal = 0, targetId }: QueueExperience
                 value={scheduleAt}
                 busy={busy}
                 error={scheduleError}
-                onChange={(value) => {
+                onChange={(value, changedPart) => {
                   setScheduleAt(value);
-                  setScheduleError(scheduleValidationMessage(value));
+                  if (changedPart === "time") {
+                    setScheduleTimeTouched(true);
+                    setScheduleError(scheduleValidationMessage(value));
+                  } else {
+                    setScheduleError(scheduleTimeTouched ? scheduleValidationMessage(value) : "");
+                  }
                 }}
                 onSchedule={() => void schedule()}
               />
