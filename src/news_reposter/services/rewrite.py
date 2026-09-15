@@ -46,6 +46,8 @@ class RewriteService:
         context = self.context_for(item)
         started_at = time.perf_counter()
         provider_name = str(getattr(self.provider, "name", type(self.provider).__name__))
+        queue_item_id = getattr(item, "queue_item_id", None)
+        target_id = getattr(item, "target_id", None)
 
         try:
             result = await self.provider.rewrite(
@@ -57,8 +59,8 @@ class RewriteService:
         except Exception as exc:
             logger.warning(
                 "action=rewrite status=failed queue_item_id=%s target_id=%s provider=%s duration_ms=%s error_type=%s",
-                item.queue_item_id,
-                item.target_id,
+                queue_item_id,
+                target_id,
                 provider_name,
                 round((time.perf_counter() - started_at) * 1000),
                 type(exc).__name__,
@@ -67,8 +69,8 @@ class RewriteService:
 
         logger.info(
             "action=rewrite status=success queue_item_id=%s target_id=%s provider=%s model=%s duration_ms=%s total_tokens=%s",
-            item.queue_item_id,
-            item.target_id,
+            queue_item_id,
+            target_id,
             result.provider,
             result.model,
             round((time.perf_counter() - started_at) * 1000),
