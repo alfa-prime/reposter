@@ -356,6 +356,7 @@ export function QueueExperience({ collectSignal = 0, targetId }: QueueExperience
 
   async function schedule() {
     if (!selected) return;
+    setError("");
 
     if (!scheduleAt) {
       setScheduleError("Укажите дату и время публикации");
