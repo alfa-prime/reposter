@@ -16,6 +16,8 @@
   width: 38px;
   height: 38px;
   flex: 0 0 38px;
+  overflow: hidden;
+  border-radius: 50%;
 }
 
 .source-avatar img {
@@ -26,7 +28,18 @@
 }
 
 .attach-source {
-  grid-template-columns: 38px 1fr auto;
+  display: flex;
+  align-items: center;
   min-height: 58px;
-  gap: 12px;
+  gap: 14px;
+}
+
+.attach-source > span:nth-child(2) {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.attach-source > small {
+  margin-left: auto;
+  flex: 0 0 auto;
 }
