@@ -23,6 +23,7 @@ class Source(Base):
     name: Mapped[str] = mapped_column(String(200))
     platform: Mapped[str] = mapped_column(String(32))
     url: Mapped[str] = mapped_column(String(2048), unique=True)
+    icon_url: Mapped[str | None] = mapped_column(String(2048), nullable=True)
     is_active: Mapped[bool] = mapped_column(
         Boolean,
         nullable=False,
