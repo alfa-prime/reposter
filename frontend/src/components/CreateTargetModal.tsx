@@ -10,7 +10,6 @@ type CreateTargetModalProps = {
 };
 
 export function CreateTargetModal({ busy, onClose, onCreated, onError }: CreateTargetModalProps) {
-  const [name, setName] = useState("");
   const [url, setUrl] = useState("");
   const [urlError, setUrlError] = useState("");
   const platform = detectTargetPlatform(url);
@@ -31,13 +30,7 @@ export function CreateTargetModal({ busy, onClose, onCreated, onError }: CreateT
     setUrlError("");
     onError("");
     try {
-      const created = await api.createTarget({
-        name: name.trim(),
-        platform: "max",
-        external_id: "auto",
-        url: url.trim(),
-        is_active: true,
-      });
+      const created = await api.createTarget({ url: url.trim(), is_active: true });
       await onCreated(created);
       onClose();
     } catch (exc) {
@@ -58,22 +51,9 @@ export function CreateTargetModal({ busy, onClose, onCreated, onError }: CreateT
           </button>
         </div>
 
-        <p className="form-note"><span>*</span> обязательные поля</p>
-
         <form noValidate onSubmit={(event) => void submit(event)} className="form-grid">
-          <label>
-            Название <b>*</b>
-            <input
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-              required
-              minLength={1}
-              placeholder="Новости 51 региона"
-            />
-          </label>
-
           <label className="wide">
-            Ссылка <b>*</b>
+            Ссылка на канал MAX
             <input
               value={url}
               onChange={(event) => {
@@ -83,28 +63,28 @@ export function CreateTargetModal({ busy, onClose, onCreated, onError }: CreateT
               type="text"
               inputMode="url"
               required
+              autoFocus
               placeholder="https://max.ru/channel_51_news"
               aria-invalid={Boolean(urlError)}
             />
             {urlError && <small className="target-link-error">{urlError}</small>}
           </label>
 
-          {platform === "max" && (
-            <div className="target-connect-panel wide">
-              <div className="target-connect-help">
-                <strong>Подключение MAX</strong>
-                <ol>
-                  <li>Добавьте бота <code>Neuro_writer_51</code> в подписчики канала.</li>
-                  <li>Затем назначьте этого бота администратором канала.</li>
-                  <li>После этого нажмите «Проверить и добавить канал».</li>
-                </ol>
-                <p><b>Важно:</b> если бот уже находился в канале до подключения сервиса, один раз удалите его, затем добавьте снова в подписчики и назначьте администратором.</p>
-              </div>
+          <div className="target-connect-panel wide">
+            <div className="target-connect-help">
+              <strong>Остальное сервис заполнит сам</strong>
+              <p>Название, технический ID и аватар канала будут получены из MAX автоматически.</p>
+              <ol>
+                <li>Добавьте бота <code>Neuro_writer_51</code> в подписчики канала.</li>
+                <li>Назначьте бота администратором канала.</li>
+                <li>Вставьте ссылку выше и нажмите «Добавить канал».</li>
+              </ol>
+              <p><b>Если бот был добавлен раньше:</b> один раз удалите его из канала и добавьте снова.</p>
             </div>
-          )}
+          </div>
 
-          <button className="primary" disabled={busy}>
-            {platform === "max" ? "Проверить и добавить канал" : "Добавить канал"}
+          <button className="primary" disabled={busy || platform !== "max"}>
+            {busy ? "Добавляю…" : "Добавить канал"}
           </button>
         </form>
       </div>
