@@ -27,19 +27,23 @@
   object-fit: cover;
 }
 
-.attach-source {
+.attach-list .attach-source {
   display: flex;
   align-items: center;
   min-height: 58px;
   gap: 14px;
 }
 
-.attach-source > span:nth-child(2) {
+.attach-list .attach-source > .source-avatar {
+  margin-right: 2px;
+}
+
+.attach-list .attach-source > span:nth-child(2) {
   flex: 1 1 auto;
   min-width: 0;
 }
 
-.attach-source > small {
+.attach-list .attach-source > small {
   margin-left: auto;
   flex: 0 0 auto;
 }
