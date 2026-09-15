@@ -95,7 +95,9 @@ export function TargetsPage({
               type="button"
               onClick={() => void onOpenTarget(item)}
             >
-              <div className="entity-icon"><Radio size={18} /></div>
+              <div className={`entity-icon ${item.icon_url ? "channel-avatar" : ""}`}>
+                {item.icon_url ? <img src={item.icon_url} alt="" /> : <Radio size={18} />}
+              </div>
               <div className="entity-main">
                 <strong>{item.name}</strong>
               </div>
