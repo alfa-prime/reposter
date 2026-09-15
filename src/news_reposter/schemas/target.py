@@ -11,6 +11,7 @@ class TargetBase(BaseModel):
     platform: str = Field(min_length=2, max_length=32, pattern=r"^[a-z][a-z0-9_-]+$", description="Код платформы в нижнем регистре", examples=["max"])
     external_id: str = Field(min_length=1, max_length=255, description="Идентификатор канала или чата во внешней платформе", examples=["-77162942582085"])
     url: str | None = Field(default=None, max_length=2048, description="Необязательная ссылка на канал или чат", examples=["https://max.ru/channel_51_news"])
+    icon_url: str | None = Field(default=None, max_length=2048, description="URL аватара канала, полученный из внешней платформы")
     default_signature: str | None = Field(default=None, max_length=4000, description="Подпись, автоматически подставляемая к новым публикациям канала")
     rewrite_prompt: str | None = Field(default=None, max_length=12000, description="Индивидуальная инструкция ИИ для рерайта постов этого канала")
     is_active: bool = Field(default=True, description="Можно ли публиковать посты в эту цель")
@@ -25,7 +26,7 @@ class TargetBase(BaseModel):
     def normalize_platform(cls, value: object) -> object:
         return value.strip().lower() if isinstance(value, str) else value
 
-    @field_validator("url", mode="before")
+    @field_validator("url", "icon_url", mode="before")
     @classmethod
     def validate_url(cls, value: object) -> object:
         if value is None:
@@ -49,7 +50,7 @@ class TargetBase(BaseModel):
 
 class TargetCreate(TargetBase):
     """Данные для создания цели публикации."""
-    model_config = ConfigDict(json_schema_extra={"example": {"name": "Новости 51 региона", "platform": "max", "external_id": "-77162942582085", "url": "https://max.ru/channel_51_news", "default_signature": "📣 Подписывайтесь на наш канал", "rewrite_prompt": None, "is_active": True}})
+    model_config = ConfigDict(json_schema_extra={"example": {"name": "Новости 51 региона", "platform": "max", "external_id": "-77162942582085", "url": "https://max.ru/channel_51_news", "icon_url": None, "default_signature": "📣 Подписывайтесь на наш канал", "rewrite_prompt": None, "is_active": True}})
 
 
 class TargetUpdate(BaseModel):
@@ -59,6 +60,7 @@ class TargetUpdate(BaseModel):
     platform: str | None = Field(default=None, min_length=2, max_length=32, pattern=r"^[a-z][a-z0-9_-]+$", description="Новый код платформы")
     external_id: str | None = Field(default=None, min_length=1, max_length=255, description="Новый ID канала или чата во внешней платформе")
     url: str | None = Field(default=None, max_length=2048, description="Новая ссылка; значение null удаляет текущую ссылку")
+    icon_url: str | None = Field(default=None, max_length=2048, description="Новый URL аватара; null очищает аватар")
     default_signature: str | None = Field(default=None, max_length=4000, description="Подпись канала; null очищает подпись по умолчанию")
     rewrite_prompt: str | None = Field(default=None, max_length=12000, description="Инструкция ИИ для рерайта; null возвращает общий промпт приложения")
     is_active: bool | None = Field(default=None, description="Включить или приостановить публикацию")
@@ -73,7 +75,7 @@ class TargetUpdate(BaseModel):
     def normalize_platform(cls, value: object) -> object:
         return value.strip().lower() if isinstance(value, str) else value
 
-    @field_validator("url", mode="before")
+    @field_validator("url", "icon_url", mode="before")
     @classmethod
     def validate_url(cls, value: object) -> object:
         if value is None:
@@ -98,7 +100,7 @@ class TargetUpdate(BaseModel):
     def validate_changes(self) -> "TargetUpdate":
         if not self.model_fields_set:
             raise ValueError("нужно передать хотя бы одно поле")
-        required_fields = self.model_fields_set - {"url", "default_signature", "rewrite_prompt"}
+        required_fields = self.model_fields_set - {"url", "icon_url", "default_signature", "rewrite_prompt"}
         if any(getattr(self, field) is None for field in required_fields):
             raise ValueError("обязательные поля цели не могут быть null")
         return self
