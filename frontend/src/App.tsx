@@ -31,6 +31,7 @@ export function App() {
   const [targets, setTargets] = useState<Target[]>([]);
   const [sources, setSources] = useState<Source[]>([]);
   const [selectedTarget, setSelectedTarget] = useState<Target | null>(null);
+  const [selectedQueueTargetId, setSelectedQueueTargetId] = useState<number | null>(null);
   const [targetSources, setTargetSources] = useState<TargetSource[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -40,6 +41,10 @@ export function App() {
   const activeTargets = useMemo(() => targets.filter((item) => item.is_active).length, [targets]);
   const activeSources = useMemo(() => sources.filter((item) => item.is_active).length, [sources]);
   const activeQueue = useMemo(() => queue.filter((item) => activeQueueStatuses.has(item.status)).length, [queue]);
+  const selectedQueueTarget = useMemo(
+    () => targets.find((item) => item.target_id === selectedQueueTargetId) ?? null,
+    [targets, selectedQueueTargetId],
+  );
 
   async function loadAll() {
     setBusy(true);
@@ -53,6 +58,13 @@ export function App() {
       setQueue(queueData);
       setTargets(targetData);
       setSources(sourceData);
+
+      if (selectedQueueTargetId !== null) {
+        const queueTargetStillAvailable = targetData.some(
+          (item) => item.target_id === selectedQueueTargetId && item.is_active,
+        );
+        if (!queueTargetStillAvailable) setSelectedQueueTargetId(null);
+      }
 
       if (selectedTarget) {
         const updatedTarget = targetData.find((item) => item.target_id === selectedTarget.target_id) ?? null;
@@ -82,6 +94,12 @@ export function App() {
     setError("");
     setNotice("");
     setSection(nextSection);
+  }
+
+  function changeQueueTarget(targetId: number | null) {
+    setError("");
+    setNotice("");
+    setSelectedQueueTargetId(targetId);
   }
 
   async function openTarget(item: Target) {
@@ -136,6 +154,7 @@ export function App() {
       confirmLabel: "Удалить канал",
       onConfirm: async () => {
         await api.deleteTarget(target.target_id);
+        if (selectedQueueTargetId === target.target_id) setSelectedQueueTargetId(null);
         setSelectedTarget(null);
         setTargetSources([]);
         await loadAll();
@@ -182,7 +201,13 @@ export function App() {
 
   return (
     <div className="shell">
-      <Sidebar section={section} onSectionChange={changeSection} />
+      <Sidebar
+        section={section}
+        targets={targets}
+        selectedQueueTargetId={selectedQueueTargetId}
+        onSectionChange={changeSection}
+        onQueueTargetChange={changeQueueTarget}
+      />
 
       <main className="workspace">
         {!standalonePage && <>
@@ -190,6 +215,7 @@ export function App() {
             <div>
               <p className="eyebrow">ДЯДЯ ВЛАД · ЧИТАЕТ НОВОСТИ</p>
               <h1>{pageTitle}</h1>
+              {section === "queue" && selectedQueueTarget && <p className="queue-context">{selectedQueueTarget.name}</p>}
             </div>
             <button className="primary" onClick={() => void collectNow()} disabled={busy}>
               <RefreshCw size={17} className={busy ? "spin" : ""} />Собрать сейчас
@@ -218,7 +244,7 @@ export function App() {
           />
         )}
 
-        {section === "queue" && <QueuePage />}
+        {section === "queue" && <QueuePage targetId={selectedQueueTargetId} />}
 
         {section === "targets" && (
           <TargetsPage
