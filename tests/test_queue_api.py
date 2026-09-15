@@ -218,6 +218,13 @@ def test_queue_crud_and_moderation(memory_queue_repository: None) -> None:
             assert approved.status_code == 200
             assert approved.json()["status"] == "approved"
 
+            past_schedule = await client.post(
+                "/api/v1/queue/1/schedule",
+                json={"scheduled_at": (datetime.now(UTC) - timedelta(minutes=1)).isoformat()},
+            )
+            assert past_schedule.status_code == 422
+            assert "должны быть в будущем" in str(past_schedule.json()["detail"])
+
             scheduled_at = datetime.now(UTC) + timedelta(hours=2)
             scheduled = await client.post(
                 "/api/v1/queue/1/schedule",
