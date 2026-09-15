@@ -1,1 +1,1 @@
-export type Section = "dashboard" | "queue" | "targets" | "sources" | "about" | "settings";
+export type Section = "queue" | "targets" | "sources" | "about" | "settings";

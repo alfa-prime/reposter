@@ -2,7 +2,6 @@ import {
   CircleDot,
   Database,
   Info,
-  LayoutDashboard,
   Radio,
   Settings,
 } from "lucide-react";
@@ -31,8 +30,6 @@ export function Sidebar({ section, targets, selectedQueueTargetId, onSectionChan
       </div>
 
       <nav>
-        <button onClick={() => onSectionChange("dashboard")} className={section === "dashboard" ? "active" : ""}><LayoutDashboard size={18} />Обзор</button>
-
         <QueueSidebarNav
           section={section}
           targets={targets}

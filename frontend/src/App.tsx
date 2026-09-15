@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import { RefreshCw, Trash2, X } from "lucide-react";
 import { api, QueueItem, Source, Target, TargetSource } from "./api";
 import { AboutPage } from "./components/AboutPage";
-import { Dashboard } from "./components/Dashboard";
 import { QueuePage } from "./components/QueuePage";
 import { SettingsPage } from "./components/SettingsPage";
 import { Sidebar } from "./components/Sidebar";
@@ -17,14 +16,6 @@ type ConfirmDialog = {
   onConfirm: () => Promise<void>;
 } | null;
 
-const activeQueueStatuses = new Set([
-  "pending",
-  "rewriting",
-  "awaiting_moderation",
-  "approved",
-  "scheduled",
-]);
-
 export function App() {
   const [section, setSection] = useState<Section>("queue");
   const [queue, setQueue] = useState<QueueItem[]>([]);
@@ -38,9 +29,6 @@ export function App() {
   const [notice, setNotice] = useState("");
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialog>(null);
 
-  const activeTargets = useMemo(() => targets.filter((item) => item.is_active).length, [targets]);
-  const activeSources = useMemo(() => sources.filter((item) => item.is_active).length, [sources]);
-  const activeQueue = useMemo(() => queue.filter((item) => activeQueueStatuses.has(item.status)).length, [queue]);
   const selectedQueueTarget = useMemo(
     () => targets.find((item) => item.target_id === selectedQueueTargetId) ?? null,
     [targets, selectedQueueTargetId],
@@ -195,7 +183,7 @@ export function App() {
       ? "Целевые каналы"
       : section === "sources"
         ? "Источники"
-        : "Обзор";
+        : "";
 
   const queueContext = selectedQueueTarget
     ? `Канал: ${selectedQueueTarget.name}`
@@ -236,17 +224,6 @@ export function App() {
 
         {section === "about" && <AboutPage />}
         {section === "settings" && <SettingsPage />}
-
-        {section === "dashboard" && (
-          <Dashboard
-            activeTargets={activeTargets}
-            totalTargets={targets.length}
-            activeSources={activeSources}
-            totalSources={sources.length}
-            activeQueue={activeQueue}
-            totalQueue={queue.length}
-          />
-        )}
 
         {section === "queue" && <QueuePage targetId={selectedQueueTargetId} />}
 

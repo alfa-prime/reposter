@@ -107,8 +107,6 @@ html[data-theme="light"] nav button.active {
   background: rgba(92,111,218,.10);
 }
 
-html[data-theme="light"] .metric,
-html[data-theme="light"] .hero-card,
 html[data-theme="light"] .table-card,
 html[data-theme="light"] .editor-panel,
 html[data-theme="light"] .queue-card,
@@ -128,7 +126,6 @@ html[data-theme="light"] .entity-button.selected {
 
 html[data-theme="light"] .queue-card p,
 html[data-theme="light"] .original-text,
-html[data-theme="light"] .hero-card p,
 html[data-theme="light"] .confirm-message {
   color: #42516a;
 }
