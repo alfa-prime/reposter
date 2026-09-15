@@ -72,8 +72,6 @@ export function CreateTargetModal({ busy, onClose, onCreated, onError }: CreateT
 
           <div className="target-connect-panel wide">
             <div className="target-connect-help">
-              <strong>Остальное сервис заполнит сам</strong>
-              <p>Название, технический ID и аватар канала будут получены из MAX автоматически.</p>
               <ol>
                 <li>Добавьте бота <code>Neuro_writer_51</code> в подписчики канала.</li>
                 <li>Назначьте бота администратором канала.</li>
