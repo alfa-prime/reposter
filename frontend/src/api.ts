@@ -82,7 +82,20 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, { ...init, cache: init?.cache ?? "no-store", headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) } });
   if (!response.ok) {
     let detail = `${response.status} ${response.statusText}`;
-    try { const body = await response.json(); detail = body.detail ?? detail; } catch { /* ignore */ }
+    try {
+      const body = await response.json();
+      if (typeof body.detail === "string") {
+        detail = body.detail;
+      } else if (Array.isArray(body.detail)) {
+        const messages = body.detail
+          .map((item: unknown) => {
+            if (typeof item !== "object" || item === null || !("msg" in item)) return "";
+            return String(item.msg);
+          })
+          .filter(Boolean);
+        if (messages.length) detail = messages.join("; ");
+      }
+    } catch { /* ignore malformed error body */ }
     throw new Error(detail);
   }
   if (response.status === 204) return undefined as T;
