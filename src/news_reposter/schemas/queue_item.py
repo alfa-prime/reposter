@@ -1,8 +1,8 @@
 import base64
 import binascii
-from datetime import datetime
+from datetime import UTC, datetime
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from news_reposter.db.models.enums import QueueItemStatus
 from news_reposter.services.media_validation import (
@@ -30,6 +30,15 @@ class QueueItemUpdate(BaseModel):
 
 class QueueItemSchedule(BaseModel):
     scheduled_at: datetime = Field(description="Дата и время публикации с часовым поясом")
+
+    @field_validator("scheduled_at")
+    @classmethod
+    def validate_scheduled_at(cls, value: datetime) -> datetime:
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise ValueError("дата и время публикации должны содержать часовой пояс")
+        if value <= datetime.now(UTC):
+            raise ValueError("дата и время публикации должны быть в будущем")
+        return value
 
 
 class QueueMediaUpload(BaseModel):
