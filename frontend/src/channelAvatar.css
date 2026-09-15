@@ -11,3 +11,33 @@
   display: block;
   object-fit: cover;
 }
+
+.source-avatar {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  overflow: hidden;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 50%;
+  background: rgba(119,145,255,.10);
+  color: #6f84ff;
+}
+
+.source-avatar.compact {
+  width: 30px;
+  height: 30px;
+  flex-basis: 30px;
+}
+
+.source-avatar img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+}
+
+html[data-theme="light"] .source-avatar.fallback {
+  background: #eef2ff;
+  color: #6075e8;
+}
