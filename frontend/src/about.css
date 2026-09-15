@@ -69,16 +69,29 @@
   line-height: 1.65;
 }
 
-.about-project-slogan {
+.about-project-flow {
   display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
   margin-top: 20px;
-  padding: 9px 12px;
+  padding: 8px;
   border: 1px solid rgba(125,145,255,.18);
   border-radius: 999px;
   color: #dce4ff;
   background: rgba(113,137,255,.09);
   font-size: 12px;
   font-weight: 700;
+}
+
+.about-project-flow span {
+  padding: 3px 7px;
+  border-radius: 999px;
+  background: rgba(255,255,255,.06);
+}
+
+.about-project-flow b {
+  color: #7e91ff;
 }
 
 .about-project-grid {
@@ -154,6 +167,46 @@
 .about-feature-list span {
   color: #c9d2e0;
   font-size: 13px;
+}
+
+.about-process {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.about-process > div {
+  position: relative;
+  min-height: 164px;
+  padding: 18px;
+  overflow: hidden;
+  border: 1px solid rgba(255,255,255,.055);
+  border-radius: 16px;
+  background: rgba(255,255,255,.02);
+}
+
+.about-process b {
+  position: absolute;
+  top: 8px;
+  right: 14px;
+  color: rgba(125,145,255,.14);
+  font-size: 52px;
+  line-height: 1;
+}
+
+.about-process strong {
+  position: relative;
+  display: block;
+  margin: 34px 0 8px;
+  color: #e7edf7;
+  font-size: 15px;
+}
+
+.about-process p {
+  position: relative;
+  font-size: 12px;
+  line-height: 1.55;
 }
 
 .about-roadmap-card {
@@ -259,19 +312,25 @@ html[data-theme="light"] .about-card p {
   color: #66758d;
 }
 
-html[data-theme="light"] .about-project-slogan {
+html[data-theme="light"] .about-project-flow {
   color: #4f61a7;
   background: #f4f6ff;
 }
 
+html[data-theme="light"] .about-project-flow span {
+  background: rgba(72,91,174,.07);
+}
+
 html[data-theme="light"] .about-feature-list > div,
-html[data-theme="light"] .about-roadmap-item {
+html[data-theme="light"] .about-roadmap-item,
+html[data-theme="light"] .about-process > div {
   border-color: rgba(42,58,88,.07);
   background: #f8faff;
 }
 
 html[data-theme="light"] .about-feature-list span,
 html[data-theme="light"] .about-roadmap-item strong,
+html[data-theme="light"] .about-process strong,
 html[data-theme="light"] .about-project-footer-note strong {
   color: #283750;
 }
@@ -285,6 +344,10 @@ html[data-theme="light"] .about-project-footer-note {
 @media (max-width: 980px) {
   .about-roadmap {
     grid-template-columns: 1fr;
+  }
+
+  .about-process {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .about-nav-button span {
@@ -337,5 +400,17 @@ html[data-theme="light"] .about-project-footer-note {
   .about-project-logo {
     width: 70px;
     height: 70px;
+  }
+
+  .about-project-flow {
+    border-radius: 16px;
+  }
+
+  .about-process {
+    grid-template-columns: 1fr;
+  }
+
+  .about-process > div {
+    min-height: 140px;
   }
 }
