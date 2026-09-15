@@ -56,6 +56,7 @@ export type Target = {
   platform: string;
   external_id: string;
   url?: string | null;
+  icon_url?: string | null;
   default_signature?: string | null;
   rewrite_prompt?: string | null;
   is_active: boolean;
@@ -89,7 +90,8 @@ export type MaxChannelInfo = {
   chat_id: number;
   title?: string | null;
   link?: string | null;
-  is_active: boolean;
+  icon_url?: string | null;
+  is_active?: boolean;
   last_event_type?: string | null;
   last_event_at?: string | null;
 };
@@ -121,13 +123,6 @@ export function detectTargetPlatform(value: string): TargetPlatform | null {
 
 export function detectSourcePlatform(value: string): SourcePlatform | null {
   return detectPlatform(value, true);
-}
-
-function externalIdFromUrl(value: string): string {
-  const url = new URL(value);
-  const path = decodeURIComponent(url.pathname).replace(/^\/+|\/+$/g, "");
-  if (!path) throw new Error("В ссылке не найден идентификатор канала");
-  return path;
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -167,35 +162,26 @@ function fileToBase64(file: File): Promise<string> {
   });
 }
 
-async function createTargetFromLink(data: Omit<Target, "target_id">): Promise<Target> {
-  const url = String(data.url ?? "").trim();
+async function createTargetFromLink(data: { url: string; is_active?: boolean }): Promise<Target> {
+  const url = data.url.trim();
   if (!url) throw new Error("Укажите ссылку на канал");
-
-  const platform = detectTargetPlatform(url);
-  if (!platform) {
-    throw new Error("Не удалось определить платформу по ссылке. Поддерживаются MAX, Telegram и VK.");
+  if (detectTargetPlatform(url) !== "max") {
+    throw new Error("Укажите ссылку на канал MAX, например https://max.ru/channel_name");
   }
 
-  let externalId: string;
-  let channelName = data.name.trim();
-  if (platform === "max") {
-    const channel = await request<MaxChannelInfo>(`/api/v1/max/channel-id?link=${encodeURIComponent(url)}`);
-    externalId = String(channel.chat_id);
-    if (!channelName && channel.title) channelName = channel.title;
-  } else {
-    externalId = externalIdFromUrl(url);
-  }
-
-  if (!channelName) throw new Error("Укажите название канала");
+  const channel = await request<MaxChannelInfo>(`/api/v1/targets/resolve-max?link=${encodeURIComponent(url)}`);
+  const name = channel.title?.trim();
+  if (!name) throw new Error("MAX не вернул название канала");
 
   return request<Target>("/api/v1/targets", {
     method: "POST",
     body: JSON.stringify({
-      ...data,
-      name: channelName,
-      platform,
-      external_id: externalId,
-      url,
+      name,
+      platform: "max",
+      external_id: String(channel.chat_id),
+      url: channel.link || url,
+      icon_url: channel.icon_url || null,
+      is_active: data.is_active ?? true,
     }),
   });
 }
@@ -232,9 +218,9 @@ export const api = {
   sources: () => request<Source[]>("/api/v1/sources?limit=100"),
   targetSources: (targetId: number) => request<TargetSource[]>(`/api/v1/targets/${targetId}/sources`),
   collectNow: () => request<CollectSummary>("/api/v1/system/collect-now", { method: "POST" }),
-  maxChannelByLink: (link: string) => request<MaxChannelInfo>(`/api/v1/max/channel-id?link=${encodeURIComponent(link)}`),
+  maxChannelByLink: (link: string) => request<MaxChannelInfo>(`/api/v1/targets/resolve-max?link=${encodeURIComponent(link)}`),
 
-  createTarget: (data: Omit<Target, "target_id">) => createTargetFromLink(data),
+  createTarget: (data: { url: string; is_active?: boolean }) => createTargetFromLink(data),
   updateTarget: (id: number, data: Partial<Omit<Target, "target_id">>) => request<Target>(`/api/v1/targets/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
   deleteTarget: (id: number) => request<void>(`/api/v1/targets/${id}`, { method: "DELETE" }),
 
