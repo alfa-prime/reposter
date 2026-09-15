@@ -355,6 +355,11 @@ export function QueueExperience({ collectSignal = 0, targetId }: QueueExperience
       return;
     }
 
+    if (scheduledDate.getTime() <= Date.now()) {
+      setError("Дата и время публикации должны быть в будущем");
+      return;
+    }
+
     const updated = await runAction(
       () => api.schedule(selected.queue_item_id, scheduledDate.toISOString()),
       "Публикация запланирована",
