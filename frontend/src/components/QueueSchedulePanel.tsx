@@ -11,9 +11,17 @@ type QueueSchedulePanelProps = {
 const hours = Array.from({ length: 24 }, (_, index) => String(index).padStart(2, "0"));
 const minutes = Array.from({ length: 60 }, (_, index) => String(index).padStart(2, "0"));
 
+function localDateValue(value: Date) {
+  const year = value.getFullYear();
+  const month = String(value.getMonth() + 1).padStart(2, "0");
+  const day = String(value.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 export function QueueSchedulePanel({ value, busy, onChange, onSchedule }: QueueSchedulePanelProps) {
   const [date = "", time = "00:00"] = value.split("T");
   const [hour = "00", minute = "00"] = time.split(":");
+  const minDate = localDateValue(new Date());
 
   function update(nextDate: string, nextHour: string, nextMinute: string) {
     onChange(`${nextDate}T${nextHour}:${nextMinute}`);
@@ -27,6 +35,7 @@ export function QueueSchedulePanel({ value, busy, onChange, onSchedule }: QueueS
           <input
             type="date"
             value={date}
+            min={minDate}
             onChange={(event) => update(event.target.value, hour, minute)}
             aria-label="Дата публикации"
             required
