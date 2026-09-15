@@ -1,11 +1,12 @@
-import { Archive, Clock3, Inbox, RefreshCw } from "lucide-react";
+import { Archive, ClipboardCheck, Clock3, Inbox, RefreshCw } from "lucide-react";
 
-export type QueueTab = "storage" | "scheduled" | "archive";
+export type QueueTab = "storage" | "moderation" | "scheduled" | "archive";
 
 export const queueTabConfig: Record<QueueTab, { label: string; statuses: string[] }> = {
-  storage: { label: "Хранилище постов", statuses: ["pending", "rewriting", "awaiting_moderation"] },
+  storage: { label: "Хранилище постов", statuses: ["pending", "rewriting", "rejected"] },
+  moderation: { label: "На модерации", statuses: ["awaiting_moderation"] },
   scheduled: { label: "Очередь публикаций", statuses: ["approved", "scheduled"] },
-  archive: { label: "Архив", statuses: ["published", "rejected", "failed"] },
+  archive: { label: "Архив", statuses: ["published", "failed"] },
 };
 
 type QueueTabsProps = {
@@ -26,7 +27,13 @@ export function QueueTabs({ tab, counts, busy, onChange, onRefresh }: QueueTabsP
           onClick={() => onChange(key)}
           role="tab"
         >
-          {key === "storage" ? <Inbox size={17} /> : key === "scheduled" ? <Clock3 size={17} /> : <Archive size={17} />}
+          {key === "storage"
+            ? <Inbox size={17} />
+            : key === "moderation"
+              ? <ClipboardCheck size={17} />
+              : key === "scheduled"
+                ? <Clock3 size={17} />
+                : <Archive size={17} />}
           <span>{queueTabConfig[key].label}</span>
           <b>{counts[key]}</b>
         </button>
