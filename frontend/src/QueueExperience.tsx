@@ -63,6 +63,16 @@ function scheduleLabel(value?: string | null) {
   }).format(new Date(value));
 }
 
+function scheduleValidationMessage(value: string) {
+  if (!value) return "";
+  const scheduledDate = new Date(value);
+  if (Number.isNaN(scheduledDate.getTime())) return "Укажите корректную дату и время публикации";
+  if (scheduledDate.getTime() <= Date.now()) {
+    return "Выбранное время уже прошло. Пост не поставлен в расписание";
+  }
+  return "";
+}
+
 function statusMatchesTab(status: string, tab: QueueTab) {
   return queueTabConfig[tab].statuses.includes(status);
 }
@@ -92,6 +102,7 @@ export function QueueExperience({ collectSignal = 0, targetId }: QueueExperience
   const [mediaOrder, setMediaOrder] = useState<string[]>([]);
   const [lightbox, setLightbox] = useState<string | null>(null);
   const [scheduleAt, setScheduleAt] = useState("");
+  const [scheduleError, setScheduleError] = useState("");
 
   const selected = useMemo(
     () => items.find((item) => item.queue_item_id === selectedId) ?? null,
@@ -164,6 +175,7 @@ export function QueueExperience({ collectSignal = 0, targetId }: QueueExperience
         setText(item.rewritten_text ?? item.original_text ?? "");
         setMediaOrder(state.media_order);
         setScheduleAt(item.scheduled_at ? item.scheduled_at.slice(0, 16) : "");
+        setScheduleError("");
         setEditing(false);
         setError("");
       } catch (exc) {
@@ -181,6 +193,7 @@ export function QueueExperience({ collectSignal = 0, targetId }: QueueExperience
     setSelectedId(null);
     setEditing(false);
     setLightbox(null);
+    setScheduleError("");
   }
 
   async function runAction(action: () => Promise<QueueItem>, successMessage = "") {
@@ -345,26 +358,30 @@ export function QueueExperience({ collectSignal = 0, targetId }: QueueExperience
     if (!selected) return;
 
     if (!scheduleAt) {
-      setError("Укажите дату и время публикации");
+      setScheduleError("Укажите дату и время публикации");
       return;
     }
 
-    const scheduledDate = new Date(scheduleAt);
-    if (Number.isNaN(scheduledDate.getTime())) {
-      setError("Укажите корректную дату и время публикации");
+    const validationError = scheduleValidationMessage(scheduleAt);
+    if (validationError) {
+      setScheduleError(validationError);
       return;
     }
 
-    if (scheduledDate.getTime() <= Date.now()) {
-      setError("Дата и время публикации должны быть в будущем");
-      return;
+    setBusy(true);
+    setError("");
+    setScheduleError("");
+    try {
+      const scheduledDate = new Date(scheduleAt);
+      const updated = await api.schedule(selected.queue_item_id, scheduledDate.toISOString());
+      replaceItem(updated);
+      setMessage("Публикация запланирована");
+      closeDrawer();
+    } catch (exc) {
+      setScheduleError(exc instanceof Error ? exc.message : "Не удалось поставить публикацию в расписание");
+    } finally {
+      setBusy(false);
     }
-
-    const updated = await runAction(
-      () => api.schedule(selected.queue_item_id, scheduledDate.toISOString()),
-      "Публикация запланирована",
-    );
-    if (updated) closeDrawer();
   }
 
   if (loading) {
@@ -449,7 +466,11 @@ export function QueueExperience({ collectSignal = 0, targetId }: QueueExperience
               <QueueSchedulePanel
                 value={scheduleAt}
                 busy={busy}
-                onChange={setScheduleAt}
+                error={scheduleError}
+                onChange={(value) => {
+                  setScheduleAt(value);
+                  setScheduleError(scheduleValidationMessage(value));
+                }}
                 onSchedule={() => void schedule()}
               />
             )}
