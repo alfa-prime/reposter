@@ -68,7 +68,7 @@ function scheduleValidationMessage(value: string) {
   const scheduledDate = new Date(value);
   if (Number.isNaN(scheduledDate.getTime())) return "Укажите корректную дату и время публикации";
   if (scheduledDate.getTime() <= Date.now()) {
-    return "Выбранное время уже прошло. Пост не поставлен в расписание";
+    return "Выбранное время уже прошло.";
   }
   return "";
 }
