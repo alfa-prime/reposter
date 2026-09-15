@@ -5,7 +5,7 @@ type QueueSchedulePanelProps = {
   value: string;
   busy: boolean;
   error?: string;
-  onChange: (value: string) => void;
+  onChange: (value: string, changedPart: "date" | "time") => void;
   onSchedule: () => void;
 };
 
@@ -24,8 +24,8 @@ export function QueueSchedulePanel({ value, busy, error, onChange, onSchedule }:
   const [hour = "00", minute = "00"] = time.split(":");
   const minDate = localDateValue(new Date());
 
-  function update(nextDate: string, nextHour: string, nextMinute: string) {
-    onChange(`${nextDate}T${nextHour}:${nextMinute}`);
+  function update(nextDate: string, nextHour: string, nextMinute: string, changedPart: "date" | "time") {
+    onChange(`${nextDate}T${nextHour}:${nextMinute}`, changedPart);
   }
 
   return (
@@ -37,14 +37,14 @@ export function QueueSchedulePanel({ value, busy, error, onChange, onSchedule }:
             type="date"
             value={date}
             min={minDate}
-            onChange={(event) => update(event.target.value, hour, minute)}
+            onChange={(event) => update(event.target.value, hour, minute, "date")}
             aria-label="Дата публикации"
             required
           />
           <div className="schedule-time-controls" aria-label="Время публикации в 24-часовом формате">
             <select
               value={hour}
-              onChange={(event) => update(date, event.target.value, minute)}
+              onChange={(event) => update(date, event.target.value, minute, "time")}
               aria-label="Часы"
             >
               {hours.map((item) => <option key={item} value={item}>{item}</option>)}
@@ -52,7 +52,7 @@ export function QueueSchedulePanel({ value, busy, error, onChange, onSchedule }:
             <span>:</span>
             <select
               value={minute}
-              onChange={(event) => update(date, hour, event.target.value)}
+              onChange={(event) => update(date, hour, event.target.value, "time")}
               aria-label="Минуты"
             >
               {minutes.map((item) => <option key={item} value={item}>{item}</option>)}
