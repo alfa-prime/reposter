@@ -13,21 +13,9 @@
 }
 
 .source-avatar {
-  width: 34px;
-  height: 34px;
-  flex: 0 0 34px;
-  overflow: hidden;
-  display: inline-grid;
-  place-items: center;
-  border-radius: 50%;
-  background: rgba(119,145,255,.10);
-  color: #6f84ff;
-}
-
-.source-avatar.compact {
   width: 38px;
   height: 38px;
-  flex-basis: 38px;
+  flex: 0 0 38px;
 }
 
 .source-avatar img {
@@ -39,9 +27,6 @@
 
 .attach-source {
   grid-template-columns: 38px 1fr auto;
-}
-
-html[data-theme="light"] .source-avatar.fallback {
-  background: #eef2ff;
-  color: #6075e8;
+  min-height: 58px;
+  gap: 12px;
 }
