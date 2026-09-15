@@ -1,5 +1,9 @@
 import { QueueExperience } from "../QueueExperience";
 
-export function QueuePage() {
-  return <QueueExperience />;
+type QueuePageProps = {
+  targetId: number | null;
+};
+
+export function QueuePage({ targetId }: QueuePageProps) {
+  return <QueueExperience targetId={targetId} />;
 }
