@@ -46,6 +46,7 @@ EXPECTED_OPERATIONS = {
     ("/api/v1/queue/{queue_item_id}/reject", "post"): "Отклонить пост",
     ("/api/v1/queue/{queue_item_id}/reopen", "post"): "Вернуть пост в работу",
     ("/api/v1/queue/{queue_item_id}/schedule", "post"): "Запланировать публикацию",
+    ("/api/v1/queue/{queue_item_id}/publish-now", "post"): "Опубликовать пост сейчас",
 }
 
 
@@ -97,7 +98,7 @@ def test_openapi_models_have_field_descriptions() -> None:
 
 
 def test_openapi_describes_api_key_security() -> None:
-    """Проверяет схему ключа и защиту всех рабочих эндпоинтов."""
+    """Проверяет API-ключ, кроме публичного MAX webhook с собственным секретом."""
 
     schema = app.openapi()
     security_scheme = schema["components"]["securitySchemes"]["APIKeyHeader"]
@@ -108,7 +109,9 @@ def test_openapi_describes_api_key_security() -> None:
 
     for path, path_item in schema["paths"].items():
         for operation in path_item.values():
-            if path.startswith("/api/v1/"):
+            if path == "/api/v1/max/webhook":
+                assert "security" not in operation
+            elif path.startswith("/api/v1/"):
                 assert operation["security"] == [{"APIKeyHeader": []}]
                 assert "401" in operation["responses"]
                 assert "503" in operation["responses"]

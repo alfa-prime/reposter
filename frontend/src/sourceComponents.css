@@ -1,0 +1,23 @@
+.source-platform-hint,
+.source-link-error {
+  display: block;
+  margin-top: 7px;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.source-platform-hint {
+  color: #74839a;
+}
+
+.source-link-error {
+  color: #c95d5d;
+}
+
+html[data-theme="light"] .source-platform-hint {
+  color: #708098;
+}
+
+html[data-theme="light"] .source-link-error {
+  color: #b94a4a;
+}

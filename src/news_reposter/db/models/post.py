@@ -39,7 +39,7 @@ class Post(Base):
 
     post_id: Mapped[int] = mapped_column(primary_key=True)
     source_id: Mapped[int] = mapped_column(
-        ForeignKey("sources.source_id", ondelete="RESTRICT"),
+        ForeignKey("sources.source_id", ondelete="CASCADE"),
         nullable=False,
     )
     external_post_id: Mapped[str] = mapped_column(String(255))

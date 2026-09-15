@@ -8,7 +8,8 @@ from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 import news_reposter.api.v1.system as system_api
-from news_reposter.api.v1.system import collect_now, database_health, health
+from news_reposter.api.v1.system import collect_now, database_health, health, llm_test
+from news_reposter.llm import LLMProviderError, RewriteResult
 
 
 def test_health() -> None:
@@ -91,3 +92,66 @@ def test_collect_now_requires_vk_token(monkeypatch: pytest.MonkeyPatch) -> None:
         asyncio.run(collect_now(None))
 
     assert error.value.status_code == status.HTTP_503_SERVICE_UNAVAILABLE
+
+
+def test_llm_test_returns_provider_response(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Проверка LLM возвращает только безопасные данные о реальном ответе провайдера."""
+
+    provider = SimpleNamespace(
+        rewrite=AsyncMock(
+            return_value=RewriteResult(
+                text="Сегодня в Мурманске хорошая погода.",
+                provider="gigachat",
+                model="GigaChat-2-Pro",
+                usage={"total_tokens": 17},
+            )
+        )
+    )
+    monkeypatch.setattr(system_api, "get_llm_provider", lambda: provider)
+
+    response = asyncio.run(llm_test(None))
+
+    assert response == {
+        "status": "ok",
+        "provider": "gigachat",
+        "model": "GigaChat-2-Pro",
+        "text": "Сегодня в Мурманске хорошая погода.",
+        "usage": {"total_tokens": 17},
+    }
+    request = provider.rewrite.await_args.args[0]
+    assert request.text == "В Мурманске сегодня хорошая погода."
+    assert request.max_tokens == 128
+
+
+def test_llm_test_returns_503_when_provider_is_not_configured(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Проверка LLM сообщает об отсутствующей конфигурации отдельно от сетевой ошибки."""
+
+    def fail_build() -> None:
+        raise RuntimeError("Для GigaChat не задан GIGACHAT_CREDENTIALS")
+
+    monkeypatch.setattr(system_api, "get_llm_provider", fail_build)
+
+    with pytest.raises(HTTPException) as error:
+        asyncio.run(llm_test(None))
+
+    assert error.value.status_code == status.HTTP_503_SERVICE_UNAVAILABLE
+    assert "GIGACHAT_CREDENTIALS" in error.value.detail
+
+
+def test_llm_test_returns_502_when_provider_request_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Ошибка внешнего LLM отделяется от ошибки конфигурации приложения."""
+
+    provider = SimpleNamespace(
+        rewrite=AsyncMock(side_effect=LLMProviderError("GigaChat не выполнил запрос (401)"))
+    )
+    monkeypatch.setattr(system_api, "get_llm_provider", lambda: provider)
+
+    with pytest.raises(HTTPException) as error:
+        asyncio.run(llm_test(None))
+
+    assert error.value.status_code == status.HTTP_502_BAD_GATEWAY
+    assert error.value.detail == "GigaChat не выполнил запрос (401)"

@@ -82,16 +82,41 @@ jobs:
       - name: Upgrade database to head again
         run: uv run alembic upgrade head
 
+  frontend-build:
+    name: Frontend build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm install
+
+      - name: Build frontend
+        working-directory: frontend
+        run: npm run build
+
   docker-build:
     name: Docker build
     runs-on: ubuntu-latest
     needs:
       - tests
       - migrations
+      - frontend-build
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Build Docker image
+      - name: Build backend image
         run: docker build --tag news-reposter:ci .
+
+      - name: Build frontend image
+        run: docker build --tag news-reposter-frontend:ci ./frontend

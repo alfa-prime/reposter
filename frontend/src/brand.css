@@ -1,0 +1,37 @@
+.brand-mark.brand-portrait {
+  overflow: hidden;
+  padding: 0;
+  background: transparent;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .14);
+  border: 1px solid rgba(255,255,255,.10);
+}
+
+.brand-mark.brand-portrait img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+html[data-theme="light"] .brand-mark.brand-portrait {
+  border-color: rgba(42,58,88,.12);
+  box-shadow: 0 8px 24px rgba(47,62,92,.10);
+}
+
+@media (max-width: 1100px) {
+  .brand {
+    justify-content: center;
+    gap: 0;
+    padding-inline: 0;
+  }
+
+  .brand > :not(.brand-mark) {
+    display: none !important;
+  }
+}
+
+@media (max-width: 680px) {
+  .brand {
+    flex: 0 0 auto;
+  }
+}
