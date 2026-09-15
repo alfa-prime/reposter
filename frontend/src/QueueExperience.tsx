@@ -1,8 +1,5 @@
 import { ChangeEvent, useEffect, useMemo, useState } from "react";
-import {
-  Archive,
-  X,
-} from "lucide-react";
+import { Archive, X } from "lucide-react";
 import { api, QueueItem, QueuePhoto, Target } from "./api";
 import { QueueActionsFooter } from "./components/QueueActionsFooter";
 import { QueueChannelFilter, QueueChannelOption } from "./components/QueueChannelFilter";
@@ -10,7 +7,7 @@ import { QueueDrawerHeader } from "./components/QueueDrawerHeader";
 import { QueueMediaSection } from "./components/QueueMediaSection";
 import { QueuePostCard } from "./components/QueuePostCard";
 import { QueueSchedulePanel } from "./components/QueueSchedulePanel";
-import { QueueTabs, QueueTab, queueTabConfig } from "./components/QueueTabs";
+import { QueueTabs, QueueTab } from "./components/QueueTabs";
 import { QueueTextEditor } from "./components/QueueTextEditor";
 import { PostSignatureSection } from "./components/SignatureSections";
 import "./queueExperience.css";
@@ -27,6 +24,21 @@ const statusLabels: Record<string, string> = {
   scheduled: "Запланирован",
   published: "Опубликован",
   failed: "Ошибка публикации",
+};
+
+const emptyState: Record<QueueTab, { title: string; text: string }> = {
+  storage: {
+    title: "Хранилище пусто",
+    text: "Новые собранные посты появятся здесь.",
+  },
+  scheduled: {
+    title: "Очередь публикаций пуста",
+    text: "Согласованные и запланированные публикации появятся здесь.",
+  },
+  archive: {
+    title: "Архив пуст",
+    text: "Опубликованные, отклонённые и неудачные публикации появятся здесь.",
+  },
 };
 
 function initialQueueTargetFilter(): number | null {
@@ -59,7 +71,7 @@ function scheduleLabel(value?: string | null) {
 
 function statusMatchesTab(status: string, tab: QueueTab) {
   if (tab === "storage") return ["pending", "rewriting", "awaiting_moderation"].includes(status);
-  if (tab === "publication") return ["approved", "scheduled"].includes(status);
+  if (tab === "scheduled") return ["approved", "scheduled"].includes(status);
   return ["published", "rejected", "failed"].includes(status);
 }
 
@@ -97,7 +109,13 @@ export function QueueExperience({ collectSignal = 0, targets = [] }: QueueExperi
 
   const targetOptions = useMemo<QueueChannelOption[]>(() => {
     const knownTargets = new Map<number, QueueChannelOption>();
-    for (const target of targets) knownTargets.set(target.target_id, { target_id: target.target_id, name: target.name });
+    for (const target of targets) {
+      knownTargets.set(target.target_id, {
+        target_id: target.target_id,
+        name: target.name,
+        is_active: target.is_active,
+      });
+    }
     for (const item of items) {
       if (!knownTargets.has(item.target_id)) {
         knownTargets.set(item.target_id, {
@@ -121,9 +139,9 @@ export function QueueExperience({ collectSignal = 0, targets = [] }: QueueExperi
     [items, targetId],
   );
 
-  const counts = useMemo(() => ({
+  const counts = useMemo<Record<QueueTab, number>>(() => ({
     storage: scopedItems.filter((item) => statusMatchesTab(item.status, "storage")).length,
-    publication: scopedItems.filter((item) => statusMatchesTab(item.status, "publication")).length,
+    scheduled: scopedItems.filter((item) => statusMatchesTab(item.status, "scheduled")).length,
     archive: scopedItems.filter((item) => statusMatchesTab(item.status, "archive")).length,
   }), [scopedItems]);
 
@@ -131,6 +149,17 @@ export function QueueExperience({ collectSignal = 0, targets = [] }: QueueExperi
     () => scopedItems.filter((item) => statusMatchesTab(item.status, tab)),
     [scopedItems, tab],
   );
+
+  const orderedPhotos = useMemo(() => {
+    if (!selected) return [];
+    const byKey = new Map(selected.photos.map((photo) => [mediaKey(photo), photo]));
+    const included = mediaOrder
+      .map((key) => byKey.get(key))
+      .filter((photo): photo is QueuePhoto => Boolean(photo));
+    const includedKeys = new Set(mediaOrder);
+    const excluded = selected.photos.filter((photo) => !includedKeys.has(mediaKey(photo)));
+    return [...included, ...excluded];
+  }, [selected, mediaOrder]);
 
   useEffect(() => {
     if (!message) return;
@@ -157,7 +186,7 @@ export function QueueExperience({ collectSignal = 0, targets = [] }: QueueExperi
   useEffect(() => {
     if (!selectedId) return;
     let active = true;
-    (async () => {
+    void (async () => {
       try {
         const item = await api.queueItem(selectedId);
         const state = await api.queueMediaState(selectedId);
@@ -243,6 +272,24 @@ export function QueueExperience({ collectSignal = 0, targets = [] }: QueueExperi
     }
   }
 
+  function togglePhoto(photo: QueuePhoto) {
+    const key = mediaKey(photo);
+    const next = mediaOrder.includes(key)
+      ? mediaOrder.filter((item) => item !== key)
+      : [...mediaOrder, key];
+    void saveMedia(next);
+  }
+
+  function movePhoto(photo: QueuePhoto, direction: -1 | 1) {
+    const key = mediaKey(photo);
+    const index = mediaOrder.indexOf(key);
+    const targetIndex = index + direction;
+    if (index < 0 || targetIndex < 0 || targetIndex >= mediaOrder.length) return;
+    const next = [...mediaOrder];
+    [next[index], next[targetIndex]] = [next[targetIndex], next[index]];
+    void saveMedia(next);
+  }
+
   async function uploadPhoto(event: ChangeEvent<HTMLInputElement>) {
     if (!selected || !event.target.files?.length) return;
     const files = Array.from(event.target.files);
@@ -311,7 +358,9 @@ export function QueueExperience({ collectSignal = 0, targets = [] }: QueueExperi
     if (updated) closeDrawer();
   }
 
-  if (loading) return <div className="editorial-empty"><Archive size={32}/><strong>Загружаю очередь…</strong></div>;
+  if (loading) {
+    return <div className="editorial-empty"><Archive size={32}/><strong>Загружаю очередь…</strong></div>;
+  }
 
   return (
     <div className="editorial-queue">
@@ -319,8 +368,8 @@ export function QueueExperience({ collectSignal = 0, targets = [] }: QueueExperi
       {error && <div className="editorial-message error"><span>{error}</span><button onClick={() => setError("")}><X size={18}/></button></div>}
 
       <div className="queue-toolbar">
-        <QueueChannelFilter targets={targetOptions} value={targetId} onChange={chooseTarget} />
-        <QueueTabs tab={tab} counts={counts} onChange={setTab} onRefresh={() => void loadQueue()} />
+        <QueueChannelFilter channels={targetOptions} value={targetId} onChange={chooseTarget} />
+        <QueueTabs tab={tab} counts={counts} busy={busy} onChange={setTab} onRefresh={() => void loadQueue()} />
       </div>
 
       <div className="editorial-card-grid">
@@ -337,8 +386,8 @@ export function QueueExperience({ collectSignal = 0, targets = [] }: QueueExperi
         {visibleItems.length === 0 && (
           <div className="editorial-empty">
             <Archive size={34}/>
-            <strong>{queueTabConfig[tab].emptyTitle}</strong>
-            <span>{queueTabConfig[tab].emptyText}</span>
+            <strong>{emptyState[tab].title}</strong>
+            <span>{emptyState[tab].text}</span>
           </div>
         )}
       </div>
@@ -356,12 +405,19 @@ export function QueueExperience({ collectSignal = 0, targets = [] }: QueueExperi
 
             <QueueMediaSection
               item={selected}
+              orderedPhotos={orderedPhotos}
               mediaOrder={mediaOrder}
               busy={busy}
-              onMediaOrderChange={(next) => void saveMedia(next)}
-              onLightbox={setLightbox}
-              onUploadPhoto={uploadPhoto}
-              onDeleteUploadedPhoto={(photo) => void deleteUploadedPhoto(photo)}
+              mediaKey={mediaKey}
+              onRemoveAll={() => void saveMedia([])}
+              onRestoreAll={() => void saveMedia(selected.photos.map(mediaKey))}
+              onTogglePhoto={togglePhoto}
+              onMovePhoto={movePhoto}
+              onRemoveUploadedPhoto={(photo) => void deleteUploadedPhoto(photo)}
+              onOpenPhoto={(photo) => setLightbox(photo.source_url)}
+              onUploadPhotos={uploadPhoto}
+              onError={setError}
+              onNotice={setMessage}
             />
 
             <QueueTextEditor
@@ -377,36 +433,31 @@ export function QueueExperience({ collectSignal = 0, targets = [] }: QueueExperi
               onRewrite={() => void rewrite()}
             />
 
-            {editing && (
-              <div className="drawer-footer">
-                <div className="drawer-main-actions">
-                  <button className="primary" disabled={busy} onClick={() => void saveText()}>Сохранить текст</button>
-                </div>
-              </div>
-            )}
-
             <PostSignatureSection
               item={selected}
-              readonly={["published", "scheduled"].includes(selected.status)}
-              onChanged={async () => {
-                const updated = await api.queueItem(selected.queue_item_id);
-                replaceItem(updated);
-              }}
+              onUpdated={replaceItem}
               onError={setError}
             />
 
-            <QueueSchedulePanel value={scheduleAt} onChange={setScheduleAt} disabled={busy} visible={selected.status === "approved"} />
+            {selected.status === "approved" && (
+              <QueueSchedulePanel
+                value={scheduleAt}
+                busy={busy}
+                onChange={setScheduleAt}
+                onSchedule={() => void schedule()}
+              />
+            )}
 
             <QueueActionsFooter
               item={selected}
+              editing={editing}
               busy={busy}
-              scheduleAt={scheduleAt}
+              onSaveText={() => void saveText()}
               onSubmit={() => void runAction(() => api.submit(selected.queue_item_id))}
               onApprove={() => void runAction(() => api.approve(selected.queue_item_id))}
               onReject={() => void runAction(() => api.reject(selected.queue_item_id))}
               onReopen={() => void runAction(() => api.reopen(selected.queue_item_id))}
               onPublishNow={() => void publishNow()}
-              onSchedule={() => void schedule()}
               onDelete={() => void deleteItem()}
             />
           </aside>
