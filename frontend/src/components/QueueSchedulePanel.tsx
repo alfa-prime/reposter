@@ -4,6 +4,7 @@ import "./QueueSchedulePanel.css";
 type QueueSchedulePanelProps = {
   value: string;
   busy: boolean;
+  error?: string;
   onChange: (value: string) => void;
   onSchedule: () => void;
 };
@@ -18,7 +19,7 @@ function localDateValue(value: Date) {
   return `${year}-${month}-${day}`;
 }
 
-export function QueueSchedulePanel({ value, busy, onChange, onSchedule }: QueueSchedulePanelProps) {
+export function QueueSchedulePanel({ value, busy, error, onChange, onSchedule }: QueueSchedulePanelProps) {
   const [date = "", time = "00:00"] = value.split("T");
   const [hour = "00", minute = "00"] = time.split(":");
   const minDate = localDateValue(new Date());
@@ -58,8 +59,9 @@ export function QueueSchedulePanel({ value, busy, onChange, onSchedule }: QueueS
             </select>
           </div>
         </div>
+        {error && <small className="schedule-validation-error" role="alert">{error}</small>}
       </label>
-      <button className="primary" onClick={onSchedule} disabled={busy || !date}>
+      <button className="primary" onClick={onSchedule} disabled={busy || !date || Boolean(error)}>
         <CalendarClock size={17}/>Поставить в очередь
       </button>
     </div>
