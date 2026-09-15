@@ -161,6 +161,39 @@ html[data-theme="light"] .attach-source:hover {
   background: #eef2fb;
 }
 
+html[data-theme="light"] .danger {
+  color: #b4233d;
+  background: #fff0f3;
+  border-color: #efb3bf;
+  box-shadow: none;
+}
+
+html[data-theme="light"] .danger:hover:not(:disabled) {
+  color: #95172f;
+  background: #ffe3e8;
+  border-color: #e68899;
+}
+
+html[data-theme="light"] .icon-button.danger-icon {
+  color: #b4233d;
+  background: #fff0f3;
+  border-color: #efb3bf;
+}
+
+html[data-theme="light"] .icon-button.danger-icon:hover:not(:disabled) {
+  color: #95172f;
+  background: #ffe3e8;
+  border-color: #e68899;
+}
+
+html[data-theme="light"] .danger:disabled,
+html[data-theme="light"] .icon-button.danger-icon:disabled {
+  color: #c98f9a;
+  background: #fff7f8;
+  border-color: #efd5da;
+  opacity: 1;
+}
+
 html[data-theme="light"] .badge {
   color: #5568b8;
   background: rgba(90,111,217,.09);
