@@ -32,6 +32,10 @@ html[data-theme="light"] .editorial-status.status-failed {
   border-color: #efbdc8;
 }
 
+html[data-theme="light"] .schedule-validation-error {
+  color: #b4233d;
+}
+
 html[data-theme="light"] .drawer-inline-actions button {
   color: #4d63d6;
   font-weight: 650;
