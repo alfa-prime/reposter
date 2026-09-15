@@ -14,6 +14,7 @@ import { QueueTabs, QueueTab, queueTabConfig } from "./components/QueueTabs";
 import { QueueTextEditor } from "./components/QueueTextEditor";
 import { PostSignatureSection } from "./components/SignatureSections";
 import "./queueExperience.css";
+import "./queueLightTheme.css";
 
 const QUEUE_TARGET_FILTER_KEY = "uncle-vlad-queue-target";
 
@@ -45,329 +46,230 @@ function shortDate(value?: string | null) {
   }).format(new Date(value));
 }
 
-function toLocalInput(value?: string | null) {
-  const date = value ? new Date(value) : new Date(Date.now() + 15 * 60 * 1000);
-  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
-  return local.toISOString().slice(0, 16);
+function scheduleLabel(value?: string | null) {
+  if (!value) return "";
+  return new Intl.DateTimeFormat("ru-RU", {
+    day: "2-digit",
+    month: "long",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(value));
+}
+
+function statusMatchesTab(status: string, tab: QueueTab) {
+  if (tab === "storage") return ["pending", "rewriting", "awaiting_moderation"].includes(status);
+  if (tab === "publication") return ["approved", "scheduled"].includes(status);
+  return ["published", "rejected", "failed"].includes(status);
 }
 
 function mediaKey(photo: QueuePhoto) {
   return photo.kind === "uploaded" && photo.media_id
-    ? `upload:${photo.media_id}`
+    ? `uploaded:${photo.media_id}`
     : `source:${photo.attachment_id}`;
 }
 
-function publicationErrorMessage(value?: string | null) {
-  const raw = (value ?? "").trim();
-  const normalized = raw.toLowerCase();
-  if (
-    normalized.includes("attachment.not.ready")
-    || normalized.includes("file.not.processed")
-    || normalized.includes("attachment.file.not.processed")
-  ) {
-    return "MAX не успел подготовить видео к отправке. Публикация не потеряна — попробуйте повторить её немного позже.";
-  }
-  if (normalized.includes("timeout") || normalized.includes("timed out")) {
-    return "MAX слишком долго отвечал. Попробуйте повторить публикацию немного позже.";
-  }
-  if (normalized.includes("сертифик") || normalized.includes("ssl")) {
-    return "Не удалось установить защищённое соединение с MAX. Повторите публикацию позже или обратитесь к администратору.";
-  }
-  return raw || "MAX не принял публикацию. Попробуйте повторить отправку позже.";
-}
+type QueueExperienceProps = {
+  collectSignal?: number;
+  targets?: Target[];
+};
 
-export function QueueExperience() {
+export function QueueExperience({ collectSignal = 0, targets = [] }: QueueExperienceProps) {
   const [items, setItems] = useState<QueueItem[]>([]);
-  const [targets, setTargets] = useState<Target[]>([]);
-  const [tab, setTab] = useState<QueueTab>("storage");
-  const [targetFilter, setTargetFilter] = useState<number | null>(initialQueueTargetFilter);
   const [selectedId, setSelectedId] = useState<number | null>(null);
-  const [draft, setDraft] = useState("");
-  const [editing, setEditing] = useState(false);
+  const [tab, setTab] = useState<QueueTab>("storage");
+  const [targetId, setTargetId] = useState<number | null>(initialQueueTargetFilter);
+  const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
-  const [rewritingId, setRewritingId] = useState<number | null>(null);
+  const [rewriteBusy, setRewriteBusy] = useState(false);
+  const [message, setMessage] = useState("");
   const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
-  const [scheduleAt, setScheduleAt] = useState("");
-  const [lightbox, setLightbox] = useState<QueuePhoto | null>(null);
+  const [text, setText] = useState("");
+  const [editing, setEditing] = useState(false);
   const [mediaOrder, setMediaOrder] = useState<string[]>([]);
+  const [lightbox, setLightbox] = useState<string | null>(null);
+  const [scheduleAt, setScheduleAt] = useState("");
 
   const selected = useMemo(
     () => items.find((item) => item.queue_item_id === selectedId) ?? null,
     [items, selectedId],
   );
 
-  const availableChannels = useMemo<QueueChannelOption[]>(() => {
-    const channels = new Map<number, QueueChannelOption>();
-
-    targets.forEach((target) => {
-      channels.set(target.target_id, {
-        target_id: target.target_id,
-        name: target.name,
-        is_active: target.is_active,
-      });
-    });
-
-    items.forEach((item) => {
-      if (!channels.has(item.target_id)) {
-        channels.set(item.target_id, {
+  const targetOptions = useMemo<QueueChannelOption[]>(() => {
+    const knownTargets = new Map<number, QueueChannelOption>();
+    for (const target of targets) knownTargets.set(target.target_id, { target_id: target.target_id, name: target.name });
+    for (const item of items) {
+      if (!knownTargets.has(item.target_id)) {
+        knownTargets.set(item.target_id, {
           target_id: item.target_id,
           name: item.target_name ?? `Канал #${item.target_id}`,
         });
       }
-    });
-
-    return Array.from(channels.values()).sort((a, b) => {
-      if (a.is_active !== b.is_active) {
-        if (a.is_active === false) return 1;
-        if (b.is_active === false) return -1;
-      }
-      return a.name.localeCompare(b.name, "ru");
-    });
+    }
+    return Array.from(knownTargets.values()).sort((a, b) => a.name.localeCompare(b.name, "ru"));
   }, [items, targets]);
 
-  const channelItems = useMemo(
-    () => targetFilter === null ? items : items.filter((item) => item.target_id === targetFilter),
-    [items, targetFilter],
-  );
+  useEffect(() => {
+    if (targetId !== null && !targetOptions.some((target) => target.target_id === targetId)) {
+      setTargetId(null);
+      localStorage.setItem(QUEUE_TARGET_FILTER_KEY, "all");
+    }
+  }, [targetId, targetOptions]);
 
-  const visibleItems = useMemo(
-    () => channelItems.filter((item) => queueTabConfig[tab].statuses.includes(item.status)),
-    [channelItems, tab],
+  const scopedItems = useMemo(
+    () => targetId === null ? items : items.filter((item) => item.target_id === targetId),
+    [items, targetId],
   );
 
   const counts = useMemo(() => ({
-    storage: channelItems.filter((item) => queueTabConfig.storage.statuses.includes(item.status)).length,
-    scheduled: channelItems.filter((item) => queueTabConfig.scheduled.statuses.includes(item.status)).length,
-    archive: channelItems.filter((item) => queueTabConfig.archive.statuses.includes(item.status)).length,
-  }), [channelItems]);
+    storage: scopedItems.filter((item) => statusMatchesTab(item.status, "storage")).length,
+    publication: scopedItems.filter((item) => statusMatchesTab(item.status, "publication")).length,
+    archive: scopedItems.filter((item) => statusMatchesTab(item.status, "archive")).length,
+  }), [scopedItems]);
 
-  const orderedPhotos = useMemo(() => {
-    if (!selected) return [];
-    const index = new Map(mediaOrder.map((key, position) => [key, position]));
-    return [...selected.photos].sort((a, b) => {
-      const ai = index.get(mediaKey(a));
-      const bi = index.get(mediaKey(b));
-      if (ai !== undefined && bi !== undefined) return ai - bi;
-      if (ai !== undefined) return -1;
-      if (bi !== undefined) return 1;
-      return a.position - b.position;
-    });
-  }, [selected, mediaOrder]);
-
-  async function load(silent = false) {
-    if (!silent) setBusy(true);
-    try {
-      const data = await api.queue();
-      setItems(data);
-      if (selectedId && !data.some((item) => item.queue_item_id === selectedId)) setSelectedId(null);
-    } catch (exc) {
-      if (!silent) setError(exc instanceof Error ? exc.message : "Не удалось загрузить очередь");
-    } finally {
-      if (!silent) setBusy(false);
-    }
-  }
-
-  async function loadTargets(silent = false) {
-    try {
-      setTargets(await api.targets());
-    } catch (exc) {
-      if (!silent) setError(exc instanceof Error ? exc.message : "Не удалось загрузить список каналов");
-    }
-  }
+  const visibleItems = useMemo(
+    () => scopedItems.filter((item) => statusMatchesTab(item.status, tab)),
+    [scopedItems, tab],
+  );
 
   useEffect(() => {
-    void load();
-    void loadTargets();
-    const timer = window.setInterval(() => void load(true), 8000);
-    const onFocus = () => {
-      void load(true);
-      void loadTargets(true);
-    };
-    window.addEventListener("focus", onFocus);
-    return () => {
-      window.clearInterval(timer);
-      window.removeEventListener("focus", onFocus);
-    };
-  }, []);
-
-  useEffect(() => {
-    localStorage.setItem(QUEUE_TARGET_FILTER_KEY, targetFilter === null ? "all" : String(targetFilter));
-  }, [targetFilter]);
-
-  useEffect(() => {
-    if (targetFilter === null || availableChannels.length === 0) return;
-    if (!availableChannels.some((channel) => channel.target_id === targetFilter)) {
-      setTargetFilter(null);
-    }
-  }, [availableChannels, targetFilter]);
-
-  useEffect(() => {
-    if (!notice) return;
-    const timer = window.setTimeout(() => setNotice(""), 3500);
+    if (!message) return;
+    const timer = window.setTimeout(() => setMessage(""), 3500);
     return () => window.clearTimeout(timer);
-  }, [notice]);
+  }, [message]);
+
+  async function loadQueue() {
+    try {
+      const queue = await api.queue();
+      setItems(queue);
+      setError("");
+    } catch (exc) {
+      setError(exc instanceof Error ? exc.message : "Не удалось загрузить очередь");
+    } finally {
+      setLoading(false);
+    }
+  }
 
   useEffect(() => {
-    if (!selected) return;
-    setDraft(selected.rewritten_text ?? selected.original_text ?? "");
-    setScheduleAt(toLocalInput(selected.scheduled_at));
-    setEditing(false);
-    void api.queueMediaState(selected.queue_item_id)
-      .then((state) => setMediaOrder(state.media_order))
-      .catch(() => setMediaOrder(selected.photos.map(mediaKey)));
+    void loadQueue();
+  }, [collectSignal]);
+
+  useEffect(() => {
+    if (!selectedId) return;
+    let active = true;
+    (async () => {
+      try {
+        const item = await api.queueItem(selectedId);
+        const state = await api.queueMediaState(selectedId);
+        if (!active) return;
+        setItems((current) => current.map((row) => row.queue_item_id === item.queue_item_id ? item : row));
+        setText(item.rewritten_text ?? item.original_text ?? "");
+        setMediaOrder(state.media_order);
+        setScheduleAt(item.scheduled_at ? item.scheduled_at.slice(0, 16) : "");
+        setEditing(false);
+        setError("");
+      } catch (exc) {
+        if (active) setError(exc instanceof Error ? exc.message : "Не удалось открыть публикацию");
+      }
+    })();
+    return () => { active = false; };
   }, [selectedId]);
 
-  function applyUpdated(updated: QueueItem) {
-    setItems((current) => current.map((item) => item.queue_item_id === updated.queue_item_id ? updated : item));
-    setDraft(updated.rewritten_text ?? updated.original_text ?? "");
-  }
-
-  function applyQueueItemOnly(updated: QueueItem) {
+  function replaceItem(updated: QueueItem) {
     setItems((current) => current.map((item) => item.queue_item_id === updated.queue_item_id ? updated : item));
   }
 
-  function changeTargetFilter(targetId: number | null) {
-    setTargetFilter(targetId);
+  function closeDrawer() {
     setSelectedId(null);
+    setEditing(false);
+    setLightbox(null);
   }
 
-  async function action(run: () => Promise<QueueItem>) {
+  function chooseTarget(nextTargetId: number | null) {
+    setTargetId(nextTargetId);
+    localStorage.setItem(QUEUE_TARGET_FILTER_KEY, nextTargetId === null ? "all" : String(nextTargetId));
+  }
+
+  async function runAction(action: () => Promise<QueueItem>, successMessage = "") {
     setBusy(true);
     setError("");
-    setNotice("");
     try {
-      const updated = await run();
-      applyUpdated(updated);
+      const updated = await action();
+      replaceItem(updated);
+      setText(updated.rewritten_text ?? updated.original_text ?? "");
+      if (successMessage) setMessage(successMessage);
+      return updated;
     } catch (exc) {
       setError(exc instanceof Error ? exc.message : "Операция не выполнена");
+      return null;
     } finally {
       setBusy(false);
     }
   }
 
-  async function rewriteNow() {
+  async function rewrite() {
     if (!selected) return;
-    setBusy(true);
-    setRewritingId(selected.queue_item_id);
+    setRewriteBusy(true);
     setError("");
-    setNotice("");
     try {
       const updated = await api.rewriteQueueItem(selected.queue_item_id);
-      applyUpdated(updated);
+      replaceItem(updated);
+      setText(updated.rewritten_text ?? updated.original_text ?? "");
       setEditing(false);
     } catch (exc) {
-      setError(exc instanceof Error ? exc.message : "Не удалось переписать пост с помощью ИИ");
+      setError(exc instanceof Error ? exc.message : "Не удалось переписать публикацию");
     } finally {
-      setRewritingId(null);
-      setBusy(false);
+      setRewriteBusy(false);
     }
-  }
-
-  async function saveMediaOrder(next: string[]) {
-    if (!selected) return;
-    setBusy(true);
-    setError("");
-    setNotice("");
-    try {
-      const state = await api.updateQueueMediaState(selected.queue_item_id, next);
-      setMediaOrder(state.media_order);
-    } catch (exc) {
-      setError(exc instanceof Error ? exc.message : "Не удалось изменить фотографии публикации");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function togglePhoto(photo: QueuePhoto) {
-    const key = mediaKey(photo);
-    const included = mediaOrder.includes(key);
-    const next = included ? mediaOrder.filter((item) => item !== key) : [...mediaOrder, key];
-    await saveMediaOrder(next);
-  }
-
-  async function removeAllPhotos() {
-    if (!selected || mediaOrder.length === 0) return;
-    await saveMediaOrder([]);
-  }
-
-  async function restoreAllPhotos() {
-    if (!selected) return;
-    await saveMediaOrder(orderedPhotos.map(mediaKey));
-  }
-
-  async function movePhoto(photo: QueuePhoto, direction: -1 | 1) {
-    const key = mediaKey(photo);
-    const current = mediaOrder.indexOf(key);
-    const target = current + direction;
-    if (current < 0 || target < 0 || target >= mediaOrder.length) return;
-    const next = [...mediaOrder];
-    [next[current], next[target]] = [next[target], next[current]];
-    await saveMediaOrder(next);
   }
 
   async function saveText() {
     if (!selected) return;
-    await action(() => api.updateQueueText(selected.queue_item_id, draft));
-    setEditing(false);
+    const updated = await runAction(() => api.updateQueueText(selected.queue_item_id, text));
+    if (updated) setEditing(false);
   }
 
-  async function submit() {
+  async function saveMedia(nextOrder: string[]) {
     if (!selected) return;
     setBusy(true);
     setError("");
-    setNotice("");
     try {
-      await api.updateQueueText(selected.queue_item_id, draft);
-      const updated = await api.submit(selected.queue_item_id);
-      applyUpdated(updated);
-      setEditing(false);
+      const state = await api.updateQueueMediaState(selected.queue_item_id, nextOrder);
+      setMediaOrder(state.media_order);
     } catch (exc) {
-      setError(exc instanceof Error ? exc.message : "Не удалось отправить на модерацию");
+      setError(exc instanceof Error ? exc.message : "Не удалось изменить медиа");
     } finally {
       setBusy(false);
     }
   }
 
-  async function uploadPhotos(event: ChangeEvent<HTMLInputElement>) {
-    if (!selected) return;
-    const files = Array.from(event.target.files ?? []);
-    event.target.value = "";
-    if (!files.length) return;
-    const invalid = files.find((file) => !["image/jpeg", "image/png", "image/webp"].includes(file.type) || file.size > 10 * 1024 * 1024);
-    if (invalid) {
-      setError("Можно загружать JPEG, PNG или WebP до 10 МБ каждый");
-      return;
-    }
-
+  async function uploadPhoto(event: ChangeEvent<HTMLInputElement>) {
+    if (!selected || !event.target.files?.length) return;
+    const files = Array.from(event.target.files);
     setBusy(true);
     setError("");
-    setNotice("");
     try {
       let updated = selected;
       for (const file of files) updated = await api.uploadQueuePhoto(selected.queue_item_id, file);
-      applyUpdated(updated);
-      const allKeys = updated.photos.map(mediaKey);
-      const newKeys = allKeys.filter((key) => !selected.photos.some((photo) => mediaKey(photo) === key));
-      const state = await api.updateQueueMediaState(selected.queue_item_id, [...mediaOrder, ...newKeys]);
+      replaceItem(updated);
+      const state = await api.queueMediaState(selected.queue_item_id);
       setMediaOrder(state.media_order);
     } catch (exc) {
       setError(exc instanceof Error ? exc.message : "Не удалось загрузить фото");
     } finally {
+      event.target.value = "";
       setBusy(false);
     }
   }
 
-  async function removeUploadedPhoto(photo: QueuePhoto) {
+  async function deleteUploadedPhoto(photo: QueuePhoto) {
     if (!selected || !photo.media_id) return;
     setBusy(true);
     setError("");
-    setNotice("");
     try {
       const updated = await api.deleteQueuePhoto(selected.queue_item_id, photo.media_id);
-      applyUpdated(updated);
-      const key = mediaKey(photo);
-      const state = await api.updateQueueMediaState(selected.queue_item_id, mediaOrder.filter((item) => item !== key));
+      replaceItem(updated);
+      const state = await api.queueMediaState(selected.queue_item_id);
       setMediaOrder(state.media_order);
     } catch (exc) {
       setError(exc instanceof Error ? exc.message : "Не удалось удалить фото");
@@ -376,56 +278,14 @@ export function QueueExperience() {
     }
   }
 
-  async function schedule() {
-    if (!selected || !scheduleAt) return;
-    const date = new Date(scheduleAt);
-    if (Number.isNaN(date.getTime())) {
-      setError("Укажите корректную дату публикации");
-      return;
-    }
-    setBusy(true);
-    setError("");
-    setNotice("");
-    try {
-      const updated = await api.schedule(selected.queue_item_id, date.toISOString());
-      applyUpdated(updated);
-      setSelectedId(null);
-      setTab("scheduled");
-      setNotice("Публикация запланирована");
-    } catch (exc) {
-      setError(exc instanceof Error ? exc.message : "Не удалось поставить публикацию в очередь");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function publishNow() {
+  async function deleteItem() {
     if (!selected) return;
     setBusy(true);
     setError("");
-    setNotice("");
-    try {
-      const updated = await api.publishNow(selected.queue_item_id);
-      applyUpdated(updated);
-      setSelectedId(null);
-      setTab("archive");
-      setNotice("Пост опубликован в MAX");
-    } catch (exc) {
-      setError(publicationErrorMessage(exc instanceof Error ? exc.message : null));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function removeItem() {
-    if (!selected || !window.confirm("Удалить эту публикацию из очереди?")) return;
-    setBusy(true);
-    setError("");
-    setNotice("");
     try {
       await api.deleteQueueItem(selected.queue_item_id);
       setItems((current) => current.filter((item) => item.queue_item_id !== selected.queue_item_id));
-      setSelectedId(null);
+      closeDrawer();
     } catch (exc) {
       setError(exc instanceof Error ? exc.message : "Не удалось удалить публикацию");
     } finally {
@@ -433,30 +293,35 @@ export function QueueExperience() {
     }
   }
 
-  return (
-    <section className="editorial-queue">
-      <div className="queue-toolbar">
-        <QueueChannelFilter
-          channels={availableChannels}
-          value={targetFilter}
-          onChange={changeTargetFilter}
-        />
-        <QueueTabs
-          tab={tab}
-          counts={counts}
-          busy={busy}
-          onChange={(nextTab) => {
-            setTab(nextTab);
-            setSelectedId(null);
-          }}
-          onRefresh={() => {
-            void load();
-            void loadTargets(true);
-          }}
-        />
-      </div>
+  async function publishNow() {
+    if (!selected) return;
+    const updated = await runAction(
+      () => api.publishNow(selected.queue_item_id),
+      "Публикация отправлена",
+    );
+    if (updated) closeDrawer();
+  }
 
-      {(error || notice) && <div className={error ? "editorial-message error" : "editorial-message"}><span>{error || notice}</span><button onClick={() => { setError(""); setNotice(""); }}>×</button></div>}
+  async function schedule() {
+    if (!selected || !scheduleAt) return;
+    const updated = await runAction(
+      () => api.schedule(selected.queue_item_id, new Date(scheduleAt).toISOString()),
+      "Публикация запланирована",
+    );
+    if (updated) closeDrawer();
+  }
+
+  if (loading) return <div className="editorial-empty"><Archive size={32}/><strong>Загружаю очередь…</strong></div>;
+
+  return (
+    <div className="editorial-queue">
+      {message && <div className="editorial-message"><span>{message}</span><button onClick={() => setMessage("")}><X size={18}/></button></div>}
+      {error && <div className="editorial-message error"><span>{error}</span><button onClick={() => setError("")}><X size={18}/></button></div>}
+
+      <div className="queue-toolbar">
+        <QueueChannelFilter targets={targetOptions} value={targetId} onChange={chooseTarget} />
+        <QueueTabs tab={tab} counts={counts} onChange={setTab} onRefresh={() => void loadQueue()} />
+      </div>
 
       <div className="editorial-card-grid">
         {visibleItems.map((item) => (
@@ -465,99 +330,95 @@ export function QueueExperience() {
             item={item}
             statusLabel={statusLabels[item.status] ?? item.status}
             dateLabel={shortDate(item.source_published_at)}
-            detailText={item.status === "failed" ? publicationErrorMessage(item.error_message) : item.original_text || "Пост без исходного текста"}
+            detailText={(item.original_text ?? "").slice(0, 180)}
             onOpen={() => setSelectedId(item.queue_item_id)}
           />
         ))}
-        {!visibleItems.length && (
+        {visibleItems.length === 0 && (
           <div className="editorial-empty">
-            <Archive size={30}/>
-            <strong>Здесь пока пусто</strong>
-            <span>{targetFilter === null ? "Посты появятся здесь по мере прохождения редакционного процесса." : "Для выбранного канала в этом разделе пока нет постов."}</span>
+            <Archive size={34}/>
+            <strong>{queueTabConfig[tab].emptyTitle}</strong>
+            <span>{queueTabConfig[tab].emptyText}</span>
           </div>
         )}
       </div>
 
       {selected && (
-        <div className="editorial-drawer-backdrop" onMouseDown={() => setSelectedId(null)}>
+        <div className="editorial-drawer-backdrop" onMouseDown={closeDrawer}>
           <aside className="editorial-drawer" onMouseDown={(event) => event.stopPropagation()}>
             <QueueDrawerHeader
               item={selected}
               statusLabel={statusLabels[selected.status] ?? selected.status}
-              scheduledLabel={selected.scheduled_at ? shortDate(selected.scheduled_at) : undefined}
-              errorMessage={selected.status === "failed" ? publicationErrorMessage(selected.error_message) : undefined}
-              onClose={() => setSelectedId(null)}
+              scheduledLabel={scheduleLabel(selected.scheduled_at)}
+              errorMessage={selected.error_message ?? undefined}
+              onClose={closeDrawer}
             />
 
             <QueueMediaSection
               item={selected}
-              orderedPhotos={orderedPhotos}
               mediaOrder={mediaOrder}
               busy={busy}
-              mediaKey={mediaKey}
-              onRemoveAll={() => void removeAllPhotos()}
-              onRestoreAll={() => void restoreAllPhotos()}
-              onTogglePhoto={(photo) => void togglePhoto(photo)}
-              onMovePhoto={(photo, direction) => void movePhoto(photo, direction)}
-              onRemoveUploadedPhoto={(photo) => void removeUploadedPhoto(photo)}
-              onOpenPhoto={setLightbox}
-              onUploadPhotos={(event) => void uploadPhotos(event)}
-              onError={(message) => {
-                setNotice("");
-                setError(message);
-              }}
-              onNotice={() => undefined}
+              onMediaOrderChange={(next) => void saveMedia(next)}
+              onLightbox={setLightbox}
+              onUploadPhoto={uploadPhoto}
+              onDeleteUploadedPhoto={(photo) => void deleteUploadedPhoto(photo)}
             />
 
             <QueueTextEditor
-              key={selected.queue_item_id}
-              value={draft}
+              value={text}
               originalText={selected.original_text}
-              readonly={selected.status === "published"}
+              readonly={["published", "scheduled"].includes(selected.status)}
               editing={editing}
               busy={busy}
-              rewriteBusy={rewritingId === selected.queue_item_id}
-              canRewrite={!editing && ["pending", "rewriting", "rejected"].includes(selected.status) && Boolean(selected.original_text?.trim())}
+              rewriteBusy={rewriteBusy}
+              canRewrite={["pending", "rewriting", "rejected"].includes(selected.status)}
               onEditingChange={setEditing}
-              onChange={setDraft}
-              onRewrite={() => void rewriteNow()}
+              onChange={setText}
+              onRewrite={() => void rewrite()}
             />
+
+            {editing && (
+              <div className="drawer-footer">
+                <div className="drawer-main-actions">
+                  <button className="primary" disabled={busy} onClick={() => void saveText()}>Сохранить текст</button>
+                </div>
+              </div>
+            )}
 
             <PostSignatureSection
               item={selected}
-              onUpdated={applyQueueItemOnly}
-              onError={(message) => {
-                setNotice("");
-                setError(message);
+              readonly={["published", "scheduled"].includes(selected.status)}
+              onChanged={async () => {
+                const updated = await api.queueItem(selected.queue_item_id);
+                replaceItem(updated);
               }}
+              onError={setError}
             />
 
-            {selected.status === "approved" && (
-              <QueueSchedulePanel
-                value={scheduleAt}
-                busy={busy}
-                onChange={setScheduleAt}
-                onSchedule={() => void schedule()}
-              />
-            )}
+            <QueueSchedulePanel value={scheduleAt} onChange={setScheduleAt} disabled={busy} visible={selected.status === "approved"} />
 
             <QueueActionsFooter
               item={selected}
-              editing={editing}
               busy={busy}
-              onSaveText={() => void saveText()}
-              onSubmit={() => void submit()}
-              onApprove={() => void action(() => api.approve(selected.queue_item_id))}
-              onReject={() => void action(() => api.reject(selected.queue_item_id))}
+              scheduleAt={scheduleAt}
+              onSubmit={() => void runAction(() => api.submit(selected.queue_item_id))}
+              onApprove={() => void runAction(() => api.approve(selected.queue_item_id))}
+              onReject={() => void runAction(() => api.reject(selected.queue_item_id))}
+              onReopen={() => void runAction(() => api.reopen(selected.queue_item_id))}
               onPublishNow={() => void publishNow()}
-              onReopen={() => void action(() => api.reopen(selected.queue_item_id))}
-              onDelete={() => void removeItem()}
+              onSchedule={() => void schedule()}
+              onDelete={() => void deleteItem()}
             />
           </aside>
         </div>
       )}
 
-      {lightbox && <div className="queue-lightbox" onClick={() => setLightbox(null)}><button onClick={() => setLightbox(null)}><X size={24}/></button><img src={lightbox.source_url} alt="Фото публикации" onClick={(event) => event.stopPropagation()}/></div>}
-    </section>
+      {lightbox && (
+        <div className="queue-lightbox" onClick={() => setLightbox(null)}>
+          <img src={lightbox} alt="" onClick={(event) => event.stopPropagation()} />
+          <button onClick={() => setLightbox(null)}><X size={22}/></button>
+        </div>
+      )}
+    </div>
   );
 }
