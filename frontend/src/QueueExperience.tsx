@@ -1,8 +1,7 @@
 import { ChangeEvent, useEffect, useMemo, useState } from "react";
 import { Archive, X } from "lucide-react";
-import { api, QueueItem, QueuePhoto, Target } from "./api";
+import { api, QueueItem, QueuePhoto } from "./api";
 import { QueueActionsFooter } from "./components/QueueActionsFooter";
-import { QueueChannelFilter, QueueChannelOption } from "./components/QueueChannelFilter";
 import { QueueDrawerHeader } from "./components/QueueDrawerHeader";
 import { QueueMediaSection } from "./components/QueueMediaSection";
 import { QueuePostCard } from "./components/QueuePostCard";
@@ -12,8 +11,6 @@ import { QueueTextEditor } from "./components/QueueTextEditor";
 import { PostSignatureSection } from "./components/SignatureSections";
 import "./queueExperience.css";
 import "./queueLightTheme.css";
-
-const QUEUE_TARGET_FILTER_KEY = "uncle-vlad-queue-target";
 
 const statusLabels: Record<string, string> = {
   pending: "В работе",
@@ -40,13 +37,6 @@ const emptyState: Record<QueueTab, { title: string; text: string }> = {
     text: "Опубликованные, отклонённые и неудачные публикации появятся здесь.",
   },
 };
-
-function initialQueueTargetFilter(): number | null {
-  const saved = localStorage.getItem(QUEUE_TARGET_FILTER_KEY);
-  if (!saved || saved === "all") return null;
-  const targetId = Number(saved);
-  return Number.isInteger(targetId) && targetId > 0 ? targetId : null;
-}
 
 function shortDate(value?: string | null) {
   if (!value) return "—";
@@ -83,14 +73,13 @@ function mediaKey(photo: QueuePhoto) {
 
 type QueueExperienceProps = {
   collectSignal?: number;
-  targets?: Target[];
+  targetId: number | null;
 };
 
-export function QueueExperience({ collectSignal = 0, targets = [] }: QueueExperienceProps) {
+export function QueueExperience({ collectSignal = 0, targetId }: QueueExperienceProps) {
   const [items, setItems] = useState<QueueItem[]>([]);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [tab, setTab] = useState<QueueTab>("storage");
-  const [targetId, setTargetId] = useState<number | null>(initialQueueTargetFilter);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [rewriteBusy, setRewriteBusy] = useState(false);
@@ -106,33 +95,6 @@ export function QueueExperience({ collectSignal = 0, targets = [] }: QueueExperi
     () => items.find((item) => item.queue_item_id === selectedId) ?? null,
     [items, selectedId],
   );
-
-  const targetOptions = useMemo<QueueChannelOption[]>(() => {
-    const knownTargets = new Map<number, QueueChannelOption>();
-    for (const target of targets) {
-      knownTargets.set(target.target_id, {
-        target_id: target.target_id,
-        name: target.name,
-        is_active: target.is_active,
-      });
-    }
-    for (const item of items) {
-      if (!knownTargets.has(item.target_id)) {
-        knownTargets.set(item.target_id, {
-          target_id: item.target_id,
-          name: item.target_name ?? `Канал #${item.target_id}`,
-        });
-      }
-    }
-    return Array.from(knownTargets.values()).sort((a, b) => a.name.localeCompare(b.name, "ru"));
-  }, [items, targets]);
-
-  useEffect(() => {
-    if (targetId !== null && !targetOptions.some((target) => target.target_id === targetId)) {
-      setTargetId(null);
-      localStorage.setItem(QUEUE_TARGET_FILTER_KEY, "all");
-    }
-  }, [targetId, targetOptions]);
 
   const scopedItems = useMemo(
     () => targetId === null ? items : items.filter((item) => item.target_id === targetId),
@@ -166,6 +128,10 @@ export function QueueExperience({ collectSignal = 0, targets = [] }: QueueExperi
     const timer = window.setTimeout(() => setMessage(""), 3500);
     return () => window.clearTimeout(timer);
   }, [message]);
+
+  useEffect(() => {
+    if (selected && targetId !== null && selected.target_id !== targetId) closeDrawer();
+  }, [targetId]);
 
   async function loadQueue() {
     try {
@@ -212,11 +178,6 @@ export function QueueExperience({ collectSignal = 0, targets = [] }: QueueExperi
     setSelectedId(null);
     setEditing(false);
     setLightbox(null);
-  }
-
-  function chooseTarget(nextTargetId: number | null) {
-    setTargetId(nextTargetId);
-    localStorage.setItem(QUEUE_TARGET_FILTER_KEY, nextTargetId === null ? "all" : String(nextTargetId));
   }
 
   async function runAction(action: () => Promise<QueueItem>, successMessage = "") {
@@ -367,10 +328,7 @@ export function QueueExperience({ collectSignal = 0, targets = [] }: QueueExperi
       {message && <div className="editorial-message"><span>{message}</span><button onClick={() => setMessage("")}><X size={18}/></button></div>}
       {error && <div className="editorial-message error"><span>{error}</span><button onClick={() => setError("")}><X size={18}/></button></div>}
 
-      <div className="queue-toolbar">
-        <QueueChannelFilter channels={targetOptions} value={targetId} onChange={chooseTarget} />
-        <QueueTabs tab={tab} counts={counts} busy={busy} onChange={setTab} onRefresh={() => void loadQueue()} />
-      </div>
+      <QueueTabs tab={tab} counts={counts} busy={busy} onChange={setTab} onRefresh={() => void loadQueue()} />
 
       <div className="editorial-card-grid">
         {visibleItems.map((item) => (
