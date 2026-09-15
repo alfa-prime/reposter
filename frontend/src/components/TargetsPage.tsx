@@ -19,18 +19,16 @@ type TargetsPageProps = {
   onError: (message: string) => void;
 };
 
-function SourceIcon({ source, compact = false }: { source?: Source; compact?: boolean }) {
+function SourceIcon({ source }: { source?: Source }) {
   if (source?.icon_url) {
     return (
-      <span className={compact ? "source-avatar compact" : "entity-icon channel-avatar"}>
+      <span className="entity-icon channel-avatar source-avatar">
         <img src={source.icon_url} alt="" />
       </span>
     );
   }
 
-  return compact
-    ? <span className="source-avatar compact fallback"><Link2 size={14} /></span>
-    : <div className="entity-icon"><Database size={17} /></div>;
+  return <div className="entity-icon"><Database size={17} /></div>;
 }
 
 export function TargetsPage({ targets, sources, selectedTarget, targetSources, busy, onOpenTarget, onChanged, onTargetSourcesChanged, onDelete, onError }: TargetsPageProps) {
@@ -120,7 +118,7 @@ export function TargetsPage({ targets, sources, selectedTarget, targetSources, b
                 <label>Подключить источник</label>
                 {sources.filter((item) => !attachedSourceIds.has(item.source_id)).map((source) => (
                   <button key={source.source_id} className="attach-source" type="button" onClick={() => void attachSource(source.source_id)}>
-                    <SourceIcon source={source} compact />
+                    <SourceIcon source={source} />
                     <span>{source.name}</span>
                     <small>{source.platform}</small>
                   </button>
