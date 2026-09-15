@@ -19,6 +19,20 @@ type TargetsPageProps = {
   onError: (message: string) => void;
 };
 
+function SourceIcon({ source, compact = false }: { source?: Source; compact?: boolean }) {
+  if (source?.icon_url) {
+    return (
+      <span className={compact ? "source-avatar compact" : "entity-icon channel-avatar"}>
+        <img src={source.icon_url} alt="" />
+      </span>
+    );
+  }
+
+  return compact
+    ? <span className="source-avatar compact fallback"><Link2 size={14} /></span>
+    : <div className="entity-icon"><Database size={17} /></div>;
+}
+
 export function TargetsPage({ targets, sources, selectedTarget, targetSources, busy, onOpenTarget, onChanged, onTargetSourcesChanged, onDelete, onError }: TargetsPageProps) {
   const [createOpen, setCreateOpen] = useState(false);
   const attachedSourceIds = new Set(targetSources.map((item) => item.source_id));
@@ -94,11 +108,23 @@ export function TargetsPage({ targets, sources, selectedTarget, targetSources, b
               {targetSources.length === 0 && <div className="setup-hint"><strong>Подключите источник</strong><span>Без этой связи сборщик не знает, в какой канал положить найденный пост.</span></div>}
               {targetSources.map((link) => {
                 const source = sources.find((item) => item.source_id === link.source_id);
-                return <div className="entity-row" key={link.target_source_id}><div className="entity-icon"><Database size={17} /></div><div className="entity-main"><strong>{source?.name ?? `Источник #${link.source_id}`}</strong><span>{source?.url}</span></div><button className="icon-button" type="button" title="Отключить источник" onClick={() => void detachSource(link.target_source_id)}><X size={16} /></button></div>;
+                return (
+                  <div className="entity-row" key={link.target_source_id}>
+                    <SourceIcon source={source} />
+                    <div className="entity-main"><strong>{source?.name ?? `Источник #${link.source_id}`}</strong><span>{source?.url}</span></div>
+                    <button className="icon-button" type="button" title="Отключить источник" onClick={() => void detachSource(link.target_source_id)}><X size={16} /></button>
+                  </div>
+                );
               })}
               <div className="attach-list">
                 <label>Подключить источник</label>
-                {sources.filter((item) => !attachedSourceIds.has(item.source_id)).map((source) => <button key={source.source_id} className="attach-source" type="button" onClick={() => void attachSource(source.source_id)}><Link2 size={15} /><span>{source.name}</span><small>{source.platform}</small></button>)}
+                {sources.filter((item) => !attachedSourceIds.has(item.source_id)).map((source) => (
+                  <button key={source.source_id} className="attach-source" type="button" onClick={() => void attachSource(source.source_id)}>
+                    <SourceIcon source={source} compact />
+                    <span>{source.name}</span>
+                    <small>{source.platform}</small>
+                  </button>
+                ))}
                 {sources.length === 0 && <div className="empty">Сначала добавьте источник в разделе «Источники»</div>}
                 {sources.length > 0 && sources.every((item) => attachedSourceIds.has(item.source_id)) && <div className="empty">Все источники уже подключены</div>}
               </div>
