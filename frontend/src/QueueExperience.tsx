@@ -219,6 +219,34 @@ export function QueueExperience({ collectSignal = 0, targetId }: QueueExperience
     if (updated) setEditing(false);
   }
 
+  async function submitForModeration() {
+    if (!selected) return;
+
+    const preparedText = text.trim();
+    if (!preparedText) {
+      setError("Перед отправкой на модерацию нужен текст публикации");
+      return;
+    }
+
+    setBusy(true);
+    setError("");
+    try {
+      const savedText = selected.rewritten_text ?? "";
+      if (savedText !== text || !savedText.trim()) {
+        const saved = await api.updateQueueText(selected.queue_item_id, text);
+        replaceItem(saved);
+      }
+
+      const updated = await api.submit(selected.queue_item_id);
+      replaceItem(updated);
+      closeDrawer();
+    } catch (exc) {
+      setError(exc instanceof Error ? exc.message : "Не удалось отправить публикацию на модерацию");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function saveMedia(nextOrder: string[]) {
     if (!selected) return;
     setBusy(true);
@@ -411,7 +439,7 @@ export function QueueExperience({ collectSignal = 0, targetId }: QueueExperience
               editing={editing}
               busy={busy}
               onSaveText={() => void saveText()}
-              onSubmit={() => void runAction(() => api.submit(selected.queue_item_id))}
+              onSubmit={() => void submitForModeration()}
               onApprove={() => void runAction(() => api.approve(selected.queue_item_id))}
               onReject={() => void runAction(() => api.reject(selected.queue_item_id))}
               onReopen={() => void runAction(() => api.reopen(selected.queue_item_id))}
