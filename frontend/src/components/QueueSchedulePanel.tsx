@@ -29,6 +29,7 @@ export function QueueSchedulePanel({ value, busy, onChange, onSchedule }: QueueS
             value={date}
             onChange={(event) => update(event.target.value, hour, minute)}
             aria-label="Дата публикации"
+            required
           />
           <div className="schedule-time-controls" aria-label="Время публикации в 24-часовом формате">
             <select
@@ -49,7 +50,7 @@ export function QueueSchedulePanel({ value, busy, onChange, onSchedule }: QueueS
           </div>
         </div>
       </label>
-      <button className="primary" onClick={onSchedule} disabled={busy}>
+      <button className="primary" onClick={onSchedule} disabled={busy || !date}>
         <CalendarClock size={17}/>Поставить в очередь
       </button>
     </div>
