@@ -6,7 +6,7 @@ import { QueueDrawerHeader } from "./components/QueueDrawerHeader";
 import { QueueMediaSection } from "./components/QueueMediaSection";
 import { QueuePostCard } from "./components/QueuePostCard";
 import { QueueSchedulePanel } from "./components/QueueSchedulePanel";
-import { QueueTabs, QueueTab } from "./components/QueueTabs";
+import { queueTabConfig, QueueTabs, QueueTab } from "./components/QueueTabs";
 import { QueueTextEditor } from "./components/QueueTextEditor";
 import { PostSignatureSection } from "./components/SignatureSections";
 import "./queueExperience.css";
@@ -27,6 +27,10 @@ const emptyState: Record<QueueTab, { title: string; text: string }> = {
   storage: {
     title: "Хранилище пусто",
     text: "Новые собранные посты появятся здесь.",
+  },
+  moderation: {
+    title: "Нет постов на модерации",
+    text: "Публикации, подготовленные редактором, появятся здесь.",
   },
   scheduled: {
     title: "Очередь публикаций пуста",
@@ -60,9 +64,7 @@ function scheduleLabel(value?: string | null) {
 }
 
 function statusMatchesTab(status: string, tab: QueueTab) {
-  if (tab === "storage") return ["pending", "rewriting", "awaiting_moderation"].includes(status);
-  if (tab === "scheduled") return ["approved", "scheduled"].includes(status);
-  return ["published", "rejected", "failed"].includes(status);
+  return queueTabConfig[tab].statuses.includes(status);
 }
 
 function mediaKey(photo: QueuePhoto) {
@@ -103,6 +105,7 @@ export function QueueExperience({ collectSignal = 0, targetId }: QueueExperience
 
   const counts = useMemo<Record<QueueTab, number>>(() => ({
     storage: scopedItems.filter((item) => statusMatchesTab(item.status, "storage")).length,
+    moderation: scopedItems.filter((item) => statusMatchesTab(item.status, "moderation")).length,
     scheduled: scopedItems.filter((item) => statusMatchesTab(item.status, "scheduled")).length,
     archive: scopedItems.filter((item) => statusMatchesTab(item.status, "archive")).length,
   }), [scopedItems]);
