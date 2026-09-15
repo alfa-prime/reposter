@@ -47,7 +47,9 @@ class VKClient:
         error = payload.get("error")
         if error:
             raise VKAPIError(error.get("error_msg", "VK вернул ошибку"), error.get("error_code"))
-        groups = payload.get("response") or []
+
+        response_data = payload.get("response") or []
+        groups = response_data.get("groups", []) if isinstance(response_data, dict) else response_data
         if not groups:
             raise VKAPIError("Сообщество VK не найдено")
         return groups[0]
@@ -132,7 +134,8 @@ class VKClient:
             value = parsed.path.strip("/").split("/", maxsplit=1)[0]
         if not re.fullmatch(r"[A-Za-z0-9_.-]+", value):
             raise ValueError("Некорректное короткое имя группы VK")
-        return value.removeprefix("club").removeprefix("public").removeprefix("event")
+        numeric_alias = re.fullmatch(r"(?:club|public|event)(\d+)", value)
+        return numeric_alias.group(1) if numeric_alias else value
 
     @staticmethod
     def _group_parameter(group: str) -> dict[str, str | int]:
