@@ -10,7 +10,6 @@ type CreateSourceModalProps = {
 };
 
 export function CreateSourceModal({ busy, onClose, onCreated, onError }: CreateSourceModalProps) {
-  const [name, setName] = useState("");
   const [url, setUrl] = useState("");
   const [urlError, setUrlError] = useState("");
 
@@ -22,21 +21,15 @@ export function CreateSourceModal({ busy, onClose, onCreated, onError }: CreateS
       return;
     }
 
-    const platform = detectSourcePlatform(url);
-    if (platform !== "vk") {
-      setUrlError("Укажите ссылку на источник VK, например: https://vk.com/имя_канала");
+    if (detectSourcePlatform(url) !== "vk") {
+      setUrlError("Укажите ссылку на источник VK, например: https://vk.ru/peninsula51");
       return;
     }
 
     setUrlError("");
     onError("");
     try {
-      await api.createSource({
-        name: name.trim(),
-        platform: "vk",
-        url: url.trim(),
-        is_active: true,
-      });
+      await api.createSource({ url: url.trim(), is_active: true });
       await onCreated();
       onClose();
     } catch (exc) {
@@ -57,22 +50,9 @@ export function CreateSourceModal({ busy, onClose, onCreated, onError }: CreateS
           </button>
         </div>
 
-        <p className="form-note"><span>*</span> обязательные поля</p>
-
         <form noValidate onSubmit={(event) => void submit(event)} className="form-grid">
-          <label>
-            Название <b>*</b>
-            <input
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-              required
-              minLength={1}
-              placeholder="Полуостров 51"
-            />
-          </label>
-
           <label className="wide">
-            Ссылка <b>*</b>
+            Ссылка на источник VK
             <input
               value={url}
               onChange={(event) => {
@@ -82,13 +62,16 @@ export function CreateSourceModal({ busy, onClose, onCreated, onError }: CreateS
               type="text"
               inputMode="url"
               required
-              placeholder="https://vk.com/peninsula51"
+              autoFocus
+              placeholder="https://vk.ru/peninsula51"
               aria-invalid={Boolean(urlError)}
             />
             {urlError && <small className="source-link-error">{urlError}</small>}
           </label>
 
-          <button className="primary" disabled={busy}>Добавить источник</button>
+          <button className="primary" disabled={busy || detectSourcePlatform(url) !== "vk"}>
+            {busy ? "Добавляю…" : "Добавить источник"}
+          </button>
         </form>
       </div>
     </div>
