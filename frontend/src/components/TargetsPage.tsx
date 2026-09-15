@@ -98,7 +98,6 @@ export function TargetsPage({
               <div className="entity-icon"><Radio size={18} /></div>
               <div className="entity-main">
                 <strong>{item.name}</strong>
-                <span>{item.platform} · {item.external_id}</span>
               </div>
               <span className={item.is_active ? "switch-label on" : "switch-label"}>
                 {item.is_active ? "Активен" : "Выключен"}
