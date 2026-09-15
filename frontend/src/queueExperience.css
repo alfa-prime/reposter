@@ -71,6 +71,7 @@
 .schedule-panel { margin-top: 22px; padding: 14px; display: flex; align-items: flex-end; gap: 12px; border: 1px solid rgba(255,255,255,.07); border-radius: 13px; background: rgba(255,255,255,.025); }
 .schedule-panel label { flex: 1; display: grid; gap: 7px; color: #8190a8; font-size: 11px; }
 .schedule-panel input { width: 100%; color: #edf2fa; background: #08111f; border: 1px solid rgba(255,255,255,.09); border-radius: 10px; padding: 10px 11px; color-scheme: dark; }
+.schedule-validation-error { color: #ff9bac; font-size: 11px; font-weight: 650; line-height: 1.4; }
 .drawer-footer { margin-top: 26px; padding-top: 20px; border-top: 1px solid rgba(255,255,255,.07); display: flex; justify-content: space-between; align-items: center; gap: 14px; flex-wrap: wrap; }
 .drawer-main-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 .drawer-delete { border: 0; color: #f1a2af; background: transparent; display: inline-flex; align-items: center; gap: 7px; }
