@@ -4,6 +4,7 @@ import { api, QueueItem, QueuePhoto } from "./api";
 import { QueueActionsFooter } from "./components/QueueActionsFooter";
 import { QueueDrawerHeader } from "./components/QueueDrawerHeader";
 import { QueueMediaSection } from "./components/QueueMediaSection";
+import { QueuePagination } from "./components/QueuePagination";
 import { QueuePostCard } from "./components/QueuePostCard";
 import { QueueSchedulePanel } from "./components/QueueSchedulePanel";
 import { queueTabConfig, QueueTabs, QueueTab } from "./components/QueueTabs";
@@ -22,6 +23,14 @@ const statusLabels: Record<string, string> = {
   published: "Опубликован",
   failed: "Ошибка публикации",
 };
+
+const defaultPageSize = 20;
+
+function savedPageSize() {
+  if (typeof window === "undefined") return defaultPageSize;
+  const value = Number(window.localStorage.getItem("queue-page-size"));
+  return [10, 20, 40].includes(value) ? value : defaultPageSize;
+}
 
 const emptyState: Record<QueueTab, { title: string; text: string }> = {
   storage: {
@@ -73,10 +82,6 @@ function scheduleValidationMessage(value: string) {
   return "";
 }
 
-function statusMatchesTab(status: string, tab: QueueTab) {
-  return queueTabConfig[tab].statuses.includes(status);
-}
-
 function mediaKey(photo: QueuePhoto) {
   return photo.kind === "uploaded" && photo.media_id
     ? `upload:${photo.media_id}`
@@ -104,28 +109,22 @@ export function QueueExperience({ collectSignal = 0, targetId }: QueueExperience
   const [scheduleAt, setScheduleAt] = useState("");
   const [scheduleError, setScheduleError] = useState("");
   const [scheduleTimeTouched, setScheduleTimeTouched] = useState(false);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(savedPageSize);
+  const [total, setTotal] = useState(0);
+  const [statusCounts, setStatusCounts] = useState<Record<string, number>>({});
 
   const selected = useMemo(
     () => items.find((item) => item.queue_item_id === selectedId) ?? null,
     [items, selectedId],
   );
 
-  const scopedItems = useMemo(
-    () => targetId === null ? items : items.filter((item) => item.target_id === targetId),
-    [items, targetId],
-  );
-
   const counts = useMemo<Record<QueueTab, number>>(() => ({
-    storage: scopedItems.filter((item) => statusMatchesTab(item.status, "storage")).length,
-    moderation: scopedItems.filter((item) => statusMatchesTab(item.status, "moderation")).length,
-    scheduled: scopedItems.filter((item) => statusMatchesTab(item.status, "scheduled")).length,
-    archive: scopedItems.filter((item) => statusMatchesTab(item.status, "archive")).length,
-  }), [scopedItems]);
-
-  const visibleItems = useMemo(
-    () => scopedItems.filter((item) => statusMatchesTab(item.status, tab)),
-    [scopedItems, tab],
-  );
+    storage: queueTabConfig.storage.statuses.reduce((sum, status) => sum + (statusCounts[status] ?? 0), 0),
+    moderation: queueTabConfig.moderation.statuses.reduce((sum, status) => sum + (statusCounts[status] ?? 0), 0),
+    scheduled: queueTabConfig.scheduled.statuses.reduce((sum, status) => sum + (statusCounts[status] ?? 0), 0),
+    archive: queueTabConfig.archive.statuses.reduce((sum, status) => sum + (statusCounts[status] ?? 0), 0),
+  }), [statusCounts]);
 
   const orderedPhotos = useMemo(() => {
     if (!selected) return [];
@@ -144,14 +143,19 @@ export function QueueExperience({ collectSignal = 0, targetId }: QueueExperience
     return () => window.clearTimeout(timer);
   }, [message]);
 
-  useEffect(() => {
-    if (selected && targetId !== null && selected.target_id !== targetId) closeDrawer();
-  }, [targetId]);
-
   async function loadQueue() {
     try {
-      const queue = await api.queue();
-      setItems(queue);
+      const queue = await api.queuePage({
+        offset: (page - 1) * pageSize,
+        limit: pageSize,
+        targetId,
+        statuses: queueTabConfig[tab].statuses,
+      });
+      setItems(queue.items);
+      setTotal(queue.total);
+      setStatusCounts(queue.status_counts);
+      const lastPage = Math.max(1, Math.ceil(queue.total / pageSize));
+      if (page > lastPage) setPage(lastPage);
       setError("");
     } catch (exc) {
       setError(exc instanceof Error ? exc.message : "Не удалось загрузить очередь");
@@ -164,7 +168,16 @@ export function QueueExperience({ collectSignal = 0, targetId }: QueueExperience
     void loadQueue();
     const timer = window.setInterval(() => void loadQueue(), 60_000);
     return () => window.clearInterval(timer);
-  }, [collectSignal]);
+  }, [collectSignal, page, pageSize, tab, targetId]);
+
+  useEffect(() => {
+    window.localStorage.setItem("queue-page-size", String(pageSize));
+  }, [pageSize]);
+
+  useEffect(() => {
+    setPage(1);
+    closeDrawer();
+  }, [targetId]);
 
   useEffect(() => {
     if (!selectedId) return;
@@ -205,10 +218,15 @@ export function QueueExperience({ collectSignal = 0, targetId }: QueueExperience
     setBusy(true);
     setError("");
     try {
+      const previousStatus = selected?.status;
       const updated = await action();
       replaceItem(updated);
       setText(updated.rewritten_text ?? updated.original_text ?? "");
       if (successMessage) setMessage(successMessage);
+      if (previousStatus && updated.status !== previousStatus) {
+        closeDrawer();
+        await loadQueue();
+      }
       return updated;
     } catch (exc) {
       setError(exc instanceof Error ? exc.message : "Операция не выполнена");
@@ -261,6 +279,7 @@ export function QueueExperience({ collectSignal = 0, targetId }: QueueExperience
       const updated = await api.submit(selected.queue_item_id);
       replaceItem(updated);
       closeDrawer();
+      await loadQueue();
     } catch (exc) {
       setError(exc instanceof Error ? exc.message : "Не удалось отправить публикацию на модерацию");
     } finally {
@@ -341,8 +360,8 @@ export function QueueExperience({ collectSignal = 0, targetId }: QueueExperience
     setError("");
     try {
       await api.deleteQueueItem(selected.queue_item_id);
-      setItems((current) => current.filter((item) => item.queue_item_id !== selected.queue_item_id));
       closeDrawer();
+      await loadQueue();
     } catch (exc) {
       setError(exc instanceof Error ? exc.message : "Не удалось удалить публикацию");
     } finally {
@@ -383,6 +402,7 @@ export function QueueExperience({ collectSignal = 0, targetId }: QueueExperience
       replaceItem(updated);
       setMessage("Публикация запланирована");
       closeDrawer();
+      await loadQueue();
     } catch (exc) {
       setScheduleError(exc instanceof Error ? exc.message : "Не удалось поставить публикацию в расписание");
     } finally {
@@ -399,10 +419,20 @@ export function QueueExperience({ collectSignal = 0, targetId }: QueueExperience
       {message && <div className="editorial-message"><span>{message}</span><button onClick={() => setMessage("")}><X size={18}/></button></div>}
       {error && <div className="editorial-message error"><span>{error}</span><button onClick={() => setError("")}><X size={18}/></button></div>}
 
-      <QueueTabs tab={tab} counts={counts} busy={busy} onChange={setTab} onRefresh={() => void loadQueue()} />
+      <QueueTabs
+        tab={tab}
+        counts={counts}
+        busy={busy}
+        onChange={(nextTab) => {
+          setTab(nextTab);
+          setPage(1);
+          closeDrawer();
+        }}
+        onRefresh={() => void loadQueue()}
+      />
 
       <div className="editorial-card-grid">
-        {visibleItems.map((item) => (
+        {items.map((item) => (
           <QueuePostCard
             key={item.queue_item_id}
             item={item}
@@ -412,7 +442,7 @@ export function QueueExperience({ collectSignal = 0, targetId }: QueueExperience
             onOpen={() => setSelectedId(item.queue_item_id)}
           />
         ))}
-        {visibleItems.length === 0 && (
+        {items.length === 0 && (
           <div className="editorial-empty">
             <Archive size={34}/>
             <strong>{emptyState[tab].title}</strong>
@@ -420,6 +450,21 @@ export function QueueExperience({ collectSignal = 0, targetId }: QueueExperience
           </div>
         )}
       </div>
+
+      <QueuePagination
+        page={page}
+        pageSize={pageSize}
+        total={total}
+        onPageChange={(nextPage) => {
+          setPage(nextPage);
+          closeDrawer();
+        }}
+        onPageSizeChange={(nextPageSize) => {
+          setPageSize(nextPageSize);
+          setPage(1);
+          closeDrawer();
+        }}
+      />
 
       {selected && (
         <div className="editorial-drawer-backdrop" onMouseDown={closeDrawer}>

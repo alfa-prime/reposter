@@ -25,6 +25,14 @@ export type QueueItem = {
   photos: QueuePhoto[];
 };
 
+export type QueuePage = {
+  items: QueueItem[];
+  total: number;
+  offset: number;
+  limit: number;
+  status_counts: Record<string, number>;
+};
+
 export type QueueMediaState = { media_order: string[] };
 export type UploadedVideo = { media_id: string; filename: string; source_url: string; size: number };
 export type SourceVideo = { attachment_id: number; external_attachment_id?: string | null; title: string; source_url?: string | null };
@@ -129,21 +137,23 @@ async function createSourceFromLink(data: { url: string; is_active?: boolean }):
   return request<Source>("/api/v1/sources", { method: "POST", body: JSON.stringify({ name: info.name, platform: "vk", url: info.url || url, icon_url: info.icon_url || null, is_active: data.is_active ?? true }) });
 }
 
-async function fetchAllQueueItems(): Promise<QueueItem[]> {
-  const pageSize = 100;
-  const items: QueueItem[] = [];
-  let offset = 0;
-
-  while (true) {
-    const page = await request<QueueItem[]>(`/api/v1/queue?offset=${offset}&limit=${pageSize}`);
-    items.push(...page);
-    if (page.length < pageSize) return items;
-    offset += pageSize;
-  }
+async function fetchQueuePage(options: {
+  offset: number;
+  limit: number;
+  targetId: number | null;
+  statuses: string[];
+}): Promise<QueuePage> {
+  const params = new URLSearchParams({
+    offset: String(options.offset),
+    limit: String(options.limit),
+  });
+  if (options.targetId !== null) params.set("target_id", String(options.targetId));
+  options.statuses.forEach((status) => params.append("status", status));
+  return request<QueuePage>(`/api/v1/queue/page?${params.toString()}`);
 }
 
 export const api = {
-  queue: fetchAllQueueItems,
+  queuePage: fetchQueuePage,
   queueItem: (id: number) => request<QueueItem>(`/api/v1/queue/${id}`),
   queueMediaState: (id: number) => request<QueueMediaState>(`/api/v1/queue/${id}/media-state`),
   updateQueueMediaState: (id: number, mediaOrder: string[]) => request<QueueMediaState>(`/api/v1/queue/${id}/media-state`, { method: "PUT", body: JSON.stringify({ media_order: mediaOrder }) }),

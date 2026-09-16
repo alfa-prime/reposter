@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import asyncio
 from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta
@@ -76,6 +78,33 @@ class MemoryQueueRepository:
             records = [item for item in records if item.status == status]
         records.sort(key=lambda item: item.queue_item_id, reverse=True)
         return records[offset : offset + limit]
+
+    async def list_page(
+        self,
+        *,
+        offset: int,
+        limit: int,
+        target_id: int | None,
+        statuses: list[QueueItemStatus],
+    ) -> list[SimpleNamespace]:
+        records = list(self.records.values())
+        if target_id is not None:
+            records = [item for item in records if item.target_id == target_id]
+        records = [item for item in records if item.status in statuses]
+        records.sort(key=lambda item: item.queue_item_id, reverse=True)
+        return records[offset : offset + limit]
+
+    async def count_by_status(
+        self,
+        *,
+        target_id: int | None,
+    ) -> dict[QueueItemStatus, int]:
+        counts: dict[QueueItemStatus, int] = {}
+        for item in self.records.values():
+            if target_id is not None and item.target_id != target_id:
+                continue
+            counts[item.status] = counts.get(item.status, 0) + 1
+        return counts
 
     async def get(self, queue_item_id: int) -> SimpleNamespace | None:
         return self.records.get(queue_item_id)
@@ -320,6 +349,63 @@ def test_queue_pages_are_returned_newest_first(
         assert [item["queue_item_id"] for item in second_page.json()] == list(
             range(25, 0, -1)
         )
+
+    asyncio.run(scenario())
+
+
+def test_queue_page_returns_selected_statuses_and_counts(
+    memory_queue_repository: None,
+) -> None:
+    """Постраничный endpoint фильтрует вкладку и возвращает общие счётчики."""
+
+    now = datetime.now(UTC)
+    statuses = [
+        QueueItemStatus.PENDING,
+        QueueItemStatus.REWRITING,
+        QueueItemStatus.AWAITING_MODERATION,
+        QueueItemStatus.PENDING,
+    ]
+    for queue_item_id, item_status in enumerate(statuses, start=1):
+        MemoryQueueRepository.records[queue_item_id] = SimpleNamespace(
+            queue_item_id=queue_item_id,
+            post_id=queue_item_id,
+            target_id=20,
+            rewritten_text=f"Пост {queue_item_id}",
+            status=item_status,
+            scheduled_at=None,
+            created_at=now,
+            updated_at=now,
+            error_message=None,
+        )
+
+    async def scenario() -> None:
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(
+            transport=transport,
+            base_url="http://test",
+        ) as client:
+            response = await client.get(
+                "/api/v1/queue/page",
+                params=[
+                    ("target_id", "20"),
+                    ("status", "pending"),
+                    ("status", "rewriting"),
+                    ("offset", "1"),
+                    ("limit", "2"),
+                ],
+            )
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["total"] == 3
+        assert body["offset"] == 1
+        assert body["limit"] == 2
+        assert [item["queue_item_id"] for item in body["items"]] == [2, 1]
+        assert body["status_counts"] == {
+            "pending": 2,
+            "rewriting": 1,
+            "awaiting_moderation": 1,
+        }
 
     asyncio.run(scenario())
 
