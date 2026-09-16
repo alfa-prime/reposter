@@ -120,7 +120,7 @@ def test_get_latest_post_skips_old_pinned_post() -> None:
 
 
 def test_get_posts_after_returns_all_new_posts_in_chronological_order() -> None:
-    """Проверяет получение всех постов после известного ID."""
+    """Проверяет получение десяти постов после известного ID."""
 
     async def scenario() -> None:
         offsets: list[str] = []
@@ -133,41 +133,12 @@ def test_get_posts_after_returns_all_new_posts_in_chronological_order() -> None:
             if offset == "0":
                 items = [
                     {
-                        "id": 105,
+                        "id": post_id,
                         "owner_id": -123,
-                        "date": 1_800_000_005,
-                        "text": "Пятый",
-                    },
-                    {
-                        "id": 104,
-                        "owner_id": -123,
-                        "date": 1_800_000_004,
-                        "text": "Четвёртый",
-                    },
-                    {
-                        "id": 103,
-                        "owner_id": -123,
-                        "date": 1_800_000_003,
-                        "text": "Третий",
-                    },
-                    {
-                        "id": 102,
-                        "owner_id": -123,
-                        "date": 1_800_000_002,
-                        "text": "Второй",
-                    },
-                    {
-                        "id": 101,
-                        "owner_id": -123,
-                        "date": 1_800_000_001,
-                        "text": "Первый",
-                    },
-                    {
-                        "id": 100,
-                        "owner_id": -123,
-                        "date": 1_800_000_000,
-                        "text": "Уже известный",
-                    },
+                        "date": 1_800_000_000 + post_id,
+                        "text": f"Пост {post_id}",
+                    }
+                    for post_id in range(110, 99, -1)
                 ]
             else:
                 items = []
@@ -183,8 +154,44 @@ def test_get_posts_after_returns_all_new_posts_in_chronological_order() -> None:
             client = VKClient(access_token="secret", http_client=http_client)
             posts = await client.get_posts_after("news_murmansk", 100)
 
-        assert [post.id for post in posts] == [101, 102, 103, 104, 105]
+        assert [post.id for post in posts] == list(range(101, 111))
         assert offsets == ["0"]
+
+    asyncio.run(scenario())
+
+
+def test_get_posts_after_reads_more_than_one_vk_page() -> None:
+    """Проверяет, что более ста новых записей собираются без потерь."""
+
+    async def scenario() -> None:
+        offsets: list[str] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            offset = int(request.url.params["offset"])
+            offsets.append(str(offset))
+            all_items = [
+                {
+                    "id": post_id,
+                    "owner_id": -123,
+                    "date": 1_800_000_000 + post_id,
+                    "text": f"Пост {post_id}",
+                }
+                for post_id in range(250, 99, -1)
+            ]
+            items = all_items[offset : offset + 100]
+            return httpx.Response(
+                200,
+                json={"response": {"count": len(all_items), "items": items}},
+            )
+
+        async with httpx.AsyncClient(
+            transport=httpx.MockTransport(handler),
+        ) as http_client:
+            client = VKClient(access_token="secret", http_client=http_client)
+            posts = await client.get_posts_after("news_murmansk", 100)
+
+        assert [post.id for post in posts] == list(range(101, 251))
+        assert offsets == ["0", "100"]
 
     asyncio.run(scenario())
 
@@ -252,7 +259,9 @@ def test_vk_api_error() -> None:
 
             return httpx.Response(
                 200,
-                json={"error": {"error_code": 5, "error_msg": "User authorization failed"}},
+                json={
+                    "error": {"error_code": 5, "error_msg": "User authorization failed"}
+                },
             )
 
         async with httpx.AsyncClient(

@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from collections import defaultdict
 from typing import Any
@@ -20,9 +21,36 @@ from news_reposter.integrations.vk import VKAPIError, VKClient, VKPost
 
 logger = logging.getLogger(__name__)
 
+_collection_lock: asyncio.Lock | None = None
+_collection_lock_loop: asyncio.AbstractEventLoop | None = None
+
+
+def _get_collection_lock() -> asyncio.Lock:
+    """Возвращает блокировку для текущего event loop.
+
+    Ручной запуск и планировщик используют один сборщик. Блокировка не даёт им
+    одновременно читать одну и ту же точку продолжения и создавать дубликаты.
+    Привязка к текущему loop также сохраняет предсказуемость изолированных тестов.
+    """
+
+    global _collection_lock, _collection_lock_loop
+
+    loop = asyncio.get_running_loop()
+    if _collection_lock is None or _collection_lock_loop is not loop:
+        _collection_lock = asyncio.Lock()
+        _collection_lock_loop = loop
+    return _collection_lock
+
 
 async def collect_active_sources_once() -> dict[str, int]:
     """Забирает новые посты активных VK-источников и создаёт очередь."""
+
+    async with _get_collection_lock():
+        return await _collect_active_sources_once()
+
+
+async def _collect_active_sources_once() -> dict[str, int]:
+    """Выполняет один сериализованный проход сборщика."""
 
     summary = {
         "sources_checked": 0,
@@ -66,7 +94,9 @@ async def collect_active_sources_once() -> dict[str, int]:
         for source_id, source in sources.items():
             summary["sources_checked"] += 1
             try:
-                last_external_post_id = await _get_last_external_post_id(session, source_id)
+                last_external_post_id = await _get_last_external_post_id(
+                    session, source_id
+                )
 
                 if last_external_post_id is None:
                     latest_post = await client.get_latest_post(source.url)
@@ -83,7 +113,10 @@ async def collect_active_sources_once() -> dict[str, int]:
                 created_posts = 0
                 created_queue_items = 0
                 for vk_post in vk_posts:
-                    post_created, queue_items_created = await _store_post_and_queue_items(
+                    (
+                        post_created,
+                        queue_items_created,
+                    ) = await _store_post_and_queue_items(
                         session=session,
                         source_id=source_id,
                         vk_post=vk_post,
@@ -101,10 +134,10 @@ async def collect_active_sources_once() -> dict[str, int]:
                     created_posts,
                     created_queue_items,
                 )
-            except (VKAPIError, ValueError) as exc:
+            except (VKAPIError, ValueError):
                 summary["errors"] += 1
                 await session.rollback()
-                logger.exception("Ошибка сбора источника %s: %s", source_id, exc)
+                logger.exception("Ошибка сбора источника %s", source_id)
             except Exception:
                 summary["errors"] += 1
                 await session.rollback()
@@ -243,7 +276,9 @@ async def _store_post_and_queue_items(
     return created, queue_items_created
 
 
-def build_post_attachments(raw_attachments: list[dict[str, Any]]) -> list[PostAttachment]:
+def build_post_attachments(
+    raw_attachments: list[dict[str, Any]],
+) -> list[PostAttachment]:
     """Преобразует фотографии и видео VK во вложения в исходном порядке."""
 
     result: list[PostAttachment] = []

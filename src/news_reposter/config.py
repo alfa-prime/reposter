@@ -1,6 +1,6 @@
 from functools import lru_cache
 
-from pydantic import Field
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from sqlalchemy.engine import URL
 
@@ -55,6 +55,16 @@ class Settings(BaseSettings):
     collection_start_hour: int = Field(default=8, ge=0, le=23)
     collection_end_hour: int = Field(default=20, ge=0, le=23)
     collection_timezone: str = "Europe/Moscow"
+
+    @model_validator(mode="after")
+    def validate_collection_window(self) -> "Settings":
+        """Не позволяет запустить приложение с нерабочим окном сбора."""
+
+        if self.collection_end_hour <= self.collection_start_hour:
+            raise ValueError(
+                "COLLECTION_END_HOUR должен быть позже COLLECTION_START_HOUR"
+            )
+        return self
 
     @property
     def database_url(self) -> str:

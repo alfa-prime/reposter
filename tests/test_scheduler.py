@@ -1,6 +1,11 @@
+import asyncio
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
+import pytest
+from pydantic import ValidationError
+
+import news_reposter.services.scheduler as scheduler_module
 from news_reposter.config import Settings
 from news_reposter.services.scheduler import CollectionScheduler
 
@@ -60,3 +65,40 @@ def test_schedule_can_be_configured() -> None:
     assert scheduler.next_run_at(datetime(2026, 9, 11, 9, 1, tzinfo=tz)) == datetime(
         2026, 9, 11, 9, 30, tzinfo=tz
     )
+
+
+def test_scheduler_run_once_collects_all_sources(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Плановый запуск вызывает основной сборщик и возвращает его сводку."""
+
+    expected = {
+        "sources_checked": 2,
+        "posts_created": 10,
+        "queue_items_created": 10,
+        "errors": 0,
+    }
+    calls = 0
+
+    async def fake_collect() -> dict[str, int]:
+        nonlocal calls
+        calls += 1
+        return expected
+
+    monkeypatch.setattr(scheduler_module, "collect_active_sources_once", fake_collect)
+
+    result = asyncio.run(make_scheduler().run_once())
+
+    assert result == expected
+    assert calls == 1
+
+
+def test_invalid_collection_window_is_rejected() -> None:
+    """Ошибочное окно расписания обнаруживается при запуске приложения."""
+
+    with pytest.raises(ValidationError, match="COLLECTION_END_HOUR"):
+        Settings(
+            _env_file=None,
+            collection_start_hour=20,
+            collection_end_hour=8,
+        )
