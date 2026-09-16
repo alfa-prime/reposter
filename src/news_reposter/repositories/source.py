@@ -1,8 +1,10 @@
+from __future__ import annotations
+
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from news_reposter.db.models import Source
+from news_reposter.db.models import Post, QueueItem, Source
 from news_reposter.schemas import SourceCreate, SourceUpdate
 
 
@@ -55,6 +57,16 @@ class SourceRepository:
         """Находит источник по идентификатору."""
 
         return await self.session.get(Source, source_id)
+
+    async def queue_item_ids(self, source_id: int) -> list[int]:
+        """Возвращает элементы очереди, которые удалятся вместе с источником."""
+
+        result = await self.session.scalars(
+            select(QueueItem.queue_item_id)
+            .join(Post, Post.post_id == QueueItem.post_id)
+            .where(Post.source_id == source_id)
+        )
+        return list(result.all())
 
     async def update(self, source: Source, data: SourceUpdate) -> Source:
         """Изменяет переданные поля источника."""

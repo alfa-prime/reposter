@@ -1,27 +1,33 @@
-from datetime import datetime
+import base64
+import binascii
+from datetime import UTC, datetime
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from news_reposter.db.models.enums import QueueItemStatus
+from news_reposter.services.media_validation import (
+    MediaValidationError,
+    validate_image_content,
+)
 
 
 class QueueItemCreate(BaseModel):
-    """Данные для помещения исходного поста в очередь целевого канала."""
-
     post_id: int = Field(gt=0, description="Идентификатор исходного поста")
     target_id: int = Field(gt=0, description="Идентификатор целевого канала")
     rewritten_text: str | None = Field(
-        default=None,
-        description="Подготовленный текст поста, если он уже известен",
+        default=None, description="Подготовленный текст поста, если он уже известен"
     )
 
 
 class QueueItemUpdate(BaseModel):
-    """Редактируемые поля элемента очереди без прямой смены статуса."""
-
     rewritten_text: str | None = Field(
         default=None,
         description="Отредактированный текст публикации; null очищает значение",
+    )
+    signature_text: str | None = Field(
+        default=None,
+        max_length=4000,
+        description="Подпись конкретной публикации; null означает использовать подпись канала",
     )
 
     @model_validator(mode="after")
@@ -32,65 +38,75 @@ class QueueItemUpdate(BaseModel):
 
 
 class QueueItemSchedule(BaseModel):
-    """Дата и время планируемой публикации."""
-
     scheduled_at: datetime = Field(
         description="Дата и время публикации с часовым поясом"
     )
 
+    @field_validator("scheduled_at")
+    @classmethod
+    def validate_scheduled_at(cls, value: datetime) -> datetime:
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise ValueError("дата и время публикации должны содержать часовой пояс")
+        if value <= datetime.now(UTC):
+            raise ValueError("дата и время публикации должны быть в будущем")
+        return value
+
+
+class QueueMediaUpload(BaseModel):
+    filename: str = Field(
+        min_length=1, max_length=255, description="Исходное имя файла"
+    )
+    content_type: str = Field(description="MIME-тип изображения")
+    data_base64: str = Field(min_length=1, description="Содержимое файла в Base64")
+
+    @model_validator(mode="after")
+    def validate_real_image_type(self) -> "QueueMediaUpload":
+        try:
+            content = base64.b64decode(self.data_base64, validate=True)
+        except (binascii.Error, ValueError) as exc:
+            raise ValueError("некорректные Base64-данные изображения") from exc
+        if not content:
+            raise ValueError("пустой файл изображения")
+        try:
+            validate_image_content(content, self.content_type)
+        except MediaValidationError as exc:
+            raise ValueError(str(exc)) from exc
+        return self
+
 
 class QueuePhotoRead(BaseModel):
-    """Фотография исходного поста для отображения в редакционной очереди."""
-
     attachment_id: int = Field(description="Идентификатор вложения")
     external_attachment_id: str | None = Field(
-        default=None,
-        description="Идентификатор фотографии во внешнем источнике",
+        default=None, description="Идентификатор фотографии во внешнем источнике"
     )
     source_url: str = Field(description="URL фотографии")
-    position: int = Field(description="Позиция фотографии в исходном посте")
+    position: int = Field(description="Позиция фотографии в публикации")
+    kind: str = Field(
+        default="source", description="Источник фото: source или uploaded"
+    )
+    media_id: str | None = Field(
+        default=None, description="Идентификатор загруженного редактором файла"
+    )
 
 
 class QueueItemRead(BaseModel):
-    """Элемент редакционной очереди в ответе API."""
-
     model_config = ConfigDict(from_attributes=True)
 
-    queue_item_id: int = Field(description="Идентификатор элемента очереди")
-    post_id: int = Field(description="Идентификатор исходного поста")
-    target_id: int = Field(description="Идентификатор целевого канала")
-    rewritten_text: str | None = Field(description="Подготовленный текст")
-    status: QueueItemStatus = Field(description="Редакционный статус")
-    scheduled_at: datetime | None = Field(description="Запланированное время публикации")
-    created_at: datetime = Field(description="Дата создания элемента очереди")
-    updated_at: datetime = Field(description="Дата последнего изменения")
-    error_message: str | None = Field(description="Ошибка редакционной обработки")
-
-    original_text: str | None = Field(
-        default=None,
-        description="Исходный текст поста из источника",
-    )
-    source_url: str | None = Field(
-        default=None,
-        description="Ссылка на исходный пост",
-    )
-    source_published_at: datetime | None = Field(
-        default=None,
-        description="Дата публикации исходного поста",
-    )
-    photos: list[QueuePhotoRead] = Field(
-        default_factory=list,
-        description="Фотографии исходного поста в исходном порядке",
-    )
-    target_name: str | None = Field(
-        default=None,
-        description="Название целевого канала",
-    )
-    target_platform: str | None = Field(
-        default=None,
-        description="Платформа целевого канала",
-    )
-    target_url: str | None = Field(
-        default=None,
-        description="Ссылка на целевой канал",
-    )
+    queue_item_id: int
+    post_id: int
+    target_id: int
+    rewritten_text: str | None
+    signature_text: str | None = None
+    status: QueueItemStatus
+    scheduled_at: datetime | None
+    created_at: datetime
+    updated_at: datetime
+    error_message: str | None
+    original_text: str | None = None
+    source_url: str | None = None
+    source_published_at: datetime | None = None
+    photos: list[QueuePhotoRead] = Field(default_factory=list)
+    target_name: str | None = None
+    target_platform: str | None = None
+    target_url: str | None = None
+    target_default_signature: str | None = None

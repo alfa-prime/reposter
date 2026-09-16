@@ -1,7 +1,10 @@
+from __future__ import annotations
+
 import asyncio
 from collections.abc import Iterator
 from datetime import UTC, datetime
 from types import SimpleNamespace
+from typing import ClassVar
 
 import httpx
 import pytest
@@ -16,8 +19,8 @@ from news_reposter.schemas import TargetCreate, TargetUpdate
 class MemoryTargetRepository:
     """Хранит цели публикаций в памяти во время проверки API."""
 
-    records: dict[int, SimpleNamespace] = {}
-    next_id = 1
+    records: ClassVar[dict[int, SimpleNamespace]] = {}
+    next_id: ClassVar[int] = 1
 
     def __init__(self, _session: object) -> None:
         """Принимает совместимый с настоящим репозиторием аргумент."""
@@ -69,6 +72,11 @@ class MemoryTargetRepository:
         """Находит тестовую цель по идентификатору."""
 
         return self.records.get(target_id)
+
+    async def queue_item_ids(self, _target_id: int) -> list[int]:
+        """В тестовом хранилище каскадных элементов нет."""
+
+        return []
 
     async def update(
         self,

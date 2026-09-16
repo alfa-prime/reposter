@@ -1,10 +1,66 @@
 from fastapi import APIRouter, HTTPException, Query, status
+from pydantic import BaseModel
 
 from news_reposter.api.dependencies import API_KEY_RESPONSES, ApiKeyDep
 from news_reposter.config import get_settings
 from news_reposter.integrations.vk import VKAPIError, VKClient, VKPost
 
 router = APIRouter(prefix="/vk", tags=["VK"], responses=API_KEY_RESPONSES)
+
+
+class VKSourceInfo(BaseModel):
+    name: str
+    url: str
+    icon_url: str | None = None
+
+
+def _client() -> VKClient:
+    settings = get_settings()
+    if not settings.vk_access_token:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="VK_ACCESS_TOKEN не задан в .env",
+        )
+    return VKClient(
+        access_token=settings.vk_access_token,
+        api_version=settings.vk_api_version,
+        api_url=settings.vk_api_url,
+    )
+
+
+@router.get(
+    "/source-info",
+    response_model=VKSourceInfo,
+    summary="Определить источник VK",
+    description="Получает название и аватар сообщества VK по его ссылке.",
+)
+async def get_vk_source_info(
+    _api_key: ApiKeyDep,
+    link: str = Query(..., description="Ссылка на сообщество VK"),
+) -> VKSourceInfo:
+    client = _client()
+    try:
+        group = await client.get_group_info(link)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
+        ) from exc
+    except VKAPIError as exc:
+        suffix = f" (код {exc.code})" if exc.code is not None else ""
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY, detail=f"Ошибка VK{suffix}: {exc}"
+        ) from exc
+
+    name = str(group.get("name") or "").strip()
+    screen_name = str(group.get("screen_name") or "").strip()
+    if not name:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="VK не вернул название сообщества",
+        )
+    canonical_url = f"https://vk.ru/{screen_name}" if screen_name else link.strip()
+    icon_url = str(group.get("photo_100") or "").strip() or None
+    return VKSourceInfo(name=name, url=canonical_url, icon_url=icon_url)
 
 
 @router.get(
@@ -34,48 +90,28 @@ async def get_latest_vk_post(
         examples=["https://vk.ru/peninsula51", "peninsula51", "club185052131"],
     ),
 ) -> VKPost:
-    """Возвращает последний пост указанной или настроенной группы VK."""
-
     settings = get_settings()
-
-    if not settings.vk_access_token:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="VK_ACCESS_TOKEN не задан в .env",
-        )
-
-    # Параметр запроса позволяет проверить другую группу без правки .env.
     selected_group = group or settings.vk_group
     if not selected_group:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="Укажите параметр group или VK_GROUP в .env",
         )
-
-    client = VKClient(
-        access_token=settings.vk_access_token,
-        api_version=settings.vk_api_version,
-        api_url=settings.vk_api_url,
-    )
-
+    client = _client()
     try:
         post = await client.get_latest_post(selected_group)
     except ValueError as exc:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=str(exc),
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
         ) from exc
     except VKAPIError as exc:
         suffix = f" (код {exc.code})" if exc.code is not None else ""
         raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=f"Ошибка VK{suffix}: {exc}",
+            status_code=status.HTTP_502_BAD_GATEWAY, detail=f"Ошибка VK{suffix}: {exc}"
         ) from exc
-
     if post is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="В группе не найдено ни одного поста",
         )
-
     return post

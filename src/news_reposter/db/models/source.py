@@ -15,14 +15,13 @@ class Source(Base):
     """Источник, из которого приложение получает публикации."""
 
     __tablename__ = "sources"
-    __table_args__ = (
-        Index("ix_sources_platform_is_active", "platform", "is_active"),
-    )
+    __table_args__ = (Index("ix_sources_platform_is_active", "platform", "is_active"),)
 
     source_id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(200))
     platform: Mapped[str] = mapped_column(String(32))
     url: Mapped[str] = mapped_column(String(2048), unique=True)
+    icon_url: Mapped[str | None] = mapped_column(String(2048), nullable=True)
     is_active: Mapped[bool] = mapped_column(
         Boolean,
         nullable=False,

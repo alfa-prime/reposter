@@ -19,7 +19,9 @@ COPY alembic.ini ./
 COPY alembic ./alembic
 RUN uv sync --frozen --no-dev
 
-RUN useradd --create-home --uid 1000 app
+RUN useradd --create-home --uid 1000 app \
+    && mkdir -p /app/data/media \
+    && chown -R app:app /app/data
 USER app
 
 EXPOSE 8000

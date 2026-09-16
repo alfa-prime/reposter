@@ -1,12 +1,21 @@
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Response, status
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from news_reposter.api.dependencies import API_KEY_RESPONSES, ApiKeyDep
+from news_reposter.api.v1.max import (
+    max_bad_gateway,
+    max_client_from_settings,
+    normalize_max_link,
+)
+from news_reposter.db.models import MAXChannel
 from news_reposter.db.session import get_db_session
+from news_reposter.integrations.max import MAXAPIError
 from news_reposter.repositories import TargetAlreadyExistsError, TargetRepository
 from news_reposter.schemas import TargetCreate, TargetRead, TargetUpdate
+from news_reposter.services.media_storage import cleanup_queue_items_media
 
 router = APIRouter(
     prefix="/targets",
@@ -32,6 +41,31 @@ def duplicate_error() -> HTTPException:
         status_code=status.HTTP_409_CONFLICT,
         detail="Такая цель публикации уже существует",
     )
+
+
+def _max_icon_url(chat: dict[str, Any]) -> str | None:
+    """Извлекает URL аватара из разных вариантов объекта icon MAX."""
+
+    icon = chat.get("icon")
+    if isinstance(icon, str) and icon.startswith(("http://", "https://")):
+        return icon
+    if not isinstance(icon, dict):
+        return None
+
+    preferred = ("url", "large", "small", "photo_200", "photo_100")
+    for key in preferred:
+        value = icon.get(key)
+        if isinstance(value, str) and value.startswith(("http://", "https://")):
+            return value
+
+    for value in icon.values():
+        if isinstance(value, str) and value.startswith(("http://", "https://")):
+            return value
+        if isinstance(value, dict):
+            nested = _max_icon_url({"icon": value})
+            if nested:
+                return nested
+    return None
 
 
 @router.post(
@@ -108,6 +142,53 @@ async def list_targets(
         is_active=is_active,
     )
     return [TargetRead.model_validate(target) for target in targets]
+
+
+@router.get(
+    "/resolve-max",
+    summary="Определить канал MAX по ссылке",
+    description="Возвращает chat_id, название и аватар канала MAX по публичной ссылке.",
+    responses={404: {"description": "Канал ещё не обнаружен webhook-ом"}},
+)
+async def resolve_max_target(
+    session: Session,
+    _api_key: ApiKeyDep,
+    link: str = Query(description="Публичная ссылка MAX"),
+) -> dict[str, Any]:
+    try:
+        normalized = normalize_max_link(link)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
+        ) from exc
+
+    channel = await session.scalar(
+        select(MAXChannel).where(
+            MAXChannel.link == normalized,
+            MAXChannel.is_active.is_(True),
+        )
+    )
+    if channel is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=(
+                "Канал ещё не обнаружен. Добавьте бота в подписчики канала и назначьте "
+                "администратором. Если бот уже был добавлен раньше, удалите его и добавьте снова."
+            ),
+        )
+
+    try:
+        chat = await max_client_from_settings().get_chat(channel.chat_id)
+    except MAXAPIError as exc:
+        raise max_bad_gateway(exc) from exc
+
+    title = chat.get("title")
+    return {
+        "chat_id": channel.chat_id,
+        "title": title if isinstance(title, str) and title.strip() else channel.title,
+        "link": normalized,
+        "icon_url": _max_icon_url(chat),
+    }
 
 
 @router.get(
@@ -196,5 +277,7 @@ async def delete_target(
     target = await repository.get(target_id)
     if target is None:
         raise not_found_error()
+    queue_item_ids = await repository.queue_item_ids(target_id)
     await repository.delete(target)
+    cleanup_queue_items_media(queue_item_ids)
     return Response(status_code=status.HTTP_204_NO_CONTENT)

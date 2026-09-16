@@ -8,6 +8,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from news_reposter.api.dependencies import API_KEY_RESPONSES, ApiKeyDep
 from news_reposter.config import get_settings
 from news_reposter.db.session import get_db_session
+from news_reposter.llm import LLMProviderError, RewriteRequest
+from news_reposter.llm.factory import get_llm_provider
 from news_reposter.schemas import DatabaseHealthResponse, HealthResponse
 from news_reposter.services.collector import collect_active_sources_once
 
@@ -31,8 +33,7 @@ async def health() -> dict[str, str]:
     "/health/database",
     summary="Проверить подключение к PostgreSQL",
     description=(
-        "Выполняет простой запрос `SELECT 1` через асинхронную сессию "
-        "SQLAlchemy."
+        "Выполняет простой запрос `SELECT 1` через асинхронную сессию SQLAlchemy."
     ),
     response_model=DatabaseHealthResponse,
     response_description="Состояние подключения к базе данных",
@@ -86,3 +87,56 @@ async def collect_now(_api_key: ApiKeyDep) -> dict[str, int | str]:
 
     summary = await collect_active_sources_once()
     return {"status": "ok", **summary}
+
+
+@router.post(
+    "/api/v1/system/llm-test",
+    summary="Проверить подключение к ИИ",
+    description=(
+        "Отправляет безопасный тестовый запрос настроенному LLM-провайдеру. "
+        "Ключи и токены в ответ не возвращаются. Endpoint предназначен для "
+        "проверки настройки интеграции перед включением рерайта в редакционной очереди."
+    ),
+    response_description="Результат тестового запроса к LLM-провайдеру",
+    responses={
+        **API_KEY_RESPONSES,
+        502: {"description": "LLM-провайдер доступен, но запрос завершился ошибкой"},
+        503: {"description": "LLM-провайдер не настроен"},
+    },
+)
+async def llm_test(_api_key: ApiKeyDep) -> dict[str, object]:
+    """Проверяет реальную авторизацию и генерацию ответа у настроенного LLM."""
+
+    try:
+        provider = get_llm_provider()
+    except (RuntimeError, ValueError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=str(exc),
+        ) from exc
+
+    request = RewriteRequest(
+        text="В Мурманске сегодня хорошая погода.",
+        system_prompt=(
+            "Перепиши предложение как короткую нейтральную новостную заметку на русском языке. "
+            "Верни только готовый текст без пояснений."
+        ),
+        temperature=0.2,
+        max_tokens=128,
+    )
+
+    try:
+        result = await provider.rewrite(request)
+    except LLMProviderError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=str(exc),
+        ) from exc
+
+    return {
+        "status": "ok",
+        "provider": result.provider,
+        "model": result.model,
+        "text": result.text,
+        "usage": result.usage,
+    }

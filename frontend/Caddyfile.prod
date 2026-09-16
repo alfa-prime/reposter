@@ -1,0 +1,42 @@
+{$SITE_ADDRESS} {
+    encode zstd gzip
+
+    # Публичный webhook MAX. Он защищён собственным секретом
+    # X-Max-Bot-Api-Secret внутри FastAPI и не требует Basic Auth.
+    handle /api/v1/max/webhook {
+        reverse_proxy app:8000
+    }
+
+    # Для остальных маршрутов сначала выполняем Basic Auth, а затем
+    # явно выбираем API/служебный маршрут или SPA. route сохраняет
+    # указанный порядок и не даёт try_files переписать /api/* в /index.html.
+    route {
+        basic_auth {
+            {$ADMIN_USER} {$ADMIN_PASSWORD_HASH}
+        }
+
+        handle /api/* {
+            reverse_proxy app:8000 {
+                header_up X-API-Key {$API_KEY}
+            }
+        }
+
+        handle /health* {
+            reverse_proxy app:8000
+        }
+
+        handle /docs* {
+            reverse_proxy app:8000
+        }
+
+        handle /openapi.json {
+            reverse_proxy app:8000
+        }
+
+        handle {
+            root * /srv
+            try_files {path} /index.html
+            file_server
+        }
+    }
+}

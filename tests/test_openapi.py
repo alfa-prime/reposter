@@ -1,15 +1,10 @@
 from news_reposter.main import app
 
-
 EXPECTED_OPERATIONS = {
     ("/health", "get"): "Проверить работу приложения",
     ("/health/database", "get"): "Проверить подключение к PostgreSQL",
     ("/api/v1/system/collect-now", "post"): "Запустить сбор источников сейчас",
     ("/api/v1/vk/posts/latest", "get"): "Получить последний пост VK",
-    (
-        "/api/v1/max/posts/from-vk/latest",
-        "post",
-    ): "Опубликовать последний пост VK в MAX",
     ("/api/v1/sources", "post"): "Добавить источник",
     ("/api/v1/sources", "get"): "Получить список источников",
     ("/api/v1/sources/{source_id}", "get"): "Получить источник",
@@ -46,6 +41,7 @@ EXPECTED_OPERATIONS = {
     ("/api/v1/queue/{queue_item_id}/reject", "post"): "Отклонить пост",
     ("/api/v1/queue/{queue_item_id}/reopen", "post"): "Вернуть пост в работу",
     ("/api/v1/queue/{queue_item_id}/schedule", "post"): "Запланировать публикацию",
+    ("/api/v1/queue/{queue_item_id}/publish-now", "post"): "Опубликовать пост сейчас",
 }
 
 
@@ -59,6 +55,12 @@ def test_openapi_has_russian_operation_descriptions() -> None:
         assert operation["summary"] == summary
         assert operation["description"]
         assert any("а" <= char.lower() <= "я" for char in operation["description"])
+
+
+def test_openapi_does_not_expose_direct_vk_to_max_publication() -> None:
+    """Любая отправка в MAX проходит только через редакционную очередь."""
+
+    assert "/api/v1/max/posts/from-vk/latest" not in app.openapi()["paths"]
 
 
 def test_openapi_has_ordered_russian_tags() -> None:
@@ -97,7 +99,7 @@ def test_openapi_models_have_field_descriptions() -> None:
 
 
 def test_openapi_describes_api_key_security() -> None:
-    """Проверяет схему ключа и защиту всех рабочих эндпоинтов."""
+    """Проверяет API-ключ, кроме публичного MAX webhook с собственным секретом."""
 
     schema = app.openapi()
     security_scheme = schema["components"]["securitySchemes"]["APIKeyHeader"]
@@ -108,7 +110,9 @@ def test_openapi_describes_api_key_security() -> None:
 
     for path, path_item in schema["paths"].items():
         for operation in path_item.values():
-            if path.startswith("/api/v1/"):
+            if path == "/api/v1/max/webhook":
+                assert "security" not in operation
+            elif path.startswith("/api/v1/"):
                 assert operation["security"] == [{"APIKeyHeader": []}]
                 assert "401" in operation["responses"]
                 assert "503" in operation["responses"]

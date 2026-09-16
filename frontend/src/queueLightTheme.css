@@ -1,0 +1,59 @@
+html[data-theme="light"] .editorial-status {
+  color: #3550a8;
+  background: #e9eeff;
+  border-color: #c7d3ff;
+}
+
+html[data-theme="light"] .editorial-status.status-pending,
+html[data-theme="light"] .editorial-status.status-rewriting {
+  color: #23439a;
+  background: #e4ebff;
+  border-color: #b8c7ff;
+}
+
+html[data-theme="light"] .editorial-status.status-awaiting_moderation {
+  color: #8a5600;
+  background: #fff1d8;
+  border-color: #f2cf8f;
+}
+
+html[data-theme="light"] .editorial-status.status-approved,
+html[data-theme="light"] .editorial-status.status-scheduled,
+html[data-theme="light"] .editorial-status.status-published {
+  color: #17683f;
+  background: #e3f5eb;
+  border-color: #b8dfc9;
+}
+
+html[data-theme="light"] .editorial-status.status-rejected,
+html[data-theme="light"] .editorial-status.status-failed {
+  color: #9b2f45;
+  background: #fde8ed;
+  border-color: #efbdc8;
+}
+
+html[data-theme="light"] .schedule-validation-error {
+  color: #b4233d;
+}
+
+html[data-theme="light"] .drawer-inline-actions button {
+  color: #4d63d6;
+  font-weight: 650;
+}
+
+html[data-theme="light"] .drawer-inline-actions button:hover:not(:disabled) {
+  color: #2f46bd;
+}
+
+html[data-theme="light"] .drawer-inline-actions button:disabled {
+  color: #9ba8d8;
+  opacity: .72;
+}
+
+html[data-theme="light"] .drawer-inline-actions .ai-rewrite-action {
+  color: #5865d8;
+}
+
+html[data-theme="light"] .drawer-inline-actions .ai-rewrite-action:hover:not(:disabled) {
+  color: #3949c6;
+}

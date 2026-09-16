@@ -39,6 +39,7 @@ class QueueItem(Base):
         index=True,
     )
     rewritten_text: Mapped[str | None] = mapped_column(Text)
+    signature_text: Mapped[str | None] = mapped_column(Text)
     status: Mapped[QueueItemStatus] = mapped_column(
         Enum(
             QueueItemStatus,

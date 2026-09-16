@@ -32,30 +32,38 @@ class TargetBase(BaseModel):
         description="Необязательная ссылка на канал или чат",
         examples=["https://max.ru/channel_51_news"],
     )
+    icon_url: str | None = Field(
+        default=None,
+        max_length=2048,
+        description="URL аватара канала, полученный из внешней платформы",
+    )
+    default_signature: str | None = Field(
+        default=None,
+        max_length=4000,
+        description="Подпись, автоматически подставляемая к новым публикациям канала",
+    )
+    rewrite_prompt: str | None = Field(
+        default=None,
+        max_length=12000,
+        description="Индивидуальная инструкция ИИ для рерайта постов этого канала",
+    )
     is_active: bool = Field(
-        default=True,
-        description="Можно ли публиковать посты в эту цель",
+        default=True, description="Можно ли публиковать посты в эту цель"
     )
 
     @field_validator("name", "external_id", mode="before")
     @classmethod
     def strip_text(cls, value: object) -> object:
-        """Убирает случайные пробелы по краям текстовых полей."""
-
         return value.strip() if isinstance(value, str) else value
 
     @field_validator("platform", mode="before")
     @classmethod
     def normalize_platform(cls, value: object) -> object:
-        """Приводит название платформы к единому виду."""
-
         return value.strip().lower() if isinstance(value, str) else value
 
-    @field_validator("url", mode="before")
+    @field_validator("url", "icon_url", mode="before")
     @classmethod
     def validate_url(cls, value: object) -> object:
-        """Проверяет необязательную ссылку на канал или чат."""
-
         if value is None:
             return None
         if not isinstance(value, str):
@@ -65,6 +73,14 @@ class TargetBase(BaseModel):
         if parsed.scheme not in {"http", "https"} or not parsed.netloc:
             raise ValueError("url должен быть абсолютной HTTP-ссылкой")
         return value
+
+    @field_validator("default_signature", "rewrite_prompt", mode="before")
+    @classmethod
+    def normalize_optional_text(cls, value: object) -> object:
+        if not isinstance(value, str):
+            return value
+        value = value.strip()
+        return value or None
 
 
 class TargetCreate(TargetBase):
@@ -77,6 +93,9 @@ class TargetCreate(TargetBase):
                 "platform": "max",
                 "external_id": "-77162942582085",
                 "url": "https://max.ru/channel_51_news",
+                "icon_url": None,
+                "default_signature": "📣 Подписывайтесь на наш канал",
+                "rewrite_prompt": None,
                 "is_active": True,
             }
         }
@@ -87,10 +106,7 @@ class TargetUpdate(BaseModel):
     """Поля цели публикации, которые можно изменить."""
 
     name: str | None = Field(
-        default=None,
-        min_length=1,
-        max_length=200,
-        description="Новое название цели",
+        default=None, min_length=1, max_length=200, description="Новое название цели"
     )
     platform: str | None = Field(
         default=None,
@@ -110,30 +126,38 @@ class TargetUpdate(BaseModel):
         max_length=2048,
         description="Новая ссылка; значение null удаляет текущую ссылку",
     )
-    is_active: bool | None = Field(
+    icon_url: str | None = Field(
         default=None,
-        description="Включить или приостановить публикацию",
+        max_length=2048,
+        description="Новый URL аватара; null очищает аватар",
+    )
+    default_signature: str | None = Field(
+        default=None,
+        max_length=4000,
+        description="Подпись канала; null очищает подпись по умолчанию",
+    )
+    rewrite_prompt: str | None = Field(
+        default=None,
+        max_length=12000,
+        description="Инструкция ИИ для рерайта; null возвращает общий промпт приложения",
+    )
+    is_active: bool | None = Field(
+        default=None, description="Включить или приостановить публикацию"
     )
 
     @field_validator("name", "external_id", mode="before")
     @classmethod
     def strip_text(cls, value: object) -> object:
-        """Убирает пробелы по краям изменяемых текстовых полей."""
-
         return value.strip() if isinstance(value, str) else value
 
     @field_validator("platform", mode="before")
     @classmethod
     def normalize_platform(cls, value: object) -> object:
-        """Приводит изменённую платформу к нижнему регистру."""
-
         return value.strip().lower() if isinstance(value, str) else value
 
-    @field_validator("url", mode="before")
+    @field_validator("url", "icon_url", mode="before")
     @classmethod
     def validate_url(cls, value: object) -> object:
-        """Проверяет изменённую ссылку и разрешает удалить её через null."""
-
         if value is None:
             return None
         if not isinstance(value, str):
@@ -144,13 +168,24 @@ class TargetUpdate(BaseModel):
             raise ValueError("url должен быть абсолютной HTTP-ссылкой")
         return value
 
+    @field_validator("default_signature", "rewrite_prompt", mode="before")
+    @classmethod
+    def normalize_optional_text(cls, value: object) -> object:
+        if not isinstance(value, str):
+            return value
+        value = value.strip()
+        return value or None
+
     @model_validator(mode="after")
     def validate_changes(self) -> "TargetUpdate":
-        """Проверяет, что запрос содержит допустимые изменения."""
-
         if not self.model_fields_set:
             raise ValueError("нужно передать хотя бы одно поле")
-        required_fields = self.model_fields_set - {"url"}
+        required_fields = self.model_fields_set - {
+            "url",
+            "icon_url",
+            "default_signature",
+            "rewrite_prompt",
+        }
         if any(getattr(self, field) is None for field in required_fields):
             raise ValueError("обязательные поля цели не могут быть null")
         return self
@@ -160,7 +195,6 @@ class TargetRead(TargetBase):
     """Цель публикации в ответе API."""
 
     model_config = ConfigDict(from_attributes=True)
-
     target_id: int = Field(description="Идентификатор цели в нашей базе")
     created_at: datetime = Field(description="Дата и время создания записи")
     updated_at: datetime = Field(description="Дата и время последнего изменения")

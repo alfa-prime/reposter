@@ -1,8 +1,10 @@
+from __future__ import annotations
+
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from news_reposter.db.models import Target
+from news_reposter.db.models import QueueItem, Target
 from news_reposter.schemas import TargetCreate, TargetUpdate
 
 
@@ -55,6 +57,14 @@ class TargetRepository:
         """Находит цель публикации по идентификатору."""
 
         return await self.session.get(Target, target_id)
+
+    async def queue_item_ids(self, target_id: int) -> list[int]:
+        """Возвращает элементы очереди, которые удалятся вместе с целью."""
+
+        result = await self.session.scalars(
+            select(QueueItem.queue_item_id).where(QueueItem.target_id == target_id)
+        )
+        return list(result.all())
 
     async def update(self, target: Target, data: TargetUpdate) -> Target:
         """Изменяет переданные поля цели публикации."""

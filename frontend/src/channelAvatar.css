@@ -1,0 +1,49 @@
+.entity-icon.channel-avatar {
+  overflow: hidden;
+  padding: 0;
+  border-radius: 50%;
+  background: transparent;
+}
+
+.entity-icon.channel-avatar img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+}
+
+.source-avatar {
+  width: 38px;
+  height: 38px;
+  flex: 0 0 38px;
+  overflow: hidden;
+  border-radius: 50%;
+}
+
+.source-avatar img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+}
+
+.attach-list .attach-source {
+  display: flex;
+  align-items: center;
+  min-height: 58px;
+  gap: 14px;
+}
+
+.attach-list .attach-source > .source-avatar {
+  margin-right: 2px;
+}
+
+.attach-list .attach-source > span:nth-child(2) {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.attach-list .attach-source > small {
+  margin-left: auto;
+  flex: 0 0 auto;
+}

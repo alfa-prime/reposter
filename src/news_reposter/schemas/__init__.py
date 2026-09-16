@@ -1,6 +1,5 @@
 """Схемы запросов и ответов API."""
 
-from news_reposter.schemas.max import MAXPublishResponse
 from news_reposter.schemas.queue_item import (
     QueueItemCreate,
     QueueItemRead,
@@ -19,7 +18,6 @@ from news_reposter.schemas.target_source import (
 __all__ = [
     "DatabaseHealthResponse",
     "HealthResponse",
-    "MAXPublishResponse",
     "QueueItemCreate",
     "QueueItemRead",
     "QueueItemSchedule",

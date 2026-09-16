@@ -57,9 +57,22 @@ class CollectionScheduler:
             await asyncio.sleep(delay)
 
             try:
-                await collect_active_sources_once()
+                await self.run_once()
             except Exception:
                 logger.exception("Ошибка фонового запуска сбора источников")
+
+    async def run_once(self) -> dict[str, int]:
+        """Выполняет тот же полный проход, который запускается по расписанию."""
+
+        summary = await collect_active_sources_once()
+        logger.info(
+            "Плановый сбор завершён: источников %s, постов %s, очередь %s, ошибок %s",
+            summary["sources_checked"],
+            summary["posts_created"],
+            summary["queue_items_created"],
+            summary["errors"],
+        )
+        return summary
 
     def next_run_at(self, now: datetime) -> datetime:
         """Возвращает ближайший момент запуска в часовом поясе планировщика."""
@@ -80,7 +93,9 @@ class CollectionScheduler:
         )
 
         if end <= start:
-            raise ValueError("COLLECTION_END_HOUR должен быть позже COLLECTION_START_HOUR")
+            raise ValueError(
+                "COLLECTION_END_HOUR должен быть позже COLLECTION_START_HOUR"
+            )
 
         if local_now <= start:
             return start

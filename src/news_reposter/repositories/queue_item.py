@@ -51,7 +51,7 @@ class QueueItemRepository:
                 selectinload(QueueItem.post).selectinload(Post.attachments),
                 selectinload(QueueItem.target),
             )
-            .order_by(QueueItem.queue_item_id)
+            .order_by(QueueItem.queue_item_id.desc())
         )
         if source_id is not None:
             statement = statement.join(Post).where(Post.source_id == source_id)
