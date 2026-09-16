@@ -84,8 +84,21 @@ html[data-theme="light"] .sidebar {
   border-right-color: rgba(28,43,68,.09);
 }
 
+html[data-theme="light"] .sidebar-foot {
+  border-color: rgba(28,43,68,.09);
+}
+
+html[data-theme="light"] .sidebar-theme-label {
+  color: #68778d;
+}
+
+html[data-theme="light"] .sidebar-theme-compact {
+  color: #52627a;
+  background: rgba(255,255,255,.88);
+  border-color: rgba(42,58,88,.12);
+}
+
 html[data-theme="light"] .brand span,
-html[data-theme="light"] .system-state,
 html[data-theme="light"] .eyebrow,
 html[data-theme="light"] .metric span,
 html[data-theme="light"] .metric small,
