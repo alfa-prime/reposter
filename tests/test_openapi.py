@@ -1,15 +1,10 @@
 from news_reposter.main import app
 
-
 EXPECTED_OPERATIONS = {
     ("/health", "get"): "Проверить работу приложения",
     ("/health/database", "get"): "Проверить подключение к PostgreSQL",
     ("/api/v1/system/collect-now", "post"): "Запустить сбор источников сейчас",
     ("/api/v1/vk/posts/latest", "get"): "Получить последний пост VK",
-    (
-        "/api/v1/max/posts/from-vk/latest",
-        "post",
-    ): "Опубликовать последний пост VK в MAX",
     ("/api/v1/sources", "post"): "Добавить источник",
     ("/api/v1/sources", "get"): "Получить список источников",
     ("/api/v1/sources/{source_id}", "get"): "Получить источник",
@@ -60,6 +55,12 @@ def test_openapi_has_russian_operation_descriptions() -> None:
         assert operation["summary"] == summary
         assert operation["description"]
         assert any("а" <= char.lower() <= "я" for char in operation["description"])
+
+
+def test_openapi_does_not_expose_direct_vk_to_max_publication() -> None:
+    """Любая отправка в MAX проходит только через редакционную очередь."""
+
+    assert "/api/v1/max/posts/from-vk/latest" not in app.openapi()["paths"]
 
 
 def test_openapi_has_ordered_russian_tags() -> None:
