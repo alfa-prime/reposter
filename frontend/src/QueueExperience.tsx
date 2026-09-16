@@ -162,6 +162,8 @@ export function QueueExperience({ collectSignal = 0, targetId }: QueueExperience
 
   useEffect(() => {
     void loadQueue();
+    const timer = window.setInterval(() => void loadQueue(), 60_000);
+    return () => window.clearInterval(timer);
   }, [collectSignal]);
 
   useEffect(() => {

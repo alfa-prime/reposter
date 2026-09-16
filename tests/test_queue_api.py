@@ -2,6 +2,7 @@ import asyncio
 from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
+from typing import ClassVar
 
 import httpx
 import pytest
@@ -17,8 +18,8 @@ from news_reposter.schemas.queue_item import QueueItemCreate, QueueItemUpdate
 class MemoryQueueRepository:
     """Хранит элементы очереди в памяти во время API-тестов."""
 
-    records: dict[int, SimpleNamespace] = {}
-    next_id = 1
+    records: ClassVar[dict[int, SimpleNamespace]] = {}
+    next_id: ClassVar[int] = 1
 
     def __init__(self, _session: object) -> None:
         pass
@@ -72,6 +73,7 @@ class MemoryQueueRepository:
             records = [item for item in records if item.post_id == post_id]
         if status is not None:
             records = [item for item in records if item.status == status]
+        records.sort(key=lambda item: item.queue_item_id, reverse=True)
         return records[offset : offset + limit]
 
     async def get(self, queue_item_id: int) -> SimpleNamespace | None:
@@ -182,7 +184,9 @@ def test_queue_response_includes_source_post_photos_and_target() -> None:
 def test_queue_crud_and_moderation(memory_queue_repository: None) -> None:
     async def scenario() -> None:
         transport = httpx.ASGITransport(app=app)
-        async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        async with httpx.AsyncClient(
+            transport=transport, base_url="http://test"
+        ) as client:
             missing_post = await client.post(
                 "/api/v1/queue",
                 json={"post_id": 999, "target_id": 20},
@@ -220,7 +224,11 @@ def test_queue_crud_and_moderation(memory_queue_repository: None) -> None:
 
             past_schedule = await client.post(
                 "/api/v1/queue/1/schedule",
-                json={"scheduled_at": (datetime.now(UTC) - timedelta(minutes=1)).isoformat()},
+                json={
+                    "scheduled_at": (
+                        datetime.now(UTC) - timedelta(minutes=1)
+                    ).isoformat()
+                },
             )
             assert past_schedule.status_code == 422
             assert "должны быть в будущем" in str(past_schedule.json()["detail"])
@@ -255,10 +263,55 @@ def test_queue_crud_and_moderation(memory_queue_repository: None) -> None:
     asyncio.run(scenario())
 
 
+def test_queue_pages_are_returned_newest_first(
+    memory_queue_repository: None,
+) -> None:
+    """Большая очередь отдаётся стабильными страницами от новых записей к старым."""
+
+    now = datetime.now(UTC)
+    for queue_item_id in range(1, 126):
+        MemoryQueueRepository.records[queue_item_id] = SimpleNamespace(
+            queue_item_id=queue_item_id,
+            post_id=queue_item_id,
+            target_id=20,
+            rewritten_text=f"Пост {queue_item_id}",
+            status=QueueItemStatus.PENDING,
+            scheduled_at=None,
+            created_at=now,
+            updated_at=now,
+            error_message=None,
+        )
+
+    async def scenario() -> None:
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(
+            transport=transport,
+            base_url="http://test",
+        ) as client:
+            first_page = await client.get("/api/v1/queue", params={"limit": 100})
+            second_page = await client.get(
+                "/api/v1/queue",
+                params={"offset": 100, "limit": 100},
+            )
+
+        assert first_page.status_code == 200
+        assert second_page.status_code == 200
+        assert [item["queue_item_id"] for item in first_page.json()] == list(
+            range(125, 25, -1)
+        )
+        assert [item["queue_item_id"] for item in second_page.json()] == list(
+            range(25, 0, -1)
+        )
+
+    asyncio.run(scenario())
+
+
 def test_submit_requires_prepared_text(memory_queue_repository: None) -> None:
     async def scenario() -> None:
         transport = httpx.ASGITransport(app=app)
-        async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        async with httpx.AsyncClient(
+            transport=transport, base_url="http://test"
+        ) as client:
             created = await client.post(
                 "/api/v1/queue",
                 json={"post_id": 10, "target_id": 20},

@@ -129,8 +129,21 @@ async function createSourceFromLink(data: { url: string; is_active?: boolean }):
   return request<Source>("/api/v1/sources", { method: "POST", body: JSON.stringify({ name: info.name, platform: "vk", url: info.url || url, icon_url: info.icon_url || null, is_active: data.is_active ?? true }) });
 }
 
+async function fetchAllQueueItems(): Promise<QueueItem[]> {
+  const pageSize = 100;
+  const items: QueueItem[] = [];
+  let offset = 0;
+
+  while (true) {
+    const page = await request<QueueItem[]>(`/api/v1/queue?offset=${offset}&limit=${pageSize}`);
+    items.push(...page);
+    if (page.length < pageSize) return items;
+    offset += pageSize;
+  }
+}
+
 export const api = {
-  queue: () => request<QueueItem[]>("/api/v1/queue?limit=100"),
+  queue: fetchAllQueueItems,
   queueItem: (id: number) => request<QueueItem>(`/api/v1/queue/${id}`),
   queueMediaState: (id: number) => request<QueueMediaState>(`/api/v1/queue/${id}/media-state`),
   updateQueueMediaState: (id: number, mediaOrder: string[]) => request<QueueMediaState>(`/api/v1/queue/${id}/media-state`, { method: "PUT", body: JSON.stringify({ media_order: mediaOrder }) }),

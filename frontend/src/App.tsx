@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { RefreshCw, Trash2, X } from "lucide-react";
-import { api, QueueItem, Source, Target, TargetSource } from "./api";
+import { api, Source, Target, TargetSource } from "./api";
 import { AboutPage } from "./components/AboutPage";
 import { QueuePage } from "./components/QueuePage";
 import { SettingsPage } from "./components/SettingsPage";
@@ -18,9 +18,9 @@ type ConfirmDialog = {
 
 export function App() {
   const [section, setSection] = useState<Section>("queue");
-  const [queue, setQueue] = useState<QueueItem[]>([]);
   const [targets, setTargets] = useState<Target[]>([]);
   const [sources, setSources] = useState<Source[]>([]);
+  const [queueReloadSignal, setQueueReloadSignal] = useState(0);
   const [selectedTarget, setSelectedTarget] = useState<Target | null>(null);
   const [selectedQueueTargetId, setSelectedQueueTargetId] = useState<number | null>(null);
   const [targetSources, setTargetSources] = useState<TargetSource[]>([]);
@@ -38,12 +38,10 @@ export function App() {
     setBusy(true);
     setError("");
     try {
-      const [queueData, targetData, sourceData] = await Promise.all([
-        api.queue(),
+      const [targetData, sourceData] = await Promise.all([
         api.targets(),
         api.sources(),
       ]);
-      setQueue(queueData);
       setTargets(targetData);
       setSources(sourceData);
 
@@ -127,6 +125,7 @@ export function App() {
       } else {
         setNotice(`Проверено источников: ${result.sources_checked}. Новых постов: ${result.posts_created}. В очередь добавлено: ${result.queue_items_created}.`);
       }
+      setQueueReloadSignal((value) => value + 1);
       await loadAll();
     } catch (exc) {
       setError(exc instanceof Error ? exc.message : "Сбор не выполнен");
@@ -225,7 +224,12 @@ export function App() {
         {section === "about" && <AboutPage />}
         {section === "settings" && <SettingsPage />}
 
-        {section === "queue" && <QueuePage targetId={selectedQueueTargetId} />}
+        {section === "queue" && (
+          <QueuePage
+            targetId={selectedQueueTargetId}
+            reloadSignal={queueReloadSignal}
+          />
+        )}
 
         {section === "targets" && (
           <TargetsPage
