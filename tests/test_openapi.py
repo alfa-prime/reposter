@@ -69,6 +69,7 @@ def test_openapi_has_ordered_russian_tags() -> None:
     tags = app.openapi()["tags"]
 
     assert [tag["name"] for tag in tags] == [
+        "Планировщик сбора",
         "Система",
         "Источники",
         "Цели публикаций",

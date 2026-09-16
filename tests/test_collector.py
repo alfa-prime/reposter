@@ -33,12 +33,45 @@ class FakeSessionContext:
         return None
 
 
+class FakeHistory:
+    """Не обращается к PostgreSQL и запоминает завершение запуска."""
+
+    def __init__(self) -> None:
+        self.finished_status = None
+
+    async def start_run(self, _trigger: object) -> int:
+        return 42
+
+    async def set_sources_total(self, _run_id: int, _total: int) -> None:
+        return None
+
+    async def start_source(self, **_kwargs: object) -> int:
+        return 7
+
+    async def set_source_last_before(
+        self, _source_run_id: int, _last_post_id: int | None
+    ) -> None:
+        return None
+
+    async def finish_source(self, _source_run_id: int, **_kwargs: object) -> None:
+        return None
+
+    async def finish_run(
+        self, _run_id: int, *, status: object, **_kwargs: object
+    ) -> None:
+        self.finished_status = status
+
+
 def test_collector_stores_all_ten_posts_after_last_saved(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Все десять новых записей проходят от клиента VK до сохранения в очередь."""
 
-    source = SimpleNamespace(source_id=1, url="https://vk.com/news_murmansk")
+    source = SimpleNamespace(
+        source_id=1,
+        name="Новости Мурманска",
+        url="https://vk.com/news_murmansk",
+    )
     target_source = SimpleNamespace(target_id=7)
     session = FakeSession([(target_source, source)])
     received_post_ids: list[int] = []
@@ -80,6 +113,8 @@ def test_collector_stores_all_ten_posts_after_last_saved(
         lambda: FakeSessionContext(session),
     )
     monkeypatch.setattr(collector_module, "VKClient", FakeVKClient)
+    history = FakeHistory()
+    monkeypatch.setattr(collector_module, "CollectionHistory", lambda: history)
     monkeypatch.setattr(
         collector_module,
         "_get_last_external_post_id",
@@ -91,7 +126,11 @@ def test_collector_stores_all_ten_posts_after_last_saved(
 
     assert received_post_ids == list(range(101, 111))
     assert summary == {
+        "run_id": 42,
+        "sources_total": 1,
         "sources_checked": 1,
+        "sources_succeeded": 1,
+        "posts_found": 10,
         "posts_created": 10,
         "queue_items_created": 10,
         "errors": 0,
@@ -108,7 +147,7 @@ def test_collector_serializes_manual_and_scheduled_runs(
     active_runs = 0
     max_active_runs = 0
 
-    async def fake_collect() -> dict[str, int]:
+    async def fake_collect(**_kwargs: object) -> dict[str, int]:
         nonlocal active_runs, max_active_runs
         active_runs += 1
         max_active_runs = max(max_active_runs, active_runs)
@@ -124,10 +163,12 @@ def test_collector_serializes_manual_and_scheduled_runs(
     monkeypatch.setattr(collector_module, "_collect_active_sources_once", fake_collect)
 
     async def scenario() -> None:
-        await asyncio.gather(
+        results = await asyncio.gather(
             collector_module.collect_active_sources_once(),
             collector_module.collect_active_sources_once(),
+            return_exceptions=True,
         )
+        assert sum(isinstance(item, Exception) for item in results) == 1
 
     asyncio.run(scenario())
 

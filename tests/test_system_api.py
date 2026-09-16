@@ -53,7 +53,7 @@ def test_database_health_returns_503_when_database_is_unavailable() -> None:
 def test_collect_now_returns_summary(monkeypatch: pytest.MonkeyPatch) -> None:
     """Ручной запуск возвращает понятную сводку для админки."""
 
-    async def fake_collect() -> dict[str, int]:
+    async def fake_collect(_trigger: object) -> dict[str, int]:
         return {
             "sources_checked": 2,
             "posts_created": 3,

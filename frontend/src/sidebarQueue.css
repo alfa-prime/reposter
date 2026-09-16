@@ -75,6 +75,11 @@ nav .queue-nav-channel.active {
   text-align: left;
 }
 
+.settings-nav-children .queue-nav-channel > svg {
+  flex: 0 0 auto;
+  color: #8297ef;
+}
+
 .queue-context {
   margin: 7px 0 0;
   color: #73829a;

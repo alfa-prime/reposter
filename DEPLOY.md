@@ -47,7 +47,7 @@ git --version
 ```bash
 git clone git@github.com:alfa-prime/reposter.git
 cd reposter
-git switch feature/frontend-admin
+git switch master
 ```
 
 Use an SSH deploy key or another secure GitHub credential for the private repository.

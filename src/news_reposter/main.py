@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
+from news_reposter.api.v1.collection import router as collection_router
 from news_reposter.api.v1.max import router as max_router
 from news_reposter.api.v1.queue import router as queue_router
 from news_reposter.api.v1.queue_media_state import router as queue_media_state_router
@@ -20,10 +21,14 @@ from news_reposter.services.publication_scheduler import PublicationScheduler
 from news_reposter.services.scheduler import CollectionScheduler
 
 settings = get_settings()
-collection_scheduler = CollectionScheduler(settings)
+collection_scheduler = CollectionScheduler()
 publication_scheduler = PublicationScheduler()
 
 OPENAPI_TAGS = [
+    {
+        "name": "Планировщик сбора",
+        "description": "Настройки автоматического сбора и журнал запусков.",
+    },
     {
         "name": "Система",
         "description": "Проверка работы приложения и подключения к PostgreSQL.",
@@ -65,6 +70,7 @@ OPENAPI_TAGS = [
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     """Запускает фоновые задачи и освобождает ресурсы при остановке."""
 
+    _app.state.collection_scheduler = collection_scheduler
     collection_scheduler.start()
     publication_scheduler.start()
     try:
@@ -96,4 +102,5 @@ app.include_router(queue_media_state_router, prefix="/api/v1")
 app.include_router(queue_video_router, prefix="/api/v1")
 app.include_router(queue_publish_router, prefix="/api/v1")
 app.include_router(queue_rewrite_router, prefix="/api/v1")
+app.include_router(collection_router, prefix="/api/v1")
 app.include_router(system_router)

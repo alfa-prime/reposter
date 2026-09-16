@@ -7,11 +7,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from news_reposter.api.dependencies import API_KEY_RESPONSES, ApiKeyDep
 from news_reposter.config import get_settings
+from news_reposter.db.models import CollectionRunTrigger
 from news_reposter.db.session import get_db_session
 from news_reposter.llm import LLMProviderError, RewriteRequest
 from news_reposter.llm.factory import get_llm_provider
 from news_reposter.schemas import DatabaseHealthResponse, HealthResponse
-from news_reposter.services.collector import collect_active_sources_once
+from news_reposter.services.collector import (
+    CollectionAlreadyRunningError,
+    collect_active_sources_once,
+)
 
 router = APIRouter(tags=["Система"])
 
@@ -73,6 +77,7 @@ async def database_health(
     response_description="Сводка выполненного сбора",
     responses={
         **API_KEY_RESPONSES,
+        409: {"description": "Другой сбор уже выполняется"},
         503: {"description": "VK_ACCESS_TOKEN не настроен"},
     },
 )
@@ -85,7 +90,13 @@ async def collect_now(_api_key: ApiKeyDep) -> dict[str, int | str]:
             detail="VK_ACCESS_TOKEN не задан в .env",
         )
 
-    summary = await collect_active_sources_once()
+    try:
+        summary = await collect_active_sources_once(CollectionRunTrigger.MANUAL)
+    except CollectionAlreadyRunningError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Сбор источников уже выполняется",
+        ) from exc
     return {"status": "ok", **summary}
 
 

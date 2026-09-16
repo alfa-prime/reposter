@@ -60,9 +60,18 @@ export type Source = {
 };
 
 export type TargetSource = { target_source_id: number; target_id: number; source_id: number; is_active: boolean; rewrite_enabled: boolean };
-export type CollectSummary = { status: string; sources_checked: number; posts_created: number; queue_items_created: number; errors: number };
+export type CollectSummary = { status: string; run_id: number; sources_total: number; sources_checked: number; sources_succeeded: number; posts_found: number; posts_created: number; queue_items_created: number; errors: number };
 export type MaxChannelInfo = { chat_id: number; title?: string | null; link?: string | null; icon_url?: string | null; is_active?: boolean; last_event_type?: string | null; last_event_at?: string | null };
 export type VKSourceInfo = { name: string; url: string; icon_url?: string | null };
+
+export type CollectionRunStatus = "running" | "success" | "partial" | "failed" | "skipped" | "interrupted";
+export type CollectionRunTrigger = "manual" | "scheduled";
+export type CollectionSettings = { enabled: boolean; interval_minutes: number; start_time: string; end_time: string; timezone: string; updated_at: string };
+export type CollectionRun = { collection_run_id: number; trigger: CollectionRunTrigger; status: CollectionRunStatus; started_at: string; finished_at?: string | null; sources_total: number; sources_checked: number; sources_succeeded: number; sources_failed: number; posts_found: number; posts_created: number; queue_items_created: number; error_message?: string | null };
+export type CollectionSourceRun = { collection_source_run_id: number; source_id?: number | null; source_name: string; source_url: string; status: "running" | "success" | "no_changes" | "failed" | "interrupted"; started_at: string; finished_at?: string | null; last_post_id_before?: string | null; last_post_id_after?: string | null; posts_found: number; posts_created: number; queue_items_created: number; error_type?: string | null; error_message?: string | null };
+export type CollectionRunDetail = CollectionRun & { source_runs: CollectionSourceRun[] };
+export type CollectionRunPage = { items: CollectionRun[]; total: number; offset: number; limit: number };
+export type CollectionStatus = { enabled: boolean; running: boolean; next_run_at?: string | null; last_run?: CollectionRun | null; last_success_at?: string | null; consecutive_failures: number };
 
 export type TargetPlatform = "max" | "telegram" | "vk";
 export type SourcePlatform = TargetPlatform;
@@ -165,6 +174,16 @@ export const api = {
   sources: () => request<Source[]>("/api/v1/sources?limit=100"),
   targetSources: (targetId: number) => request<TargetSource[]>(`/api/v1/targets/${targetId}/sources`),
   collectNow: () => request<CollectSummary>("/api/v1/system/collect-now", { method: "POST" }),
+  collectionSettings: () => request<CollectionSettings>("/api/v1/system/collection/settings"),
+  updateCollectionSettings: (data: Omit<CollectionSettings, "updated_at">) => request<CollectionSettings>("/api/v1/system/collection/settings", { method: "PUT", body: JSON.stringify(data) }),
+  collectionStatus: () => request<CollectionStatus>("/api/v1/system/collection/status"),
+  collectionRuns: (options: { offset: number; limit: number; status?: string; trigger?: string }) => {
+    const params = new URLSearchParams({ offset: String(options.offset), limit: String(options.limit) });
+    if (options.status) params.set("status", options.status);
+    if (options.trigger) params.set("trigger", options.trigger);
+    return request<CollectionRunPage>(`/api/v1/system/collection/runs?${params.toString()}`);
+  },
+  collectionRun: (id: number) => request<CollectionRunDetail>(`/api/v1/system/collection/runs/${id}`),
   maxChannelByLink: (link: string) => request<MaxChannelInfo>(`/api/v1/targets/resolve-max?link=${encodeURIComponent(link)}`),
   createTarget: (data: { url: string; is_active?: boolean }) => createTargetFromLink(data),
   updateTarget: (id: number, data: Partial<Omit<Target, "target_id">>) => request<Target>(`/api/v1/targets/${id}`, { method: "PATCH", body: JSON.stringify(data) }),

@@ -1,8 +1,14 @@
 """ORM-модели приложения."""
 
 from news_reposter.db.models.attachment import PostAttachment
+from news_reposter.db.models.collection_run import CollectionRun
+from news_reposter.db.models.collection_settings import CollectionSettings
+from news_reposter.db.models.collection_source_run import CollectionSourceRun
 from news_reposter.db.models.enums import (
     AttachmentType,
+    CollectionRunStatus,
+    CollectionRunTrigger,
+    CollectionSourceRunStatus,
     PostStatus,
     PublicationStatus,
     QueueItemStatus,
@@ -17,6 +23,12 @@ from news_reposter.db.models.target_source import TargetSource
 
 __all__ = [
     "AttachmentType",
+    "CollectionRun",
+    "CollectionRunStatus",
+    "CollectionRunTrigger",
+    "CollectionSettings",
+    "CollectionSourceRun",
+    "CollectionSourceRunStatus",
     "MAXChannel",
     "Post",
     "PostAttachment",

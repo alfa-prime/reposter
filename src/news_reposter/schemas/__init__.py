@@ -1,5 +1,14 @@
 """Схемы запросов и ответов API."""
 
+from news_reposter.schemas.collection import (
+    CollectionRunDetail,
+    CollectionRunPage,
+    CollectionRunRead,
+    CollectionSettingsRead,
+    CollectionSettingsUpdate,
+    CollectionSourceRunRead,
+    CollectionStatusRead,
+)
 from news_reposter.schemas.queue_item import (
     QueueItemCreate,
     QueueItemRead,
@@ -16,6 +25,13 @@ from news_reposter.schemas.target_source import (
 )
 
 __all__ = [
+    "CollectionRunDetail",
+    "CollectionRunPage",
+    "CollectionRunRead",
+    "CollectionSettingsRead",
+    "CollectionSettingsUpdate",
+    "CollectionSourceRunRead",
+    "CollectionStatusRead",
     "DatabaseHealthResponse",
     "HealthResponse",
     "QueueItemCreate",
