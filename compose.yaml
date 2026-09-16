@@ -44,8 +44,6 @@ services:
       POSTGRES_HOST: postgres
       POSTGRES_PORT: 5432
       MEDIA_ROOT: /app/data/media
-    ports:
-      - "${APP_PORT:-8000}:8000"
     volumes:
       - ./certs:/app/certs:ro
       - media_data:/app/data/media
