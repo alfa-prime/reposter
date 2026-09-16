@@ -1,5 +1,6 @@
 """Операции чтения и записи данных приложения."""
 
+from news_reposter.repositories.collection import CollectionRepository
 from news_reposter.repositories.queue_item import (
     QueueItemAlreadyExistsError,
     QueueItemRepository,
@@ -12,6 +13,7 @@ from news_reposter.repositories.target_source import (
 )
 
 __all__ = [
+    "CollectionRepository",
     "QueueItemAlreadyExistsError",
     "QueueItemRepository",
     "SourceAlreadyExistsError",

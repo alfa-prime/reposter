@@ -4,6 +4,7 @@ import { api, Source, Target, TargetSource } from "./api";
 import { AboutPage } from "./components/AboutPage";
 import { QueuePage } from "./components/QueuePage";
 import { SettingsPage } from "./components/SettingsPage";
+import { SchedulerLogsPage } from "./components/SchedulerLogsPage";
 import { Sidebar } from "./components/Sidebar";
 import { SourcesPage } from "./components/SourcesPage";
 import { TargetsPage } from "./components/TargetsPage";
@@ -188,7 +189,7 @@ export function App() {
     ? `Канал: ${selectedQueueTarget.name}`
     : "Общая очередь · посты из всех каналов";
 
-  const standalonePage = section === "about" || section === "settings";
+  const standalonePage = section === "about" || section === "scheduler" || section === "scheduler_logs";
 
   return (
     <div className="shell">
@@ -222,7 +223,8 @@ export function App() {
         </>}
 
         {section === "about" && <AboutPage />}
-        {section === "settings" && <SettingsPage />}
+        {section === "scheduler" && <SettingsPage />}
+        {section === "scheduler_logs" && <SchedulerLogsPage />}
 
         {section === "queue" && (
           <QueuePage

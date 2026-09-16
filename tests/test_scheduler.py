@@ -1,104 +1,94 @@
 import asyncio
-from datetime import datetime
+from datetime import datetime, time
 from zoneinfo import ZoneInfo
 
 import pytest
-from pydantic import ValidationError
 
 import news_reposter.services.scheduler as scheduler_module
-from news_reposter.config import Settings
-from news_reposter.services.scheduler import CollectionScheduler
+from news_reposter.db.models import CollectionRunTrigger
+from news_reposter.services.scheduler import (
+    CollectionSchedule,
+    CollectionScheduler,
+    next_run_at,
+)
 
 
-def make_scheduler(**overrides: object) -> CollectionScheduler:
+def make_schedule(**overrides: object) -> CollectionSchedule:
     values: dict[str, object] = {
-        "collection_enabled": True,
-        "collection_interval_minutes": 15,
-        "collection_start_hour": 8,
-        "collection_end_hour": 20,
-        "collection_timezone": "Europe/Moscow",
+        "enabled": True,
+        "interval_minutes": 15,
+        "start_time": time(8),
+        "end_time": time(20),
+        "timezone": "Europe/Moscow",
     }
     values.update(overrides)
-    settings = Settings(_env_file=None, **values)
-    return CollectionScheduler(settings)
-
-
-def test_collection_schedule_defaults() -> None:
-    """Проверяет базовое расписание MVP: каждые 15 минут с 08:00 до 20:00."""
-
-    settings = Settings(_env_file=None)
-
-    assert settings.collection_enabled is True
-    assert settings.collection_interval_minutes == 15
-    assert settings.collection_start_hour == 8
-    assert settings.collection_end_hour == 20
-    assert settings.collection_timezone == "Europe/Moscow"
+    return CollectionSchedule(**values)  # type: ignore[arg-type]
 
 
 def test_next_run_aligns_to_interval() -> None:
-    """Планировщик выравнивает запуск по сетке 08:00, 08:15, 08:30 и т.д."""
-
     tz = ZoneInfo("Europe/Moscow")
-    scheduler = make_scheduler()
+    schedule = make_schedule()
 
-    assert scheduler.next_run_at(datetime(2026, 9, 11, 7, 50, tzinfo=tz)) == datetime(
+    assert next_run_at(datetime(2026, 9, 11, 7, 50, tzinfo=tz), schedule) == datetime(
         2026, 9, 11, 8, 0, tzinfo=tz
     )
-    assert scheduler.next_run_at(datetime(2026, 9, 11, 8, 7, tzinfo=tz)) == datetime(
+    assert next_run_at(datetime(2026, 9, 11, 8, 7, tzinfo=tz), schedule) == datetime(
         2026, 9, 11, 8, 15, tzinfo=tz
     )
-    assert scheduler.next_run_at(datetime(2026, 9, 11, 19, 46, tzinfo=tz)) == datetime(
+    assert next_run_at(datetime(2026, 9, 11, 19, 46, tzinfo=tz), schedule) == datetime(
         2026, 9, 12, 8, 0, tzinfo=tz
     )
 
 
-def test_schedule_can_be_configured() -> None:
-    """Проверяет изменение интервала и рабочего окна."""
-
+def test_overnight_schedule_runs_across_midnight() -> None:
     tz = ZoneInfo("Europe/Moscow")
-    scheduler = make_scheduler(
-        collection_interval_minutes=30,
-        collection_start_hour=9,
-        collection_end_hour=18,
+    schedule = make_schedule(start_time=time(20), end_time=time(8), interval_minutes=30)
+
+    assert next_run_at(datetime(2026, 9, 11, 19, 0, tzinfo=tz), schedule) == datetime(
+        2026, 9, 11, 20, 0, tzinfo=tz
+    )
+    assert next_run_at(datetime(2026, 9, 11, 23, 11, tzinfo=tz), schedule) == datetime(
+        2026, 9, 11, 23, 30, tzinfo=tz
+    )
+    assert next_run_at(datetime(2026, 9, 12, 1, 11, tzinfo=tz), schedule) == datetime(
+        2026, 9, 12, 1, 30, tzinfo=tz
+    )
+    assert next_run_at(datetime(2026, 9, 12, 8, 0, tzinfo=tz), schedule) == datetime(
+        2026, 9, 12, 20, 0, tzinfo=tz
     )
 
-    assert scheduler.next_run_at(datetime(2026, 9, 11, 9, 1, tzinfo=tz)) == datetime(
-        2026, 9, 11, 9, 30, tzinfo=tz
-    )
+
+def test_equal_window_boundaries_are_rejected() -> None:
+    tz = ZoneInfo("Europe/Moscow")
+    with pytest.raises(ValueError, match="не должны совпадать"):
+        next_run_at(
+            datetime(2026, 9, 11, 8, tzinfo=tz),
+            make_schedule(start_time=time(8), end_time=time(8)),
+        )
 
 
-def test_scheduler_run_once_collects_all_sources(
+def test_scheduler_run_once_marks_scheduled_trigger(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Плановый запуск вызывает основной сборщик и возвращает его сводку."""
-
     expected = {
+        "run_id": 1,
+        "sources_total": 2,
         "sources_checked": 2,
+        "sources_succeeded": 2,
+        "posts_found": 10,
         "posts_created": 10,
         "queue_items_created": 10,
         "errors": 0,
     }
-    calls = 0
+    triggers: list[CollectionRunTrigger] = []
 
-    async def fake_collect() -> dict[str, int]:
-        nonlocal calls
-        calls += 1
+    async def fake_collect(trigger: CollectionRunTrigger) -> dict[str, int]:
+        triggers.append(trigger)
         return expected
 
     monkeypatch.setattr(scheduler_module, "collect_active_sources_once", fake_collect)
 
-    result = asyncio.run(make_scheduler().run_once())
+    result = asyncio.run(CollectionScheduler().run_once())
 
     assert result == expected
-    assert calls == 1
-
-
-def test_invalid_collection_window_is_rejected() -> None:
-    """Ошибочное окно расписания обнаруживается при запуске приложения."""
-
-    with pytest.raises(ValidationError, match="COLLECTION_END_HOUR"):
-        Settings(
-            _env_file=None,
-            collection_start_hour=20,
-            collection_end_hour=8,
-        )
+    assert triggers == [CollectionRunTrigger.SCHEDULED]

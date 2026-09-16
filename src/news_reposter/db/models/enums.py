@@ -46,3 +46,31 @@ class PublicationStatus(StrEnum):
     PUBLISHING = "publishing"
     PUBLISHED = "published"
     FAILED = "failed"
+
+
+class CollectionRunTrigger(StrEnum):
+    """Причина запуска сборщика источников."""
+
+    MANUAL = "manual"
+    SCHEDULED = "scheduled"
+
+
+class CollectionRunStatus(StrEnum):
+    """Итог общего прохода сборщика."""
+
+    RUNNING = "running"
+    SUCCESS = "success"
+    PARTIAL = "partial"
+    FAILED = "failed"
+    SKIPPED = "skipped"
+    INTERRUPTED = "interrupted"
+
+
+class CollectionSourceRunStatus(StrEnum):
+    """Итог обработки одного источника внутри прохода."""
+
+    RUNNING = "running"
+    SUCCESS = "success"
+    NO_CHANGES = "no_changes"
+    FAILED = "failed"
+    INTERRUPTED = "interrupted"

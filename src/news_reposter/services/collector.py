@@ -8,6 +8,9 @@ from sqlalchemy import select
 from news_reposter.config import get_settings
 from news_reposter.db.models import (
     AttachmentType,
+    CollectionRunStatus,
+    CollectionRunTrigger,
+    CollectionSourceRunStatus,
     Post,
     PostAttachment,
     PostStatus,
@@ -18,11 +21,16 @@ from news_reposter.db.models import (
 )
 from news_reposter.db.session import async_session_factory
 from news_reposter.integrations.vk import VKAPIError, VKClient, VKPost
+from news_reposter.services.collection_history import CollectionHistory
 
 logger = logging.getLogger(__name__)
 
 _collection_lock: asyncio.Lock | None = None
 _collection_lock_loop: asyncio.AbstractEventLoop | None = None
+
+
+class CollectionAlreadyRunningError(RuntimeError):
+    """Другой ручной или плановый проход уже обрабатывает источники."""
 
 
 def _get_collection_lock() -> asyncio.Lock:
@@ -42,18 +50,31 @@ def _get_collection_lock() -> asyncio.Lock:
     return _collection_lock
 
 
-async def collect_active_sources_once() -> dict[str, int]:
+async def collect_active_sources_once(
+    trigger: CollectionRunTrigger = CollectionRunTrigger.MANUAL,
+) -> dict[str, int]:
     """Забирает новые посты активных VK-источников и создаёт очередь."""
 
-    async with _get_collection_lock():
-        return await _collect_active_sources_once()
+    lock = _get_collection_lock()
+    if lock.locked():
+        raise CollectionAlreadyRunningError("Сбор источников уже выполняется")
+    async with lock:
+        return await _collect_active_sources_once(trigger=trigger)
 
 
-async def _collect_active_sources_once() -> dict[str, int]:
+async def _collect_active_sources_once(
+    trigger: CollectionRunTrigger = CollectionRunTrigger.MANUAL,
+) -> dict[str, int]:
     """Выполняет один сериализованный проход сборщика."""
 
+    history = CollectionHistory()
+    run_id = await history.start_run(trigger)
     summary = {
+        "run_id": run_id,
+        "sources_total": 0,
         "sources_checked": 0,
+        "sources_succeeded": 0,
+        "posts_found": 0,
         "posts_created": 0,
         "queue_items_created": 0,
         "errors": 0,
@@ -62,87 +83,164 @@ async def _collect_active_sources_once() -> dict[str, int]:
     settings = get_settings()
     if not settings.vk_access_token:
         logger.warning("Сбор пропущен: VK_ACCESS_TOKEN не настроен")
+        error = RuntimeError("VK_ACCESS_TOKEN не настроен")
+        await history.finish_run(
+            run_id,
+            status=CollectionRunStatus.FAILED,
+            summary=summary,
+            error=error,
+        )
         return summary
 
-    async with async_session_factory() as session:
-        statement = (
-            select(TargetSource, Source)
-            .join(Source, Source.source_id == TargetSource.source_id)
-            .join(Target, Target.target_id == TargetSource.target_id)
-            .where(
-                TargetSource.is_active.is_(True),
-                Source.is_active.is_(True),
-                Target.is_active.is_(True),
-                Source.platform == "vk",
+    try:
+        async with async_session_factory() as session:
+            statement = (
+                select(TargetSource, Source)
+                .join(Source, Source.source_id == TargetSource.source_id)
+                .join(Target, Target.target_id == TargetSource.target_id)
+                .where(
+                    TargetSource.is_active.is_(True),
+                    Source.is_active.is_(True),
+                    Target.is_active.is_(True),
+                    Source.platform == "vk",
+                )
+                .order_by(Source.source_id, TargetSource.target_id)
             )
-            .order_by(Source.source_id, TargetSource.target_id)
-        )
-        rows = (await session.execute(statement)).all()
+            rows = (await session.execute(statement)).all()
 
-        targets_by_source: dict[int, list[TargetSource]] = defaultdict(list)
-        sources: dict[int, Source] = {}
-        for target_source, source in rows:
-            targets_by_source[source.source_id].append(target_source)
-            sources[source.source_id] = source
+            targets_by_source: dict[int, list[TargetSource]] = defaultdict(list)
+            sources: dict[int, Source] = {}
+            for target_source, source in rows:
+                targets_by_source[source.source_id].append(target_source)
+                sources[source.source_id] = source
+            summary["sources_total"] = len(sources)
+            await history.set_sources_total(run_id, len(sources))
 
-        client = VKClient(
-            access_token=settings.vk_access_token,
-            api_version=settings.vk_api_version,
-            api_url=settings.vk_api_url,
-        )
+            client = VKClient(
+                access_token=settings.vk_access_token,
+                api_version=settings.vk_api_version,
+                api_url=settings.vk_api_url,
+            )
 
-        for source_id, source in sources.items():
-            summary["sources_checked"] += 1
-            try:
-                last_external_post_id = await _get_last_external_post_id(
-                    session, source_id
+            for source_id, source in sources.items():
+                summary["sources_checked"] += 1
+                last_external_post_id: int | None = None
+                posts_found = 0
+                source_run_id = await history.start_source(
+                    run_id=run_id,
+                    source_id=source_id,
+                    source_name=source.name,
+                    source_url=source.url,
+                    last_post_id_before=None,
                 )
-
-                if last_external_post_id is None:
-                    latest_post = await client.get_latest_post(source.url)
-                    vk_posts = [latest_post] if latest_post is not None else []
-                else:
-                    vk_posts = await client.get_posts_after(
-                        source.url,
-                        last_external_post_id,
+                try:
+                    last_external_post_id = await _get_last_external_post_id(
+                        session, source_id
+                    )
+                    await history.set_source_last_before(
+                        source_run_id, last_external_post_id
                     )
 
-                if not vk_posts:
-                    continue
+                    if last_external_post_id is None:
+                        latest_post = await client.get_latest_post(source.url)
+                        vk_posts = [latest_post] if latest_post is not None else []
+                    else:
+                        vk_posts = await client.get_posts_after(
+                            source.url,
+                            last_external_post_id,
+                        )
+                    posts_found = len(vk_posts)
+                    summary["posts_found"] += posts_found
 
-                created_posts = 0
-                created_queue_items = 0
-                for vk_post in vk_posts:
-                    (
-                        post_created,
-                        queue_items_created,
-                    ) = await _store_post_and_queue_items(
-                        session=session,
-                        source_id=source_id,
-                        vk_post=vk_post,
-                        target_sources=targets_by_source[source_id],
+                    if not vk_posts:
+                        summary["sources_succeeded"] += 1
+                        await history.finish_source(
+                            source_run_id,
+                            status=CollectionSourceRunStatus.NO_CHANGES,
+                            last_post_id_after=last_external_post_id,
+                            posts_found=0,
+                            posts_created=0,
+                            queue_items_created=0,
+                        )
+                        continue
+
+                    created_posts = 0
+                    created_queue_items = 0
+                    for vk_post in vk_posts:
+                        (
+                            post_created,
+                            queue_items_created,
+                        ) = await _store_post_and_queue_items(
+                            session=session,
+                            source_id=source_id,
+                            vk_post=vk_post,
+                            target_sources=targets_by_source[source_id],
+                        )
+                        created_posts += int(post_created)
+                        created_queue_items += queue_items_created
+
+                    await session.commit()
+                    summary["sources_succeeded"] += 1
+                    summary["posts_created"] += created_posts
+                    summary["queue_items_created"] += created_queue_items
+                    await history.finish_source(
+                        source_run_id,
+                        status=CollectionSourceRunStatus.SUCCESS,
+                        last_post_id_after=vk_posts[-1].id,
+                        posts_found=posts_found,
+                        posts_created=created_posts,
+                        queue_items_created=created_queue_items,
                     )
-                    created_posts += int(post_created)
-                    created_queue_items += queue_items_created
+                    logger.info(
+                        "Источник %s обработан: новых постов %s, элементов очереди %s",
+                        source_id,
+                        created_posts,
+                        created_queue_items,
+                    )
+                except (VKAPIError, ValueError) as exc:
+                    summary["errors"] += 1
+                    await session.rollback()
+                    await history.finish_source(
+                        source_run_id,
+                        status=CollectionSourceRunStatus.FAILED,
+                        last_post_id_after=last_external_post_id,
+                        posts_found=posts_found,
+                        posts_created=0,
+                        queue_items_created=0,
+                        error=exc,
+                    )
+                    logger.exception("Ошибка сбора источника %s", source_id)
+                except Exception as exc:
+                    summary["errors"] += 1
+                    await session.rollback()
+                    await history.finish_source(
+                        source_run_id,
+                        status=CollectionSourceRunStatus.FAILED,
+                        last_post_id_after=last_external_post_id,
+                        posts_found=posts_found,
+                        posts_created=0,
+                        queue_items_created=0,
+                        error=exc,
+                    )
+                    logger.exception("Неожиданная ошибка сбора источника %s", source_id)
+    except Exception as exc:
+        await history.finish_run(
+            run_id,
+            status=CollectionRunStatus.FAILED,
+            summary=summary,
+            error=exc,
+        )
+        raise
 
-                await session.commit()
-                summary["posts_created"] += created_posts
-                summary["queue_items_created"] += created_queue_items
-                logger.info(
-                    "Источник %s обработан: новых постов %s, элементов очереди %s",
-                    source_id,
-                    created_posts,
-                    created_queue_items,
-                )
-            except (VKAPIError, ValueError):
-                summary["errors"] += 1
-                await session.rollback()
-                logger.exception("Ошибка сбора источника %s", source_id)
-            except Exception:
-                summary["errors"] += 1
-                await session.rollback()
-                logger.exception("Неожиданная ошибка сбора источника %s", source_id)
-
+    if summary["sources_total"] == 0:
+        run_status = CollectionRunStatus.SKIPPED
+    elif summary["errors"] == 0:
+        run_status = CollectionRunStatus.SUCCESS
+    elif summary["sources_succeeded"]:
+        run_status = CollectionRunStatus.PARTIAL
+    else:
+        run_status = CollectionRunStatus.FAILED
+    await history.finish_run(run_id, status=run_status, summary=summary)
     return summary
 
 
