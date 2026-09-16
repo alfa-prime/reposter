@@ -190,7 +190,12 @@ def _message_fields(response: dict[str, Any]) -> tuple[str | None, str | None]:
     )
 
 
-async def _loaded_item(session: AsyncSession, queue_item_id: int) -> QueueItem | None:
+async def _loaded_item(
+    session: AsyncSession,
+    queue_item_id: int,
+    *,
+    for_update: bool = False,
+) -> QueueItem | None:
     statement = (
         select(QueueItem)
         .options(
@@ -200,6 +205,8 @@ async def _loaded_item(session: AsyncSession, queue_item_id: int) -> QueueItem |
         )
         .where(QueueItem.queue_item_id == queue_item_id)
     )
+    if for_update:
+        statement = statement.with_for_update()
     return await session.scalar(statement)
 
 
@@ -211,7 +218,9 @@ async def publish_queue_item(
 ) -> QueueItem:
     """Публикует согласованный, запланированный или ранее упавший QueueItem в MAX."""
 
-    item = await _loaded_item(session, queue_item_id)
+    # Блокировка строки сериализует ручной запуск и все экземпляры планировщика.
+    # Проверка PublicationStatus выполняется до освобождающего блокировку commit.
+    item = await _loaded_item(session, queue_item_id, for_update=True)
     if item is None:
         raise PublicationError("Элемент очереди не найден")
     allowed = {QueueItemStatus.APPROVED, QueueItemStatus.FAILED}
@@ -221,6 +230,13 @@ async def publish_queue_item(
         raise PublicationError(
             f"Публикация недоступна для статуса {item.status.value}"
         )
+
+    publication = item.publication
+    if publication is not None and publication.status == PublicationStatus.PUBLISHED:
+        raise PublicationError("Этот пост уже опубликован")
+    if publication is not None and publication.status == PublicationStatus.PUBLISHING:
+        raise PublicationError("Публикация этого поста уже выполняется")
+
     if item.target.platform.lower() != "max":
         raise PublicationError("Автопубликация пока подключена только для MAX")
     if not item.target.is_active:
@@ -234,9 +250,6 @@ async def publish_queue_item(
     except (TypeError, ValueError) as exc:
         raise PublicationError("У канала MAX некорректный chat_id") from exc
 
-    publication = item.publication
-    if publication is not None and publication.status == PublicationStatus.PUBLISHED:
-        raise PublicationError("Этот пост уже опубликован")
     if publication is None:
         publication = Publication(queue_item_id=item.queue_item_id)
         session.add(publication)
@@ -249,14 +262,14 @@ async def publish_queue_item(
     await session.commit()
 
     started_at = time.perf_counter()
-    client = MAXClient(
-        access_token=settings.max_access_token,
-        chat_id=chat_id,
-        api_url=settings.max_api_url,
-        ca_file=settings.max_ca_file,
-    )
 
     try:
+        client = MAXClient(
+            access_token=settings.max_access_token,
+            chat_id=chat_id,
+            api_url=settings.max_api_url,
+            ca_file=settings.max_ca_file,
+        )
         text = _publication_text(item)
         attachments = await _max_attachments(item, client)
         if not text and not attachments:
@@ -267,7 +280,7 @@ async def publish_queue_item(
             attachments=attachments,
         )
         mid, url = _message_fields(response)
-    except (PublicationError, MAXAPIError, ValueError, OSError) as exc:
+    except Exception as exc:
         publication.status = PublicationStatus.FAILED
         publication.error_message = str(exc)
         item.status = QueueItemStatus.FAILED
