@@ -115,17 +115,17 @@ export function SettingsPage() {
 
       {form && <div className="scheduler-form-card">
         <div className="scheduler-form-title">
-          <div><strong>Автоматический сбор</strong><span>После включения новые публикации будут проверяться только внутри рабочего окна.</span></div>
+          <div><strong>Автоматический сбор</strong><span>После включения новые публикации будут проверяться только в течение рабочего периода.</span></div>
           <label className="scheduler-toggle"><input type="checkbox" checked={form.enabled} onChange={(event) => setForm({ ...form, enabled: event.target.checked })} /><span /></label>
         </div>
 
         <div className="scheduler-fields">
-          <TimeField label="Начало окна" value={form.start_time} onChange={(value) => setForm({ ...form, start_time: value })} />
-          <TimeField label="Конец окна" value={form.end_time} onChange={(value) => setForm({ ...form, end_time: value })} />
+          <TimeField label="Начало периода" value={form.start_time} onChange={(value) => setForm({ ...form, start_time: value })} />
+          <TimeField label="Окончание периода" value={form.end_time} onChange={(value) => setForm({ ...form, end_time: value })} />
           <label>Периодичность<select value={form.interval_minutes} onChange={(event) => setForm({ ...form, interval_minutes: Number(event.target.value) })}>{[5, 10, 15, 30, 60, 120].map((minutes) => <option key={minutes} value={minutes}>{minutes < 60 ? `Каждые ${minutes} мин` : `Каждые ${minutes / 60} ч`}</option>)}</select></label>
           <label>Часовой пояс<select value={form.timezone} onChange={(event) => setForm({ ...form, timezone: event.target.value })}><option value="Europe/Moscow">Москва (UTC+3)</option><option value="Europe/Kaliningrad">Калининград (UTC+2)</option><option value="Asia/Yekaterinburg">Екатеринбург (UTC+5)</option><option value="Asia/Novosibirsk">Новосибирск (UTC+7)</option><option value="Asia/Vladivostok">Владивосток (UTC+10)</option></select></label>
         </div>
-        <p className="scheduler-hint">Окно может переходить через полночь: сочетание 20:00–08:00 означает работу вечером и ночью. Одинаковое время начала и окончания не допускается.</p>
+        <p className="scheduler-hint">Период может переходить через полночь: сочетание 20:00–08:00 означает работу вечером и ночью. Одинаковое время начала и окончания не допускается.</p>
         <div className="scheduler-actions"><button className="primary" disabled={busy} onClick={() => void save()}><Save size={16} />Сохранить расписание</button></div>
       </div>}
     </section>

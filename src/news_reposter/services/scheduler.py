@@ -51,12 +51,12 @@ async def load_collection_schedule() -> CollectionSchedule:
 
 
 def next_run_at(now: datetime, schedule: CollectionSchedule) -> datetime:
-    """Считает ближайший запуск для дневного или переходящего через полночь окна."""
+    """Считает ближайший запуск для дневного или ночного рабочего периода."""
 
     if now.tzinfo is None:
         raise ValueError("now должен содержать часовой пояс")
     if schedule.start_time == schedule.end_time:
-        raise ValueError("Начало и конец окна не должны совпадать")
+        raise ValueError("Начало и окончание периода не должны совпадать")
 
     timezone = schedule.zoneinfo()
     local_now = now.astimezone(timezone)
