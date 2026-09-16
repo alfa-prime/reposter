@@ -191,8 +191,10 @@ async def create_channel_discovery_subscription(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="MAX_WEBHOOK_SECRET не задан",
         )
-    if len(secret) < 5 or len(secret) > 256 or any(
-        not (char.isalnum() or char in "_-") for char in secret
+    if (
+        len(secret) < 5
+        or len(secret) > 256
+        or any(not (char.isalnum() or char in "_-") for char in secret)
     ):
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,

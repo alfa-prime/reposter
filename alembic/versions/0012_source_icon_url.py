@@ -8,6 +8,7 @@ Create Date: 2026-09-15
 from collections.abc import Sequence
 
 import sqlalchemy as sa
+
 from alembic import op
 
 revision: str = "0012_source_icon_url"
@@ -17,7 +18,9 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    op.add_column("sources", sa.Column("icon_url", sa.String(length=2048), nullable=True))
+    op.add_column(
+        "sources", sa.Column("icon_url", sa.String(length=2048), nullable=True)
+    )
 
 
 def downgrade() -> None:

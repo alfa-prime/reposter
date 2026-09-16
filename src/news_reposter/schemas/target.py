@@ -7,14 +7,49 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 class TargetBase(BaseModel):
     """Общие поля цели публикации."""
 
-    name: str = Field(min_length=1, max_length=200, description="Понятное название канала или чата", examples=["Новости 51 региона"])
-    platform: str = Field(min_length=2, max_length=32, pattern=r"^[a-z][a-z0-9_-]+$", description="Код платформы в нижнем регистре", examples=["max"])
-    external_id: str = Field(min_length=1, max_length=255, description="Идентификатор канала или чата во внешней платформе", examples=["-77162942582085"])
-    url: str | None = Field(default=None, max_length=2048, description="Необязательная ссылка на канал или чат", examples=["https://max.ru/channel_51_news"])
-    icon_url: str | None = Field(default=None, max_length=2048, description="URL аватара канала, полученный из внешней платформы")
-    default_signature: str | None = Field(default=None, max_length=4000, description="Подпись, автоматически подставляемая к новым публикациям канала")
-    rewrite_prompt: str | None = Field(default=None, max_length=12000, description="Индивидуальная инструкция ИИ для рерайта постов этого канала")
-    is_active: bool = Field(default=True, description="Можно ли публиковать посты в эту цель")
+    name: str = Field(
+        min_length=1,
+        max_length=200,
+        description="Понятное название канала или чата",
+        examples=["Новости 51 региона"],
+    )
+    platform: str = Field(
+        min_length=2,
+        max_length=32,
+        pattern=r"^[a-z][a-z0-9_-]+$",
+        description="Код платформы в нижнем регистре",
+        examples=["max"],
+    )
+    external_id: str = Field(
+        min_length=1,
+        max_length=255,
+        description="Идентификатор канала или чата во внешней платформе",
+        examples=["-77162942582085"],
+    )
+    url: str | None = Field(
+        default=None,
+        max_length=2048,
+        description="Необязательная ссылка на канал или чат",
+        examples=["https://max.ru/channel_51_news"],
+    )
+    icon_url: str | None = Field(
+        default=None,
+        max_length=2048,
+        description="URL аватара канала, полученный из внешней платформы",
+    )
+    default_signature: str | None = Field(
+        default=None,
+        max_length=4000,
+        description="Подпись, автоматически подставляемая к новым публикациям канала",
+    )
+    rewrite_prompt: str | None = Field(
+        default=None,
+        max_length=12000,
+        description="Индивидуальная инструкция ИИ для рерайта постов этого канала",
+    )
+    is_active: bool = Field(
+        default=True, description="Можно ли публиковать посты в эту цель"
+    )
 
     @field_validator("name", "external_id", mode="before")
     @classmethod
@@ -50,20 +85,65 @@ class TargetBase(BaseModel):
 
 class TargetCreate(TargetBase):
     """Данные для создания цели публикации."""
-    model_config = ConfigDict(json_schema_extra={"example": {"name": "Новости 51 региона", "platform": "max", "external_id": "-77162942582085", "url": "https://max.ru/channel_51_news", "icon_url": None, "default_signature": "📣 Подписывайтесь на наш канал", "rewrite_prompt": None, "is_active": True}})
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "name": "Новости 51 региона",
+                "platform": "max",
+                "external_id": "-77162942582085",
+                "url": "https://max.ru/channel_51_news",
+                "icon_url": None,
+                "default_signature": "📣 Подписывайтесь на наш канал",
+                "rewrite_prompt": None,
+                "is_active": True,
+            }
+        }
+    )
 
 
 class TargetUpdate(BaseModel):
     """Поля цели публикации, которые можно изменить."""
 
-    name: str | None = Field(default=None, min_length=1, max_length=200, description="Новое название цели")
-    platform: str | None = Field(default=None, min_length=2, max_length=32, pattern=r"^[a-z][a-z0-9_-]+$", description="Новый код платформы")
-    external_id: str | None = Field(default=None, min_length=1, max_length=255, description="Новый ID канала или чата во внешней платформе")
-    url: str | None = Field(default=None, max_length=2048, description="Новая ссылка; значение null удаляет текущую ссылку")
-    icon_url: str | None = Field(default=None, max_length=2048, description="Новый URL аватара; null очищает аватар")
-    default_signature: str | None = Field(default=None, max_length=4000, description="Подпись канала; null очищает подпись по умолчанию")
-    rewrite_prompt: str | None = Field(default=None, max_length=12000, description="Инструкция ИИ для рерайта; null возвращает общий промпт приложения")
-    is_active: bool | None = Field(default=None, description="Включить или приостановить публикацию")
+    name: str | None = Field(
+        default=None, min_length=1, max_length=200, description="Новое название цели"
+    )
+    platform: str | None = Field(
+        default=None,
+        min_length=2,
+        max_length=32,
+        pattern=r"^[a-z][a-z0-9_-]+$",
+        description="Новый код платформы",
+    )
+    external_id: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=255,
+        description="Новый ID канала или чата во внешней платформе",
+    )
+    url: str | None = Field(
+        default=None,
+        max_length=2048,
+        description="Новая ссылка; значение null удаляет текущую ссылку",
+    )
+    icon_url: str | None = Field(
+        default=None,
+        max_length=2048,
+        description="Новый URL аватара; null очищает аватар",
+    )
+    default_signature: str | None = Field(
+        default=None,
+        max_length=4000,
+        description="Подпись канала; null очищает подпись по умолчанию",
+    )
+    rewrite_prompt: str | None = Field(
+        default=None,
+        max_length=12000,
+        description="Инструкция ИИ для рерайта; null возвращает общий промпт приложения",
+    )
+    is_active: bool | None = Field(
+        default=None, description="Включить или приостановить публикацию"
+    )
 
     @field_validator("name", "external_id", mode="before")
     @classmethod
@@ -100,7 +180,12 @@ class TargetUpdate(BaseModel):
     def validate_changes(self) -> "TargetUpdate":
         if not self.model_fields_set:
             raise ValueError("нужно передать хотя бы одно поле")
-        required_fields = self.model_fields_set - {"url", "icon_url", "default_signature", "rewrite_prompt"}
+        required_fields = self.model_fields_set - {
+            "url",
+            "icon_url",
+            "default_signature",
+            "rewrite_prompt",
+        }
         if any(getattr(self, field) is None for field in required_fields):
             raise ValueError("обязательные поля цели не могут быть null")
         return self

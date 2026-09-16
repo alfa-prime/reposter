@@ -44,7 +44,10 @@ def source_keys(item: Any) -> list[str]:
         return []
     result: list[tuple[int, str]] = []
     for attachment in getattr(post, "attachments", []):
-        if attachment.attachment_type != AttachmentType.PHOTO or not attachment.source_url:
+        if (
+            attachment.attachment_type != AttachmentType.PHOTO
+            or not attachment.source_url
+        ):
             continue
         result.append((attachment.position, f"source:{attachment.attachment_id}"))
     return [key for _, key in sorted(result)]
@@ -123,7 +126,10 @@ async def update_media_state(
 
     available = set(available_keys(item))
     if len(data.media_order) != len(set(data.media_order)):
-        raise HTTPException(status_code=400, detail="Фотография не может повторяться в порядке публикации")
+        raise HTTPException(
+            status_code=400,
+            detail="Фотография не может повторяться в порядке публикации",
+        )
     unknown = [key for key in data.media_order if key not in available]
     if unknown:
         raise HTTPException(

@@ -5,8 +5,9 @@ Revises: 0006_source_delete_cascade
 Create Date: 2026-09-11
 """
 
-from alembic import op
 import sqlalchemy as sa
+
+from alembic import op
 
 revision = "0007_signatures"
 down_revision = "0006_source_delete_cascade"

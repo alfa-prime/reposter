@@ -17,9 +17,5 @@ def test_source_table_structure() -> None:
     assert isinstance(table.c.is_active.type, Boolean)
     assert isinstance(table.c.created_at.type, DateTime)
     assert isinstance(table.c.updated_at.type, DateTime)
-    assert any(
-        constraint.name == "uq_sources_url" for constraint in table.constraints
-    )
-    assert "ix_sources_platform_is_active" in {
-        index.name for index in table.indexes
-    }
+    assert any(constraint.name == "uq_sources_url" for constraint in table.constraints)
+    assert "ix_sources_platform_is_active" in {index.name for index in table.indexes}

@@ -8,6 +8,7 @@ Create Date: 2026-09-14
 from collections.abc import Sequence
 
 import sqlalchemy as sa
+
 from alembic import op
 
 revision: str = "0010_target_rewrite_prompt"

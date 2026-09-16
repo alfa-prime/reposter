@@ -4,7 +4,11 @@ from fastapi import APIRouter, Depends, HTTPException, Path, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from news_reposter.api.dependencies import API_KEY_RESPONSES, ApiKeyDep
-from news_reposter.api.v1.queue import conflict_error, not_found_error, queue_item_response
+from news_reposter.api.v1.queue import (
+    conflict_error,
+    not_found_error,
+    queue_item_response,
+)
 from news_reposter.db.models import QueueItemStatus
 from news_reposter.db.session import get_db_session
 from news_reposter.llm import LLMProviderError
@@ -39,13 +43,17 @@ REWRITE_ALLOWED_STATUSES = {
     ),
     responses={
         404: {"description": "Элемент очереди не найден"},
-        409: {"description": "Рерайт недоступен для текущего состояния или нет исходного текста"},
+        409: {
+            "description": "Рерайт недоступен для текущего состояния или нет исходного текста"
+        },
         502: {"description": "LLM-провайдер не выполнил запрос"},
         503: {"description": "LLM-провайдер не настроен"},
     },
 )
 async def rewrite_queue_item(
-    queue_item_id: Annotated[int, Path(gt=0, description="Идентификатор элемента очереди")],
+    queue_item_id: Annotated[
+        int, Path(gt=0, description="Идентификатор элемента очереди")
+    ],
     session: Session,
     _api_key: ApiKeyDep,
 ) -> QueueItemRead:

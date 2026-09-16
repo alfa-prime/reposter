@@ -2,6 +2,7 @@ import asyncio
 from collections.abc import Iterator
 from datetime import UTC, datetime
 from types import SimpleNamespace
+from typing import ClassVar
 
 import httpx
 import pytest
@@ -16,10 +17,10 @@ from news_reposter.schemas import TargetSourceCreate, TargetSourceUpdate
 class MemoryTargetSourceRepository:
     """Хранит связи целей и источников в памяти во время проверки API."""
 
-    records: dict[int, SimpleNamespace] = {}
-    next_id = 1
-    target_ids = {1}
-    source_ids = {10, 20}
+    records: ClassVar[dict[int, SimpleNamespace]] = {}
+    next_id: ClassVar[int] = 1
+    target_ids: ClassVar[set[int]] = {1}
+    source_ids: ClassVar[set[int]] = {10, 20}
 
     def __init__(self, _session: object) -> None:
         pass
@@ -117,7 +118,9 @@ def test_target_sources_crud(memory_target_source_repository: None) -> None:
 
     async def scenario() -> None:
         transport = httpx.ASGITransport(app=app)
-        async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        async with httpx.AsyncClient(
+            transport=transport, base_url="http://test"
+        ) as client:
             created = await client.post(
                 "/api/v1/targets/1/sources",
                 json={"source_id": 10, "rewrite_enabled": True},

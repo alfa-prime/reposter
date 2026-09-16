@@ -30,7 +30,9 @@ def test_publish_post_with_images() -> None:
                 json={"message": {"url": "https://max.ru/channel/post"}},
             )
 
-        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http_client:
+        async with httpx.AsyncClient(
+            transport=httpx.MockTransport(handler)
+        ) as http_client:
             client = MAXClient(
                 access_token="secret",
                 chat_id=-77162942582085,
@@ -68,7 +70,9 @@ def test_upload_video_returns_token() -> None:
                 return httpx.Response(200, json={"retval": {"ok": True}})
             return httpx.Response(404)
 
-        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http_client:
+        async with httpx.AsyncClient(
+            transport=httpx.MockTransport(handler)
+        ) as http_client:
             client = MAXClient(access_token="secret", http_client=http_client)
             token = await client.upload_media(
                 media_type="video",
@@ -100,7 +104,9 @@ def test_upload_video_uses_initial_token_when_upload_response_is_not_json() -> N
                 return httpx.Response(200, text="OK")
             return httpx.Response(404)
 
-        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http_client:
+        async with httpx.AsyncClient(
+            transport=httpx.MockTransport(handler)
+        ) as http_client:
             client = MAXClient(access_token="secret", http_client=http_client)
             token = await client.upload_media(
                 media_type="video",
@@ -135,7 +141,9 @@ def test_get_updates() -> None:
                 },
             )
 
-        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http_client:
+        async with httpx.AsyncClient(
+            transport=httpx.MockTransport(handler)
+        ) as http_client:
             client = MAXClient(access_token="secret", http_client=http_client)
             result = await client.get_updates(
                 limit=10,
@@ -159,7 +167,9 @@ def test_get_subscriptions() -> None:
             assert request.headers["Authorization"] == "secret"
             return httpx.Response(200, json={"subscriptions": []})
 
-        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http_client:
+        async with httpx.AsyncClient(
+            transport=httpx.MockTransport(handler)
+        ) as http_client:
             client = MAXClient(access_token="secret", http_client=http_client)
             result = await client.get_subscriptions()
 
@@ -197,7 +207,9 @@ def test_create_subscription_and_get_chat() -> None:
                 )
             return httpx.Response(404)
 
-        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http_client:
+        async with httpx.AsyncClient(
+            transport=httpx.MockTransport(handler)
+        ) as http_client:
             client = MAXClient(access_token="secret", http_client=http_client)
             subscription = await client.create_subscription(
                 url="https://www.uncle-vlad.ru/api/v1/max/webhook",
@@ -221,7 +233,9 @@ def test_max_api_error() -> None:
         def handler(request: httpx.Request) -> httpx.Response:
             return httpx.Response(403, json={"message": "access denied"})
 
-        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http_client:
+        async with httpx.AsyncClient(
+            transport=httpx.MockTransport(handler)
+        ) as http_client:
             client = MAXClient(
                 access_token="secret",
                 chat_id=-1,

@@ -146,7 +146,9 @@ def test_llm_test_returns_502_when_provider_request_fails(
     """Ошибка внешнего LLM отделяется от ошибки конфигурации приложения."""
 
     provider = SimpleNamespace(
-        rewrite=AsyncMock(side_effect=LLMProviderError("GigaChat не выполнил запрос (401)"))
+        rewrite=AsyncMock(
+            side_effect=LLMProviderError("GigaChat не выполнил запрос (401)")
+        )
     )
     monkeypatch.setattr(system_api, "get_llm_provider", lambda: provider)
 

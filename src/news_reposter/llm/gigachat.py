@@ -41,7 +41,9 @@ class GigaChatProvider:
         self._token_lock = asyncio.Lock()
 
         if ca_file:
-            self._verify: ssl.SSLContext | bool = ssl.create_default_context(cafile=ca_file)
+            self._verify: ssl.SSLContext | bool = ssl.create_default_context(
+                cafile=ca_file
+            )
         else:
             self._verify = True
 
@@ -65,7 +67,9 @@ class GigaChatProvider:
         try:
             result_text = str(data["choices"][0]["message"]["content"]).strip()
         except (KeyError, IndexError, TypeError) as exc:
-            raise LLMProviderError("GigaChat вернул ответ в неожиданном формате") from exc
+            raise LLMProviderError(
+                "GigaChat вернул ответ в неожиданном формате"
+            ) from exc
 
         if not result_text:
             raise LLMProviderError("GigaChat вернул пустой текст")
@@ -104,7 +108,9 @@ class GigaChatProvider:
             raise LLMProviderError("GigaChat вернул ответ в неожиданном формате")
         return body
 
-    async def _post_completion(self, payload: dict[str, Any], token: str) -> httpx.Response:
+    async def _post_completion(
+        self, payload: dict[str, Any], token: str
+    ) -> httpx.Response:
         async with self._client() as client:
             return await client.post(
                 f"{self.api_url}/chat/completions",
@@ -145,7 +151,9 @@ class GigaChatProvider:
                 token = str(body["access_token"])
                 expires_at = float(body["expires_at"])
             except (ValueError, KeyError, TypeError) as exc:
-                raise LLMProviderError("GigaChat вернул некорректный ответ авторизации") from exc
+                raise LLMProviderError(
+                    "GigaChat вернул некорректный ответ авторизации"
+                ) from exc
 
             # API исторически возвращал expires_at как в секундах, так и в миллисекундах.
             if expires_at > 10_000_000_000:
@@ -168,7 +176,9 @@ class GigaChatProvider:
         try:
             body = response.json()
             if isinstance(body, dict):
-                detail = str(body.get("message") or body.get("detail") or body.get("error") or "")
+                detail = str(
+                    body.get("message") or body.get("detail") or body.get("error") or ""
+                )
         except ValueError:
             pass
         suffix = f": {detail}" if detail else ""

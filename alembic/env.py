@@ -1,14 +1,14 @@
 import asyncio
 from logging.config import fileConfig
 
-from alembic import context
 from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import create_async_engine
 
+import news_reposter.db.models  # noqa: F401  # Регистрирует модели в metadata.
+from alembic import context
 from news_reposter.config import get_settings
 from news_reposter.db.base import Base
-import news_reposter.db.models  # Регистрирует ORM-модели в metadata Alembic.
 
 config = context.config
 

@@ -2,7 +2,12 @@
 .venv/
 __pycache__/
 .pytest_cache/
+.coverage
+htmlcov/
 *.py[cod]
 .idea
+frontend/dist/
+frontend/node_modules/
+frontend/tsconfig.tsbuildinfo
 certs/*.pem
 !certs/.gitkeep

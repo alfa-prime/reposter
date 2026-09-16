@@ -22,6 +22,4 @@ def test_target_table_structure() -> None:
         and constraint.name == "uq_targets_platform_external_id"
         for constraint in table.constraints
     )
-    assert "ix_targets_platform_is_active" in {
-        index.name for index in table.indexes
-    }
+    assert "ix_targets_platform_is_active" in {index.name for index in table.indexes}

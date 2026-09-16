@@ -7,8 +7,9 @@ Create Date: 2026-09-07
 
 from collections.abc import Sequence
 
-from alembic import op
 import sqlalchemy as sa
+
+from alembic import op
 
 revision: str = "0003_create_targets"
 down_revision: str | Sequence[str] | None = "0002_rename_source_id"

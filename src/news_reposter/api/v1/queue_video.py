@@ -84,7 +84,9 @@ def _raw_video_payloads(raw_post: dict[str, Any]) -> list[dict[str, Any]]:
     attachments = raw_post.get("attachments")
     if not isinstance(attachments, list) or not attachments:
         copy_history = raw_post.get("copy_history")
-        copied = copy_history[0] if isinstance(copy_history, list) and copy_history else None
+        copied = (
+            copy_history[0] if isinstance(copy_history, list) and copy_history else None
+        )
         attachments = copied.get("attachments") if isinstance(copied, dict) else []
 
     result: list[dict[str, Any]] = []
@@ -115,7 +117,9 @@ def _source_videos(item: Any) -> list[dict[str, Any]]:
             {
                 "attachment_id": attachment.attachment_id,
                 "external_attachment_id": attachment.external_attachment_id,
-                "title": title if isinstance(title, str) and title.strip() else "Видео из VK",
+                "title": title
+                if isinstance(title, str) and title.strip()
+                else "Видео из VK",
                 "source_url": attachment.source_url,
                 "kind": "source",
             }
@@ -127,15 +131,21 @@ def _source_videos(item: Any) -> list[dict[str, Any]]:
             owner_id = payload.get("owner_id")
             external_id = None
             if video_id is not None:
-                external_id = str(video_id) if owner_id is None else f"{owner_id}_{video_id}"
+                external_id = (
+                    str(video_id) if owner_id is None else f"{owner_id}_{video_id}"
+                )
             title = payload.get("title")
             player = payload.get("player")
             result.append(
                 {
                     "attachment_id": -(index + 1),
                     "external_attachment_id": external_id,
-                    "title": title if isinstance(title, str) and title.strip() else "Видео из VK",
-                    "source_url": player if isinstance(player, str) and player else None,
+                    "title": title
+                    if isinstance(title, str) and title.strip()
+                    else "Видео из VK",
+                    "source_url": player
+                    if isinstance(player, str) and player
+                    else None,
                     "kind": "source",
                 }
             )
@@ -200,7 +210,9 @@ async def upload_queue_video(
     try:
         content = base64.b64decode(data.data_base64, validate=True)
     except (binascii.Error, ValueError) as exc:
-        raise HTTPException(status_code=400, detail="Некорректные данные файла") from exc
+        raise HTTPException(
+            status_code=400, detail="Некорректные данные файла"
+        ) from exc
 
     if not content:
         raise HTTPException(status_code=400, detail="Пустой файл")
@@ -232,7 +244,10 @@ async def get_queue_video(
     _api_key: ApiKeyDep,
 ) -> FileResponse:
     safe_name = FilePath(media_id).name
-    if safe_name != media_id or FilePath(safe_name).suffix.lower() not in VIDEO_EXTENSIONS:
+    if (
+        safe_name != media_id
+        or FilePath(safe_name).suffix.lower() not in VIDEO_EXTENSIONS
+    ):
         raise HTTPException(status_code=400, detail="Некорректное имя видео")
     path = video_directory(queue_item_id) / safe_name
     if not path.is_file():
@@ -253,7 +268,10 @@ async def delete_queue_video(
 ) -> None:
     await _get_item(queue_item_id, session)
     safe_name = FilePath(media_id).name
-    if safe_name != media_id or FilePath(safe_name).suffix.lower() not in VIDEO_EXTENSIONS:
+    if (
+        safe_name != media_id
+        or FilePath(safe_name).suffix.lower() not in VIDEO_EXTENSIONS
+    ):
         raise HTTPException(status_code=400, detail="Некорректное имя видео")
 
     path = video_directory(queue_item_id) / safe_name

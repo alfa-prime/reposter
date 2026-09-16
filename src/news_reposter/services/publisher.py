@@ -227,9 +227,7 @@ async def publish_queue_item(
     if allow_scheduled:
         allowed.add(QueueItemStatus.SCHEDULED)
     if item.status not in allowed:
-        raise PublicationError(
-            f"Публикация недоступна для статуса {item.status.value}"
-        )
+        raise PublicationError(f"Публикация недоступна для статуса {item.status.value}")
 
     publication = item.publication
     if publication is not None and publication.status == PublicationStatus.PUBLISHED:

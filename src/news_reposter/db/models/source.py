@@ -15,9 +15,7 @@ class Source(Base):
     """Источник, из которого приложение получает публикации."""
 
     __tablename__ = "sources"
-    __table_args__ = (
-        Index("ix_sources_platform_is_active", "platform", "is_active"),
-    )
+    __table_args__ = (Index("ix_sources_platform_is_active", "platform", "is_active"),)
 
     source_id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(200))

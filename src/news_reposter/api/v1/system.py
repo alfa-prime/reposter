@@ -33,8 +33,7 @@ async def health() -> dict[str, str]:
     "/health/database",
     summary="Проверить подключение к PostgreSQL",
     description=(
-        "Выполняет простой запрос `SELECT 1` через асинхронную сессию "
-        "SQLAlchemy."
+        "Выполняет простой запрос `SELECT 1` через асинхронную сессию SQLAlchemy."
     ),
     response_model=DatabaseHealthResponse,
     response_description="Состояние подключения к базе данных",

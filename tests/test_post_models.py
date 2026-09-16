@@ -53,9 +53,7 @@ def test_attachment_table_structure() -> None:
     assert set(table.c.attachment_type.type.enums) == {
         item.value for item in AttachmentType
     }
-    assert "uq_post_attachments_post_id_position" in constraint_names(
-        PostAttachment
-    )
+    assert "uq_post_attachments_post_id_position" in constraint_names(PostAttachment)
     assert any(
         isinstance(constraint, CheckConstraint)
         and constraint.name == "ck_post_attachments_position"

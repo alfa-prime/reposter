@@ -12,11 +12,7 @@ def detect_image_type(content: bytes) -> str | None:
         return "image/jpeg"
     if len(content) >= 8 and content[:8] == b"\x89PNG\r\n\x1a\n":
         return "image/png"
-    if (
-        len(content) >= 12
-        and content[:4] == b"RIFF"
-        and content[8:12] == b"WEBP"
-    ):
+    if len(content) >= 12 and content[:4] == b"RIFF" and content[8:12] == b"WEBP":
         return "image/webp"
     return None
 
@@ -50,9 +46,7 @@ def validate_image_content(content: bytes, declared_type: str) -> str:
 
     detected = detect_image_type(content)
     if detected is None:
-        raise MediaValidationError(
-            "Содержимое файла не похоже на JPEG, PNG или WebP"
-        )
+        raise MediaValidationError("Содержимое файла не похоже на JPEG, PNG или WebP")
     if detected != declared_type.lower():
         raise MediaValidationError(
             f"Фактический тип файла {detected}, а заявлен {declared_type.lower()}"
@@ -65,9 +59,7 @@ def validate_video_content(content: bytes, declared_type: str) -> str:
 
     detected = detect_video_type(content)
     if detected is None:
-        raise MediaValidationError(
-            "Содержимое файла не похоже на MP4, MOV или WebM"
-        )
+        raise MediaValidationError("Содержимое файла не похоже на MP4, MOV или WebM")
     if detected != declared_type.lower():
         raise MediaValidationError(
             f"Фактический тип файла {detected}, а заявлен {declared_type.lower()}"

@@ -157,9 +157,7 @@ def test_sources_crud(memory_repository: None) -> None:
                 params={"is_active": "false"},
             )
             assert filtered.status_code == 200
-            assert [item["name"] for item in filtered.json()] == [
-                "Резервный источник"
-            ]
+            assert [item["name"] for item in filtered.json()] == ["Резервный источник"]
 
             updated = await client.patch(
                 "/api/v1/sources/1",

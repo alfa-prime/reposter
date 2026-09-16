@@ -21,7 +21,9 @@ class MAXChannel(Base):
         server_default=true(),
     )
     last_event_type: Mapped[str] = mapped_column(String(64), nullable=False)
-    last_event_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_event_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,

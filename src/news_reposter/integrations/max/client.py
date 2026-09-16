@@ -99,7 +99,9 @@ class MAXClient:
                     content_type,
                 )
             else:
-                async with httpx.AsyncClient(timeout=120.0, verify=self._ssl_context()) as client:
+                async with httpx.AsyncClient(
+                    timeout=120.0, verify=self._ssl_context()
+                ) as client:
                     result = await self._upload_to_url(
                         client,
                         upload_url,
@@ -116,7 +118,11 @@ class MAXClient:
                 "MAX вернул ответ не в формате JSON",
                 "MAX вернул неожиданный формат ответа",
             }
-            if not (isinstance(initial_token, str) and initial_token and non_json_upload_response):
+            if not (
+                isinstance(initial_token, str)
+                and initial_token
+                and non_json_upload_response
+            ):
                 raise
             result = {}
 
@@ -166,7 +172,9 @@ class MAXClient:
         if self._http_client is not None:
             return await self._send(self._http_client, body)
 
-        async with httpx.AsyncClient(timeout=60.0, verify=self._ssl_context()) as client:
+        async with httpx.AsyncClient(
+            timeout=60.0, verify=self._ssl_context()
+        ) as client:
             return await self._send(client, body)
 
     def _ssl_context(self) -> ssl.SSLContext:
@@ -184,7 +192,9 @@ class MAXClient:
         if self._http_client is not None:
             return await self._request_get(self._http_client, path, params=params)
 
-        async with httpx.AsyncClient(timeout=95.0, verify=self._ssl_context()) as client:
+        async with httpx.AsyncClient(
+            timeout=95.0, verify=self._ssl_context()
+        ) as client:
             return await self._request_get(client, path, params=params)
 
     async def _post_json(
@@ -202,7 +212,9 @@ class MAXClient:
                 params=params,
             )
 
-        async with httpx.AsyncClient(timeout=30.0, verify=self._ssl_context()) as client:
+        async with httpx.AsyncClient(
+            timeout=30.0, verify=self._ssl_context()
+        ) as client:
             return await self._request_post(client, path, body=body, params=params)
 
     async def _request_get(

@@ -32,14 +32,21 @@ def test_gigachat_rewrite_gets_token_and_reuses_it() -> None:
             assert request.headers["Authorization"] == "Bearer access-token"
             body = __import__("json").loads(request.content)
             assert body["model"] == "GigaChat-2-Pro"
-            assert body["messages"][0] == {"role": "system", "content": "Перепиши новость"}
+            assert body["messages"][0] == {
+                "role": "system",
+                "content": "Перепиши новость",
+            }
             assert body["messages"][1] == {"role": "user", "content": "Исходный текст"}
             return httpx.Response(
                 200,
                 json={
                     "model": "GigaChat-2-Pro",
                     "choices": [{"message": {"content": "Готовый рерайт"}}],
-                    "usage": {"prompt_tokens": 12, "completion_tokens": 8, "total_tokens": 20},
+                    "usage": {
+                        "prompt_tokens": 12,
+                        "completion_tokens": 8,
+                        "total_tokens": 20,
+                    },
                 },
             )
 
@@ -55,7 +62,9 @@ def test_gigachat_rewrite_gets_token_and_reuses_it() -> None:
     )
 
     async def run() -> None:
-        request = RewriteRequest(text="Исходный текст", system_prompt="Перепиши новость")
+        request = RewriteRequest(
+            text="Исходный текст", system_prompt="Перепиши новость"
+        )
         first = await provider.rewrite(request)
         second = await provider.rewrite(request)
 

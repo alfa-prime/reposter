@@ -72,7 +72,9 @@ def uploaded_photos(queue_item_id: int, start_position: int) -> list[dict[str, A
         return []
 
     photos: list[dict[str, Any]] = []
-    for index, path in enumerate(sorted(directory.iterdir(), key=lambda item: item.stat().st_mtime)):
+    for index, path in enumerate(
+        sorted(directory.iterdir(), key=lambda item: item.stat().st_mtime)
+    ):
         if not path.is_file():
             continue
         photos.append(
@@ -98,7 +100,10 @@ def queue_item_response(item: Any) -> QueueItemRead:
 
     if post is not None:
         for attachment in getattr(post, "attachments", []):
-            if attachment.attachment_type != AttachmentType.PHOTO or not attachment.source_url:
+            if (
+                attachment.attachment_type != AttachmentType.PHOTO
+                or not attachment.source_url
+            ):
                 continue
             photos.append(
                 {
@@ -182,9 +187,13 @@ async def list_queue_items(
     _api_key: ApiKeyDep,
     offset: Annotated[int, Query(ge=0, description="Сколько записей пропустить")] = 0,
     limit: Annotated[int, Query(ge=1, le=100, description="Максимум записей")] = 50,
-    target_id: Annotated[int | None, Query(gt=0, description="Фильтр по каналу")] = None,
+    target_id: Annotated[
+        int | None, Query(gt=0, description="Фильтр по каналу")
+    ] = None,
     post_id: Annotated[int | None, Query(gt=0, description="Фильтр по посту")] = None,
-    source_id: Annotated[int | None, Query(gt=0, description="Фильтр по источнику")] = None,
+    source_id: Annotated[
+        int | None, Query(gt=0, description="Фильтр по источнику")
+    ] = None,
     queue_status: Annotated[
         QueueItemStatus | None,
         Query(alias="status", description="Фильтр по редакционному статусу"),
@@ -212,7 +221,9 @@ async def list_queue_items(
     responses={404: {"description": "Элемент очереди не найден"}},
 )
 async def get_queue_item(
-    queue_item_id: Annotated[int, Path(gt=0, description="Идентификатор элемента очереди")],
+    queue_item_id: Annotated[
+        int, Path(gt=0, description="Идентификатор элемента очереди")
+    ],
     session: Session,
     _api_key: ApiKeyDep,
 ) -> QueueItemRead:
@@ -230,10 +241,15 @@ async def get_queue_item(
         "Сохраняет пользовательское JPEG, PNG или WebP изображение для конкретного "
         "элемента очереди. Максимальный размер одного файла — 10 МБ."
     ),
-    responses={404: {"description": "Элемент очереди не найден"}, 413: {"description": "Файл слишком большой"}},
+    responses={
+        404: {"description": "Элемент очереди не найден"},
+        413: {"description": "Файл слишком большой"},
+    },
 )
 async def upload_queue_media(
-    queue_item_id: Annotated[int, Path(gt=0, description="Идентификатор элемента очереди")],
+    queue_item_id: Annotated[
+        int, Path(gt=0, description="Идентификатор элемента очереди")
+    ],
     data: QueueMediaUpload,
     session: Session,
     _api_key: ApiKeyDep,
@@ -253,7 +269,9 @@ async def upload_queue_media(
     try:
         content = base64.b64decode(data.data_base64, validate=True)
     except (binascii.Error, ValueError) as exc:
-        raise HTTPException(status_code=400, detail="Некорректные данные файла") from exc
+        raise HTTPException(
+            status_code=400, detail="Некорректные данные файла"
+        ) from exc
 
     if len(content) > MAX_UPLOAD_BYTES:
         raise HTTPException(status_code=413, detail="Файл больше 10 МБ")
@@ -324,7 +342,9 @@ async def delete_queue_media(
     responses={404: {"description": "Элемент очереди не найден"}},
 )
 async def update_queue_item(
-    queue_item_id: Annotated[int, Path(gt=0, description="Идентификатор элемента очереди")],
+    queue_item_id: Annotated[
+        int, Path(gt=0, description="Идентификатор элемента очереди")
+    ],
     data: QueueItemUpdate,
     session: Session,
     _api_key: ApiKeyDep,
@@ -342,10 +362,15 @@ async def update_queue_item(
     response_model=QueueItemRead,
     summary="Отправить пост на модерацию",
     description="Переводит подготовленный пост в статус awaiting_moderation.",
-    responses={404: {"description": "Элемент очереди не найден"}, 409: {"description": "Недопустимый переход статуса"}},
+    responses={
+        404: {"description": "Элемент очереди не найден"},
+        409: {"description": "Недопустимый переход статуса"},
+    },
 )
 async def submit_queue_item(
-    queue_item_id: Annotated[int, Path(gt=0, description="Идентификатор элемента очереди")],
+    queue_item_id: Annotated[
+        int, Path(gt=0, description="Идентификатор элемента очереди")
+    ],
     session: Session,
     _api_key: ApiKeyDep,
 ) -> QueueItemRead:
@@ -368,10 +393,15 @@ async def submit_queue_item(
     response_model=QueueItemRead,
     summary="Одобрить пост",
     description="Одобряет пост, находящийся на модерации.",
-    responses={404: {"description": "Элемент очереди не найден"}, 409: {"description": "Недопустимый переход статуса"}},
+    responses={
+        404: {"description": "Элемент очереди не найден"},
+        409: {"description": "Недопустимый переход статуса"},
+    },
 )
 async def approve_queue_item(
-    queue_item_id: Annotated[int, Path(gt=0, description="Идентификатор элемента очереди")],
+    queue_item_id: Annotated[
+        int, Path(gt=0, description="Идентификатор элемента очереди")
+    ],
     session: Session,
     _api_key: ApiKeyDep,
 ) -> QueueItemRead:
@@ -389,10 +419,15 @@ async def approve_queue_item(
     response_model=QueueItemRead,
     summary="Отклонить пост",
     description="Отклоняет пост, находящийся на модерации.",
-    responses={404: {"description": "Элемент очереди не найден"}, 409: {"description": "Недопустимый переход статуса"}},
+    responses={
+        404: {"description": "Элемент очереди не найден"},
+        409: {"description": "Недопустимый переход статуса"},
+    },
 )
 async def reject_queue_item(
-    queue_item_id: Annotated[int, Path(gt=0, description="Идентификатор элемента очереди")],
+    queue_item_id: Annotated[
+        int, Path(gt=0, description="Идентификатор элемента очереди")
+    ],
     session: Session,
     _api_key: ApiKeyDep,
 ) -> QueueItemRead:
@@ -413,10 +448,15 @@ async def reject_queue_item(
         "Возвращает пост в статус pending для повторного редактирования. "
         "Можно использовать после модерации, одобрения или планирования."
     ),
-    responses={404: {"description": "Элемент очереди не найден"}, 409: {"description": "Недопустимый переход статуса"}},
+    responses={
+        404: {"description": "Элемент очереди не найден"},
+        409: {"description": "Недопустимый переход статуса"},
+    },
 )
 async def reopen_queue_item(
-    queue_item_id: Annotated[int, Path(gt=0, description="Идентификатор элемента очереди")],
+    queue_item_id: Annotated[
+        int, Path(gt=0, description="Идентификатор элемента очереди")
+    ],
     session: Session,
     _api_key: ApiKeyDep,
 ) -> QueueItemRead:
@@ -442,10 +482,15 @@ async def reopen_queue_item(
     response_model=QueueItemRead,
     summary="Запланировать публикацию",
     description="Назначает время публикации для одобренного поста.",
-    responses={404: {"description": "Элемент очереди не найден"}, 409: {"description": "Недопустимый переход статуса"}},
+    responses={
+        404: {"description": "Элемент очереди не найден"},
+        409: {"description": "Недопустимый переход статуса"},
+    },
 )
 async def schedule_queue_item(
-    queue_item_id: Annotated[int, Path(gt=0, description="Идентификатор элемента очереди")],
+    queue_item_id: Annotated[
+        int, Path(gt=0, description="Идентификатор элемента очереди")
+    ],
     data: QueueItemSchedule,
     session: Session,
     _api_key: ApiKeyDep,
@@ -471,7 +516,9 @@ async def schedule_queue_item(
     responses={404: {"description": "Элемент очереди не найден"}},
 )
 async def delete_queue_item(
-    queue_item_id: Annotated[int, Path(gt=0, description="Идентификатор элемента очереди")],
+    queue_item_id: Annotated[
+        int, Path(gt=0, description="Идентификатор элемента очереди")
+    ],
     session: Session,
     _api_key: ApiKeyDep,
 ) -> Response:

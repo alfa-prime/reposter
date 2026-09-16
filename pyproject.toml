@@ -17,6 +17,8 @@ dependencies = [
 [dependency-groups]
 dev = [
     "pytest>=8.4.1",
+    "pytest-cov>=7.0.0",
+    "ruff==0.16.7",
 ]
 
 [build-system]
@@ -29,3 +31,17 @@ packages = ["src/news_reposter"]
 [tool.pytest.ini_options]
 pythonpath = ["src"]
 testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I", "RUF012", "UP"]
+
+[tool.coverage.run]
+branch = true
+source = ["news_reposter"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true

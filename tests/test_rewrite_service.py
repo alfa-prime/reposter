@@ -28,7 +28,9 @@ def test_rewrite_uses_target_prompt_when_present() -> None:
     settings = SimpleNamespace(llm_default_rewrite_prompt="Общий промпт")
     service = RewriteService(provider, settings)
 
-    result = asyncio.run(service.rewrite(make_item(text="Исходник", prompt="Промпт канала")))
+    result = asyncio.run(
+        service.rewrite(make_item(text="Исходник", prompt="Промпт канала"))
+    )
 
     assert result.text == "Готовый текст"
     request = provider.rewrite.await_args.args[0]
@@ -39,10 +41,14 @@ def test_rewrite_uses_target_prompt_when_present() -> None:
 def test_rewrite_falls_back_to_default_prompt() -> None:
     provider = SimpleNamespace(
         rewrite=AsyncMock(
-            return_value=RewriteResult(text="Готово", provider="gigachat", model="model")
+            return_value=RewriteResult(
+                text="Готово", provider="gigachat", model="model"
+            )
         )
     )
-    service = RewriteService(provider, SimpleNamespace(llm_default_rewrite_prompt="Общий промпт"))
+    service = RewriteService(
+        provider, SimpleNamespace(llm_default_rewrite_prompt="Общий промпт")
+    )
 
     asyncio.run(service.rewrite(make_item(text="Исходник", prompt=None)))
 

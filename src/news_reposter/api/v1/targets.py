@@ -158,7 +158,9 @@ async def resolve_max_target(
     try:
         normalized = normalize_max_link(link)
     except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
+        ) from exc
 
     channel = await session.scalar(
         select(MAXChannel).where(

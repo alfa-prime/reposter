@@ -7,9 +7,10 @@ Create Date: 2026-09-07
 
 from collections.abc import Sequence
 
-from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
+
+from alembic import op
 
 revision: str = "0004_create_post_queue"
 down_revision: str | Sequence[str] | None = "0003_create_targets"

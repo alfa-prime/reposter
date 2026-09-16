@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, computed_field
@@ -39,7 +39,7 @@ class VKPost(BaseModel):
     def published_at(self) -> datetime:
         """Возвращает время публикации в UTC."""
 
-        return datetime.fromtimestamp(self.date, tz=timezone.utc)
+        return datetime.fromtimestamp(self.date, tz=UTC)
 
     def photo_urls(self) -> list[str]:
         """Возвращает лучшие доступные URL фотографий из вложений поста."""

@@ -36,7 +36,9 @@ class RewriteService:
             raise RewriteServiceError("У исходного поста нет текста для рерайта")
 
         target_prompt = (getattr(target, "rewrite_prompt", None) or "").strip()
-        system_prompt = target_prompt or self.settings.llm_default_rewrite_prompt.strip()
+        system_prompt = (
+            target_prompt or self.settings.llm_default_rewrite_prompt.strip()
+        )
         if not system_prompt:
             raise RewriteServiceError("Не настроена инструкция для рерайта")
 
@@ -45,7 +47,9 @@ class RewriteService:
     async def rewrite(self, item: QueueItem) -> RewriteResult:
         context = self.context_for(item)
         started_at = time.perf_counter()
-        provider_name = str(getattr(self.provider, "name", type(self.provider).__name__))
+        provider_name = str(
+            getattr(self.provider, "name", type(self.provider).__name__)
+        )
         queue_item_id = getattr(item, "queue_item_id", None)
         target_id = getattr(item, "target_id", None)
 
