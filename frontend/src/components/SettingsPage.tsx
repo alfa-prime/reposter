@@ -4,9 +4,44 @@ import { api, CollectionSettings, CollectionStatus } from "../api";
 import "../scheduler.css";
 
 type FormState = Omit<CollectionSettings, "updated_at">;
+const hours = Array.from({ length: 24 }, (_, value) => String(value).padStart(2, "0"));
+const minutes = Array.from({ length: 60 }, (_, value) => String(value).padStart(2, "0"));
 
 function formatDate(value?: string | null) {
   return value ? new Intl.DateTimeFormat("ru-RU", { dateStyle: "short", timeStyle: "medium" }).format(new Date(value)) : "—";
+}
+
+type TimeFieldProps = {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+};
+
+function TimeField({ label, value, onChange }: TimeFieldProps) {
+  const [hour = "00", minute = "00"] = value.split(":");
+
+  return (
+    <label className="scheduler-time-field">
+      <span>{label}</span>
+      <span className="scheduler-time-input">
+        <select
+          value={hour}
+          onChange={(event) => onChange(`${event.target.value}:${minute}`)}
+          aria-label={`${label}: часы`}
+        >
+          {hours.map((item) => <option key={item} value={item}>{item}</option>)}
+        </select>
+        <b aria-hidden="true">:</b>
+        <select
+          value={minute}
+          onChange={(event) => onChange(`${hour}:${event.target.value}`)}
+          aria-label={`${label}: минуты`}
+        >
+          {minutes.map((item) => <option key={item} value={item}>{item}</option>)}
+        </select>
+      </span>
+    </label>
+  );
 }
 
 export function SettingsPage() {
@@ -85,8 +120,8 @@ export function SettingsPage() {
         </div>
 
         <div className="scheduler-fields">
-          <label>Начало окна<input type="time" value={form.start_time} onChange={(event) => setForm({ ...form, start_time: event.target.value })} /></label>
-          <label>Конец окна<input type="time" value={form.end_time} onChange={(event) => setForm({ ...form, end_time: event.target.value })} /></label>
+          <TimeField label="Начало окна" value={form.start_time} onChange={(value) => setForm({ ...form, start_time: value })} />
+          <TimeField label="Конец окна" value={form.end_time} onChange={(value) => setForm({ ...form, end_time: value })} />
           <label>Периодичность<select value={form.interval_minutes} onChange={(event) => setForm({ ...form, interval_minutes: Number(event.target.value) })}>{[5, 10, 15, 30, 60, 120].map((minutes) => <option key={minutes} value={minutes}>{minutes < 60 ? `Каждые ${minutes} мин` : `Каждые ${minutes / 60} ч`}</option>)}</select></label>
           <label>Часовой пояс<select value={form.timezone} onChange={(event) => setForm({ ...form, timezone: event.target.value })}><option value="Europe/Moscow">Москва (UTC+3)</option><option value="Europe/Kaliningrad">Калининград (UTC+2)</option><option value="Asia/Yekaterinburg">Екатеринбург (UTC+5)</option><option value="Asia/Novosibirsk">Новосибирск (UTC+7)</option><option value="Asia/Vladivostok">Владивосток (UTC+10)</option></select></label>
         </div>
