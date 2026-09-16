@@ -128,3 +128,22 @@ def test_repository_updates_and_deletes_source() -> None:
         session.delete.assert_awaited_once_with(updated)
 
     asyncio.run(scenario())
+
+
+def test_repository_finds_queue_items_deleted_with_source() -> None:
+    """Перед каскадом репозиторий получает ID файловых данных для очистки."""
+
+    async def scenario() -> None:
+        session = AsyncMock(spec=AsyncSession)
+        result = Mock()
+        result.all.return_value = [11, 12]
+        session.scalars.return_value = result
+
+        queue_item_ids = await SourceRepository(session).queue_item_ids(3)
+
+        assert queue_item_ids == [11, 12]
+        statement = session.scalars.await_args.args[0]
+        assert "queue_items" in str(statement)
+        assert "posts.source_id" in str(statement)
+
+    asyncio.run(scenario())

@@ -1,6 +1,5 @@
 import base64
 import binascii
-import os
 from pathlib import Path as FilePath
 from typing import Annotated, Any
 from uuid import uuid4
@@ -23,6 +22,10 @@ from news_reposter.schemas.queue_item import (
     QueueItemUpdate,
     QueueMediaUpload,
 )
+from news_reposter.services.media_storage import (
+    cleanup_queue_item_media,
+    queue_item_directory,
+)
 
 router = APIRouter(
     prefix="/queue",
@@ -31,7 +34,6 @@ router = APIRouter(
 )
 Session = Annotated[AsyncSession, Depends(get_db_session)]
 
-MEDIA_ROOT = FilePath(os.getenv("MEDIA_ROOT", "/app/data/media"))
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024
 ALLOWED_IMAGE_TYPES = {
     "image/jpeg": ".jpg",
@@ -61,7 +63,7 @@ def ensure_status(item_status: QueueItemStatus, allowed: set[QueueItemStatus]) -
 
 
 def media_directory(queue_item_id: int) -> FilePath:
-    return MEDIA_ROOT / str(queue_item_id)
+    return queue_item_directory(queue_item_id)
 
 
 def uploaded_photos(queue_item_id: int, start_position: int) -> list[dict[str, Any]]:
@@ -479,11 +481,6 @@ async def delete_queue_item(
         raise not_found_error()
     await repository.delete(item)
 
-    directory = media_directory(queue_item_id)
-    if directory.exists():
-        for path in directory.iterdir():
-            if path.is_file():
-                path.unlink()
-        directory.rmdir()
+    cleanup_queue_item_media(queue_item_id)
 
     return Response(status_code=status.HTTP_204_NO_CONTENT)

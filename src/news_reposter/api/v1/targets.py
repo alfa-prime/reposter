@@ -5,12 +5,17 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from news_reposter.api.dependencies import API_KEY_RESPONSES, ApiKeyDep
-from news_reposter.api.v1.max import max_bad_gateway, max_client_from_settings, normalize_max_link
+from news_reposter.api.v1.max import (
+    max_bad_gateway,
+    max_client_from_settings,
+    normalize_max_link,
+)
 from news_reposter.db.models import MAXChannel
 from news_reposter.db.session import get_db_session
 from news_reposter.integrations.max import MAXAPIError
 from news_reposter.repositories import TargetAlreadyExistsError, TargetRepository
 from news_reposter.schemas import TargetCreate, TargetRead, TargetUpdate
+from news_reposter.services.media_storage import cleanup_queue_items_media
 
 router = APIRouter(
     prefix="/targets",
@@ -270,5 +275,7 @@ async def delete_target(
     target = await repository.get(target_id)
     if target is None:
         raise not_found_error()
+    queue_item_ids = await repository.queue_item_ids(target_id)
     await repository.delete(target)
+    cleanup_queue_items_media(queue_item_ids)
     return Response(status_code=status.HTTP_204_NO_CONTENT)

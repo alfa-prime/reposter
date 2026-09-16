@@ -40,6 +40,9 @@ class MemorySourceRepository:
     async def get(self, source_id: int) -> dict[str, Any] | None:
         return self.items.get(source_id)
 
+    async def queue_item_ids(self, _source_id: int) -> list[int]:
+        return []
+
     async def create(self, data: SourceCreate) -> dict[str, Any]:
         normalized_url = str(data.url).replace("vk.ru", "vk.com")
         if any(

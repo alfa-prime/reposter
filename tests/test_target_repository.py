@@ -102,3 +102,21 @@ def test_target_repository_filters_and_updates_targets() -> None:
         session.refresh.assert_awaited_once_with(target)
 
     asyncio.run(scenario())
+
+
+def test_repository_finds_queue_items_deleted_with_target() -> None:
+    """Перед каскадом репозиторий получает ID файловых данных для очистки."""
+
+    async def scenario() -> None:
+        session = AsyncMock(spec=AsyncSession)
+        result = Mock()
+        result.all.return_value = [21, 22]
+        session.scalars.return_value = result
+
+        queue_item_ids = await TargetRepository(session).queue_item_ids(4)
+
+        assert queue_item_ids == [21, 22]
+        statement = session.scalars.await_args.args[0]
+        assert "queue_items.target_id" in str(statement)
+
+    asyncio.run(scenario())

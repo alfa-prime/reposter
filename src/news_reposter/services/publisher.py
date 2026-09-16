@@ -1,10 +1,9 @@
 import asyncio
 import logging
 import mimetypes
-import os
 import re
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -24,8 +23,8 @@ from news_reposter.db.models import (
     QueueItemStatus,
 )
 from news_reposter.integrations.max import MAXAPIError, MAXClient
+from news_reposter.services.media_storage import queue_item_directory
 
-MEDIA_ROOT = Path(os.getenv("MEDIA_ROOT", "/app/data/media"))
 logger = logging.getLogger(__name__)
 
 
@@ -76,7 +75,7 @@ def _uploaded_photo_path(queue_item_id: int, key: str) -> Path | None:
     filename = Path(key.split(":", 1)[1]).name
     if not filename:
         return None
-    path = MEDIA_ROOT / str(queue_item_id) / filename
+    path = queue_item_directory(queue_item_id) / filename
     return path if path.is_file() else None
 
 
@@ -287,7 +286,7 @@ async def publish_queue_item(
     publication.status = PublicationStatus.PUBLISHED
     publication.external_message_id = mid
     publication.publication_url = url
-    publication.published_at = datetime.now(timezone.utc)
+    publication.published_at = datetime.now(UTC)
     publication.error_message = None
     item.status = QueueItemStatus.PUBLISHED
     item.scheduled_at = None
@@ -311,7 +310,7 @@ async def publish_queue_item(
 async def publish_due_items(session: AsyncSession) -> tuple[int, int]:
     """Публикует все MAX-посты, время которых уже наступило."""
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     ids = list(
         (
             await session.scalars(

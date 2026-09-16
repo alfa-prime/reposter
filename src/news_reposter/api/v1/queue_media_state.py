@@ -1,9 +1,9 @@
 import json
-import os
 from pathlib import Path
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, HTTPException, Path as ApiPath, status
+from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import Path as ApiPath
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -11,6 +11,10 @@ from news_reposter.api.dependencies import API_KEY_RESPONSES, ApiKeyDep
 from news_reposter.db.models import AttachmentType
 from news_reposter.db.session import get_db_session
 from news_reposter.repositories.queue_item import QueueItemRepository
+from news_reposter.services.media_storage import (
+    media_state_path,
+    queue_item_directory,
+)
 
 router = APIRouter(
     prefix="/queue",
@@ -18,8 +22,6 @@ router = APIRouter(
     responses=API_KEY_RESPONSES,
 )
 Session = Annotated[AsyncSession, Depends(get_db_session)]
-MEDIA_ROOT = Path(os.getenv("MEDIA_ROOT", "/app/data/media"))
-STATE_ROOT = MEDIA_ROOT / "_state"
 
 
 class QueueMediaState(BaseModel):
@@ -29,11 +31,11 @@ class QueueMediaState(BaseModel):
 
 
 def item_dir(queue_item_id: int) -> Path:
-    return MEDIA_ROOT / str(queue_item_id)
+    return queue_item_directory(queue_item_id)
 
 
 def state_path(queue_item_id: int) -> Path:
-    return STATE_ROOT / f"{queue_item_id}.json"
+    return media_state_path(queue_item_id)
 
 
 def source_keys(item: Any) -> list[str]:
@@ -76,8 +78,9 @@ def load_state(item: Any) -> list[str]:
 
 
 def save_state(queue_item_id: int, media_order: list[str]) -> None:
-    STATE_ROOT.mkdir(parents=True, exist_ok=True)
-    state_path(queue_item_id).write_text(
+    path = state_path(queue_item_id)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
         json.dumps(media_order, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )

@@ -79,7 +79,7 @@ function statusMatchesTab(status: string, tab: QueueTab) {
 
 function mediaKey(photo: QueuePhoto) {
   return photo.kind === "uploaded" && photo.media_id
-    ? `uploaded:${photo.media_id}`
+    ? `upload:${photo.media_id}`
     : `source:${photo.attachment_id}`;
 }
 

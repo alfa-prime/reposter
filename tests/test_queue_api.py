@@ -13,6 +13,7 @@ from news_reposter.db.models import AttachmentType, QueueItemStatus
 from news_reposter.main import app
 from news_reposter.repositories.queue_item import QueueItemAlreadyExistsError
 from news_reposter.schemas.queue_item import QueueItemCreate, QueueItemUpdate
+from news_reposter.services import media_storage
 
 
 class MemoryQueueRepository:
@@ -181,7 +182,13 @@ def test_queue_response_includes_source_post_photos_and_target() -> None:
     assert [photo.position for photo in response.photos] == [0, 2]
 
 
-def test_queue_crud_and_moderation(memory_queue_repository: None) -> None:
+def test_queue_crud_and_moderation(
+    memory_queue_repository: None,
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(media_storage, "MEDIA_ROOT", tmp_path)
+
     async def scenario() -> None:
         transport = httpx.ASGITransport(app=app)
         async with httpx.AsyncClient(
@@ -256,9 +263,20 @@ def test_queue_crud_and_moderation(memory_queue_repository: None) -> None:
             assert reopened.json()["status"] == "pending"
             assert reopened.json()["scheduled_at"] is None
 
+            item_directory = media_storage.queue_item_directory(1)
+            video_directory = item_directory / "videos"
+            video_directory.mkdir(parents=True)
+            (item_directory / "photo.jpg").write_bytes(b"image")
+            (video_directory / "clip.mp4").write_bytes(b"video")
+            state_path = media_storage.media_state_path(1)
+            state_path.parent.mkdir(parents=True)
+            state_path.write_text("[]", encoding="utf-8")
+
             deleted = await client.delete("/api/v1/queue/1")
             assert deleted.status_code == 204
             assert (await client.get("/api/v1/queue/1")).status_code == 404
+            assert not item_directory.exists()
+            assert not state_path.exists()
 
     asyncio.run(scenario())
 

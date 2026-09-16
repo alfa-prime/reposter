@@ -7,6 +7,7 @@ from news_reposter.api.dependencies import API_KEY_RESPONSES, ApiKeyDep
 from news_reposter.db.session import get_db_session
 from news_reposter.repositories import SourceAlreadyExistsError, SourceRepository
 from news_reposter.schemas import SourceCreate, SourceRead, SourceUpdate
+from news_reposter.services.media_storage import cleanup_queue_items_media
 
 router = APIRouter(
     prefix="/sources",
@@ -196,5 +197,7 @@ async def delete_source(
     source = await repository.get(source_id)
     if source is None:
         raise not_found_error()
+    queue_item_ids = await repository.queue_item_ids(source_id)
     await repository.delete(source)
+    cleanup_queue_items_media(queue_item_ids)
     return Response(status_code=status.HTTP_204_NO_CONTENT)

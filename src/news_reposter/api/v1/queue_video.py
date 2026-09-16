@@ -1,6 +1,5 @@
 import base64
 import binascii
-import os
 from pathlib import Path as FilePath
 from typing import Annotated, Any
 from uuid import uuid4
@@ -14,6 +13,7 @@ from news_reposter.api.dependencies import API_KEY_RESPONSES, ApiKeyDep
 from news_reposter.db.models import AttachmentType
 from news_reposter.db.session import get_db_session
 from news_reposter.repositories.queue_item import QueueItemRepository
+from news_reposter.services.media_storage import queue_item_directory
 from news_reposter.services.media_validation import (
     MediaValidationError,
     validate_video_content,
@@ -26,7 +26,6 @@ router = APIRouter(
 )
 Session = Annotated[AsyncSession, Depends(get_db_session)]
 
-MEDIA_ROOT = FilePath(os.getenv("MEDIA_ROOT", "/app/data/media"))
 MAX_VIDEO_BYTES = 50 * 1024 * 1024
 ALLOWED_VIDEO_TYPES = {
     "video/mp4": ".mp4",
@@ -57,7 +56,7 @@ class QueueVideoUpload(BaseModel):
 
 
 def video_directory(queue_item_id: int) -> FilePath:
-    return MEDIA_ROOT / str(queue_item_id) / "videos"
+    return queue_item_directory(queue_item_id) / "videos"
 
 
 def _uploaded_videos(queue_item_id: int) -> list[dict[str, Any]]:
