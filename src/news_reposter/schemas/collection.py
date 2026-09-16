@@ -29,7 +29,7 @@ class CollectionSettingsData(BaseModel):
     @model_validator(mode="after")
     def validate_window(self) -> "CollectionSettingsData":
         if self.start_time == self.end_time:
-            raise ValueError("начало и конец рабочего окна не должны совпадать")
+            raise ValueError("начало и окончание рабочего периода не должны совпадать")
         return self
 
 
