@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import { Moon, Play, Save, Sun } from "lucide-react";
+import { Play, Save } from "lucide-react";
 import { api, CollectionSettings, CollectionStatus } from "../api";
-import { applyTheme, getInitialTheme, Theme } from "../theme";
 import "../scheduler.css";
 
 type FormState = Omit<CollectionSettings, "updated_at">;
@@ -11,14 +10,11 @@ function formatDate(value?: string | null) {
 }
 
 export function SettingsPage() {
-  const [theme, setTheme] = useState<Theme>(getInitialTheme);
   const [form, setForm] = useState<FormState | null>(null);
   const [status, setStatus] = useState<CollectionStatus | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
-
-  useEffect(() => { applyTheme(theme); }, [theme]);
 
   const load = useCallback(async () => {
     try {
@@ -66,8 +62,6 @@ export function SettingsPage() {
     } finally { setBusy(false); }
   }
 
-  const isLight = theme === "light";
-
   return (
     <section className="settings-page scheduler-page">
       <header className="settings-page-head scheduler-head">
@@ -99,13 +93,6 @@ export function SettingsPage() {
         <p className="scheduler-hint">Окно может переходить через полночь: сочетание 20:00–08:00 означает работу вечером и ночью. Одинаковое время начала и окончания не допускается.</p>
         <div className="scheduler-actions"><button className="primary" disabled={busy} onClick={() => void save()}><Save size={16} />Сохранить расписание</button></div>
       </div>}
-
-      <div className="settings-page-card scheduler-theme-card">
-        <div className="settings-row-copy"><strong>Оформление</strong><span>{isLight ? "Светлая тема" : "Тёмная тема"}</span></div>
-        <button className="theme-switch" type="button" onClick={() => setTheme(isLight ? "dark" : "light")} aria-label={isLight ? "Включить тёмную тему" : "Включить светлую тему"} aria-pressed={isLight}>
-          <span className="theme-switch-track" aria-hidden="true"><Sun size={13} className="theme-switch-sun" /><Moon size={13} className="theme-switch-moon" /><span className="theme-switch-thumb" /></span>
-        </button>
-      </div>
     </section>
   );
 }
