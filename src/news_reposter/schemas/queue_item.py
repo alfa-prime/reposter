@@ -110,3 +110,13 @@ class QueueItemRead(BaseModel):
     target_platform: str | None = None
     target_url: str | None = None
     target_default_signature: str | None = None
+
+
+class QueuePageRead(BaseModel):
+    """Одна страница редакционной очереди и счётчики её статусов."""
+
+    items: list[QueueItemRead]
+    total: int = Field(ge=0)
+    offset: int = Field(ge=0)
+    limit: int = Field(ge=1)
+    status_counts: dict[str, int]

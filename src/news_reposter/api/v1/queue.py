@@ -21,6 +21,7 @@ from news_reposter.schemas.queue_item import (
     QueueItemSchedule,
     QueueItemUpdate,
     QueueMediaUpload,
+    QueuePageRead,
 )
 from news_reposter.services.media_storage import (
     cleanup_queue_item_media,
@@ -208,6 +209,48 @@ async def list_queue_items(
         status=queue_status,
     )
     return [queue_item_response(item) for item in items]
+
+
+@router.get(
+    "/page",
+    response_model=QueuePageRead,
+    summary="Получить страницу очереди постов",
+    description=(
+        "Возвращает только запрошенную страницу очереди, общее количество "
+        "подходящих записей и счётчики всех статусов. Параметр status можно "
+        "передать несколько раз."
+    ),
+)
+async def get_queue_page(
+    session: Session,
+    _api_key: ApiKeyDep,
+    queue_statuses: Annotated[
+        list[QueueItemStatus],
+        Query(alias="status", description="Один или несколько статусов очереди"),
+    ],
+    offset: Annotated[int, Query(ge=0, description="Сколько записей пропустить")] = 0,
+    limit: Annotated[int, Query(ge=1, le=100, description="Размер страницы")] = 20,
+    target_id: Annotated[
+        int | None, Query(gt=0, description="Фильтр по целевому каналу")
+    ] = None,
+) -> QueuePageRead:
+    repository = QueueItemRepository(session)
+    items = await repository.list_page(
+        offset=offset,
+        limit=limit,
+        target_id=target_id,
+        statuses=queue_statuses,
+    )
+    counts = await repository.count_by_status(target_id=target_id)
+    return QueuePageRead(
+        items=[queue_item_response(item) for item in items],
+        total=sum(counts.get(queue_status, 0) for queue_status in queue_statuses),
+        offset=offset,
+        limit=limit,
+        status_counts={
+            queue_status.value: count for queue_status, count in counts.items()
+        },
+    )
 
 
 @router.get(

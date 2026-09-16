@@ -1,6 +1,8 @@
+from __future__ import annotations
+
 from datetime import datetime
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -64,6 +66,47 @@ class QueueItemRepository:
         statement = statement.offset(offset).limit(limit)
         result = await self.session.scalars(statement)
         return list(result.all())
+
+    async def list_page(
+        self,
+        *,
+        offset: int,
+        limit: int,
+        target_id: int | None,
+        statuses: list[QueueItemStatus],
+    ) -> list[QueueItem]:
+        """Возвращает одну страницу очереди для выбранной группы статусов."""
+
+        statement = (
+            select(QueueItem)
+            .options(
+                selectinload(QueueItem.post).selectinload(Post.attachments),
+                selectinload(QueueItem.target),
+            )
+            .where(QueueItem.status.in_(statuses))
+            .order_by(QueueItem.queue_item_id.desc())
+        )
+        if target_id is not None:
+            statement = statement.where(QueueItem.target_id == target_id)
+        statement = statement.offset(offset).limit(limit)
+        result = await self.session.scalars(statement)
+        return list(result.all())
+
+    async def count_by_status(
+        self,
+        *,
+        target_id: int | None,
+    ) -> dict[QueueItemStatus, int]:
+        """Считает элементы каждого статуса для выбранного канала."""
+
+        statement = select(
+            QueueItem.status,
+            func.count(QueueItem.queue_item_id),
+        ).group_by(QueueItem.status)
+        if target_id is not None:
+            statement = statement.where(QueueItem.target_id == target_id)
+        rows = (await self.session.execute(statement)).all()
+        return {queue_status: count for queue_status, count in rows}
 
     async def get(self, queue_item_id: int) -> QueueItem | None:
         statement = (
