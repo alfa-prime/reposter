@@ -10,6 +10,8 @@ services:
       - ./alembic.ini:/app/alembic.ini:ro
 
   app:
+    ports:
+      - "${APP_PORT:-8000}:8000"
     command:
       - uvicorn
       - news_reposter.main:app
