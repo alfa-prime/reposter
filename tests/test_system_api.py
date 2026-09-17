@@ -2,6 +2,7 @@ import asyncio
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
 
+import httpx
 import pytest
 from fastapi import HTTPException, status
 from sqlalchemy.exc import OperationalError
@@ -53,7 +54,10 @@ def test_database_health_returns_503_when_database_is_unavailable() -> None:
 def test_collect_now_returns_summary(monkeypatch: pytest.MonkeyPatch) -> None:
     """Ручной запуск возвращает понятную сводку для админки."""
 
-    async def fake_collect(_trigger: object) -> dict[str, int]:
+    http_client = Mock(spec=httpx.AsyncClient)
+
+    async def fake_collect(client: object, _trigger: object) -> dict[str, int]:
+        assert client is http_client
         return {
             "sources_checked": 2,
             "posts_created": 3,
@@ -68,7 +72,7 @@ def test_collect_now_returns_summary(monkeypatch: pytest.MonkeyPatch) -> None:
     )
     monkeypatch.setattr(system_api, "collect_active_sources_once", fake_collect)
 
-    response = asyncio.run(collect_now(None))
+    response = asyncio.run(collect_now(http_client, None))
 
     assert response == {
         "status": "ok",
@@ -89,7 +93,7 @@ def test_collect_now_requires_vk_token(monkeypatch: pytest.MonkeyPatch) -> None:
     )
 
     with pytest.raises(HTTPException) as error:
-        asyncio.run(collect_now(None))
+        asyncio.run(collect_now(Mock(spec=httpx.AsyncClient), None))
 
     assert error.value.status_code == status.HTTP_503_SERVICE_UNAVAILABLE
 

@@ -5,6 +5,8 @@ import httpx
 
 from news_reposter.integrations.vk.schemas import VKPost, VKWallEnvelope
 
+VK_REQUEST_TIMEOUT_SECONDS = 15.0
+
 
 class VKAPIError(RuntimeError):
     """Ошибка, полученная при обращении к API VK."""
@@ -21,9 +23,9 @@ class VKClient:
         self,
         *,
         access_token: str,
+        http_client: httpx.AsyncClient,
         api_version: str = "5.199",
         api_url: str = "https://api.vk.com/method",
-        http_client: httpx.AsyncClient | None = None,
     ) -> None:
         self._access_token = access_token
         self._api_version = api_version
@@ -39,17 +41,16 @@ class VKClient:
             "group_ids": identifier,
             "fields": "photo_100,screen_name",
         }
-        if self._http_client is not None:
-            return await self._request_group_info(self._http_client, params)
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            return await self._request_group_info(client, params)
+        return await self._request_group_info(self._http_client, params)
 
     async def _request_group_info(
         self, client: httpx.AsyncClient, params: dict[str, str]
     ) -> dict[str, object]:
         try:
             response = await client.get(
-                f"{self._api_url}/groups.getById", params=params
+                f"{self._api_url}/groups.getById",
+                params=params,
+                timeout=VK_REQUEST_TIMEOUT_SECONDS,
             )
             response.raise_for_status()
         except httpx.HTTPError as exc:
@@ -74,20 +75,16 @@ class VKClient:
     async def get_latest_post(self, group: str) -> VKPost | None:
         params = self._base_wall_params(group)
         params["count"] = 1
-        if self._http_client is not None:
-            return await self._request_latest(self._http_client, params)
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            return await self._request_latest(client, params)
+        return await self._request_latest(self._http_client, params)
 
     async def get_posts_after(self, group: str, after_post_id: int) -> list[VKPost]:
         params = self._base_wall_params(group)
         params["count"] = 100
-        if self._http_client is not None:
-            return await self._request_posts_after(
-                self._http_client, params, after_post_id
-            )
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            return await self._request_posts_after(client, params, after_post_id)
+        return await self._request_posts_after(
+            self._http_client,
+            params,
+            after_post_id,
+        )
 
     async def _request_latest(
         self, client: httpx.AsyncClient, params: dict[str, str | int]
@@ -145,7 +142,11 @@ class VKClient:
         self, client: httpx.AsyncClient, params: dict[str, str | int]
     ) -> VKWallEnvelope:
         try:
-            response = await client.get(f"{self._api_url}/wall.get", params=params)
+            response = await client.get(
+                f"{self._api_url}/wall.get",
+                params=params,
+                timeout=VK_REQUEST_TIMEOUT_SECONDS,
+            )
             response.raise_for_status()
         except httpx.HTTPError as exc:
             raise VKAPIError(f"Не удалось выполнить запрос к VK: {exc}") from exc

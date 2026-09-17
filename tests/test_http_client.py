@@ -49,24 +49,22 @@ def test_http_client_dependency_returns_app_state_client() -> None:
 
 def test_lifespan_registers_and_closes_http_client(monkeypatch) -> None:
     client = AsyncMock(spec=httpx.AsyncClient)
-    collection_start = Mock()
-    collection_stop = AsyncMock()
-    publication_start = Mock()
-    publication_stop = AsyncMock()
+    collection_scheduler = SimpleNamespace(start=Mock(), stop=AsyncMock())
+    publication_scheduler = SimpleNamespace(start=Mock(), stop=AsyncMock())
+    collection_scheduler_factory = Mock(return_value=collection_scheduler)
+    publication_scheduler_factory = Mock(return_value=publication_scheduler)
     close_database = AsyncMock()
 
     monkeypatch.setattr(main_module, "create_http_client", lambda: client)
-    monkeypatch.setattr(main_module.collection_scheduler, "start", collection_start)
-    monkeypatch.setattr(main_module.collection_scheduler, "stop", collection_stop)
     monkeypatch.setattr(
-        main_module.publication_scheduler,
-        "start",
-        publication_start,
+        main_module,
+        "CollectionScheduler",
+        collection_scheduler_factory,
     )
     monkeypatch.setattr(
-        main_module.publication_scheduler,
-        "stop",
-        publication_stop,
+        main_module,
+        "PublicationScheduler",
+        publication_scheduler_factory,
     )
     monkeypatch.setattr(main_module, "close_database", close_database)
 
@@ -74,12 +72,15 @@ def test_lifespan_registers_and_closes_http_client(monkeypatch) -> None:
         app = FastAPI()
         async with main_module.lifespan(app):
             assert app.state.http_client is client
-            collection_start.assert_called_once_with()
-            publication_start.assert_called_once_with()
+            assert app.state.collection_scheduler is collection_scheduler
+            collection_scheduler_factory.assert_called_once_with(client)
+            publication_scheduler_factory.assert_called_once_with()
+            collection_scheduler.start.assert_called_once_with()
+            publication_scheduler.start.assert_called_once_with()
             client.aclose.assert_not_awaited()
 
-        publication_stop.assert_awaited_once_with()
-        collection_stop.assert_awaited_once_with()
+        publication_scheduler.stop.assert_awaited_once_with()
+        collection_scheduler.stop.assert_awaited_once_with()
         client.aclose.assert_awaited_once_with()
         close_database.assert_awaited_once_with()
 
