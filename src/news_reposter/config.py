@@ -23,6 +23,7 @@ class Settings(BaseSettings):
     http_max_keepalive_connections: int = Field(default=20, ge=0, le=1000)
     http_keepalive_expiry_seconds: float = Field(default=30.0, gt=0, le=600)
     http_trust_env: bool = False
+    http_ca_file: str | None = None
 
     vk_access_token: str | None = None
     vk_group: str | None = None

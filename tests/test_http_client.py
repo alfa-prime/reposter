@@ -1,14 +1,37 @@
 import asyncio
+import ssl
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
 
 import httpx
+import pytest
 from fastapi import FastAPI
 
 import news_reposter.main as main_module
 from news_reposter.api.dependencies import get_http_client
 from news_reposter.config import Settings
-from news_reposter.http_client import create_http_client
+from news_reposter.http_client import create_http_client, create_http_ssl_context
+
+
+def test_http_ssl_context_adds_custom_ca_to_system_trust(monkeypatch) -> None:
+    context = Mock(spec=ssl.SSLContext)
+    create_default_context = Mock(return_value=context)
+    monkeypatch.setattr(ssl, "create_default_context", create_default_context)
+
+    result = create_http_ssl_context("/app/certs/russian_trusted_ca.pem")
+
+    assert result is context
+    create_default_context.assert_called_once_with()
+    context.load_verify_locations.assert_called_once_with(
+        cafile="/app/certs/russian_trusted_ca.pem"
+    )
+
+
+def test_http_ssl_context_reports_missing_ca_file(tmp_path) -> None:
+    missing_path = tmp_path / "missing.pem"
+
+    with pytest.raises(RuntimeError, match="Не удалось загрузить HTTP_CA_FILE"):
+        create_http_ssl_context(str(missing_path))
 
 
 def test_create_http_client_uses_shared_pool_settings() -> None:
