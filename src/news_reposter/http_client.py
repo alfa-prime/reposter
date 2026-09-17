@@ -20,9 +20,7 @@ def create_http_client(settings: Settings | None = None) -> httpx.AsyncClient:
     )
     limits = httpx.Limits(
         max_connections=resolved_settings.http_max_connections,
-        max_keepalive_connections=(
-            resolved_settings.http_max_keepalive_connections
-        ),
+        max_keepalive_connections=(resolved_settings.http_max_keepalive_connections),
         keepalive_expiry=resolved_settings.http_keepalive_expiry_seconds,
     )
     return httpx.AsyncClient(
