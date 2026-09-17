@@ -106,7 +106,7 @@ API MAX может требовать сертификаты Минцифры. �
 системное хранилище, положите объединённый PEM в `certs/` и задайте:
 
 ```dotenv
-MAX_CA_FILE=/app/certs/russian-trusted-ca.pem
+HTTP_CA_FILE=/app/certs/russian_trusted_ca.pem
 ```
 
 Файлы `certs/*.pem` не попадают в Git и Docker build context.

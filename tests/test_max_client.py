@@ -13,6 +13,7 @@ def test_publish_post_with_images() -> None:
     async def scenario() -> None:
         def handler(request: httpx.Request) -> httpx.Response:
             assert request.url.path == "/messages"
+            assert request.extensions["timeout"]["read"] == 60.0
             assert request.url.params["chat_id"] == "-77162942582085"
             assert request.headers["Authorization"] == "secret"
             assert json.loads(request.content) == {
@@ -57,6 +58,7 @@ def test_upload_video_returns_token() -> None:
         def handler(request: httpx.Request) -> httpx.Response:
             calls.append(request.url.path)
             if request.url.path == "/uploads":
+                assert request.extensions["timeout"]["read"] == 30.0
                 assert request.url.params["type"] == "video"
                 return httpx.Response(
                     200,
@@ -66,6 +68,7 @@ def test_upload_video_returns_token() -> None:
                     },
                 )
             if request.url.host == "upload.example":
+                assert request.extensions["timeout"]["read"] == 120.0
                 assert b"movie.mp4" in request.content
                 return httpx.Response(200, json={"retval": {"ok": True}})
             return httpx.Response(404)
@@ -126,6 +129,7 @@ def test_get_updates() -> None:
     async def scenario() -> None:
         def handler(request: httpx.Request) -> httpx.Response:
             assert request.url.path == "/updates"
+            assert request.extensions["timeout"]["read"] == 95.0
             assert request.headers["Authorization"] == "secret"
             assert request.url.params["limit"] == "10"
             assert request.url.params["timeout"] == "0"

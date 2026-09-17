@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Path, Query, Response, st
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from news_reposter.api.dependencies import API_KEY_RESPONSES, ApiKeyDep
+from news_reposter.api.dependencies import API_KEY_RESPONSES, ApiKeyDep, HttpClientDep
 from news_reposter.api.v1.max import (
     max_bad_gateway,
     max_client_from_settings,
@@ -152,6 +152,7 @@ async def list_targets(
 )
 async def resolve_max_target(
     session: Session,
+    http_client: HttpClientDep,
     _api_key: ApiKeyDep,
     link: str = Query(description="Публичная ссылка MAX"),
 ) -> dict[str, Any]:
@@ -178,7 +179,7 @@ async def resolve_max_target(
         )
 
     try:
-        chat = await max_client_from_settings().get_chat(channel.chat_id)
+        chat = await max_client_from_settings(http_client).get_chat(channel.chat_id)
     except MAXAPIError as exc:
         raise max_bad_gateway(exc) from exc
 

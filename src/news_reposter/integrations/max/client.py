@@ -1,4 +1,3 @@
-import ssl
 from typing import Any, Literal
 
 import httpx
@@ -21,15 +20,13 @@ class MAXClient:
         self,
         *,
         access_token: str,
+        http_client: httpx.AsyncClient,
         chat_id: int | None = None,
         api_url: str = "https://platform-api2.max.ru",
-        ca_file: str | None = None,
-        http_client: httpx.AsyncClient | None = None,
     ) -> None:
         self._access_token = access_token
         self._chat_id = chat_id
         self._api_url = api_url.rstrip("/")
-        self._ca_file = ca_file
         self._http_client = http_client
 
     async def get_updates(
@@ -90,25 +87,12 @@ class MAXClient:
 
         initial_token = upload.get("token")
         try:
-            if self._http_client is not None:
-                result = await self._upload_to_url(
-                    self._http_client,
-                    upload_url,
-                    filename,
-                    content,
-                    content_type,
-                )
-            else:
-                async with httpx.AsyncClient(
-                    timeout=120.0, verify=self._ssl_context()
-                ) as client:
-                    result = await self._upload_to_url(
-                        client,
-                        upload_url,
-                        filename,
-                        content,
-                        content_type,
-                    )
+            result = await self._upload_to_url(
+                upload_url,
+                filename,
+                content,
+                content_type,
+            )
         except MAXAPIError as exc:
             # Для видео MAX выдаёт token ещё на шаге POST /uploads. Некоторые
             # upload-хосты при успешной загрузке отвечают пустым телом или не-JSON.
@@ -169,19 +153,7 @@ class MAXClient:
         if clean_text and text_format:
             body["format"] = text_format
 
-        if self._http_client is not None:
-            return await self._send(self._http_client, body)
-
-        async with httpx.AsyncClient(
-            timeout=60.0, verify=self._ssl_context()
-        ) as client:
-            return await self._send(client, body)
-
-    def _ssl_context(self) -> ssl.SSLContext:
-        ssl_context = ssl.create_default_context()
-        if self._ca_file:
-            ssl_context.load_verify_locations(cafile=self._ca_file)
-        return ssl_context
+        return await self._send(body)
 
     async def _get_json(
         self,
@@ -189,13 +161,7 @@ class MAXClient:
         *,
         params: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        if self._http_client is not None:
-            return await self._request_get(self._http_client, path, params=params)
-
-        async with httpx.AsyncClient(
-            timeout=95.0, verify=self._ssl_context()
-        ) as client:
-            return await self._request_get(client, path, params=params)
+        return await self._request_get(path, params=params)
 
     async def _post_json(
         self,
@@ -204,31 +170,20 @@ class MAXClient:
         body: dict[str, Any] | None,
         params: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        if self._http_client is not None:
-            return await self._request_post(
-                self._http_client,
-                path,
-                body=body,
-                params=params,
-            )
-
-        async with httpx.AsyncClient(
-            timeout=30.0, verify=self._ssl_context()
-        ) as client:
-            return await self._request_post(client, path, body=body, params=params)
+        return await self._request_post(path, body=body, params=params)
 
     async def _request_get(
         self,
-        client: httpx.AsyncClient,
         path: str,
         *,
         params: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         try:
-            response = await client.get(
+            response = await self._http_client.get(
                 f"{self._api_url}{path}",
                 params=params,
                 headers={"Authorization": self._access_token},
+                timeout=95.0,
             )
             response.raise_for_status()
         except httpx.HTTPStatusError as exc:
@@ -241,18 +196,18 @@ class MAXClient:
 
     async def _request_post(
         self,
-        client: httpx.AsyncClient,
         path: str,
         *,
         body: dict[str, Any] | None,
         params: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         try:
-            response = await client.post(
+            response = await self._http_client.post(
                 f"{self._api_url}{path}",
                 params=params,
                 headers={"Authorization": self._access_token},
                 json=body,
+                timeout=30.0,
             )
             response.raise_for_status()
         except httpx.HTTPStatusError as exc:
@@ -265,16 +220,16 @@ class MAXClient:
 
     async def _upload_to_url(
         self,
-        client: httpx.AsyncClient,
         url: str,
         filename: str,
         content: bytes,
         content_type: str,
     ) -> dict[str, Any]:
         try:
-            response = await client.post(
+            response = await self._http_client.post(
                 url,
                 files={"data": (filename, content, content_type)},
+                timeout=120.0,
             )
             response.raise_for_status()
         except httpx.HTTPStatusError as exc:
@@ -300,15 +255,15 @@ class MAXClient:
 
     async def _send(
         self,
-        client: httpx.AsyncClient,
         body: dict[str, Any],
     ) -> dict[str, Any]:
         try:
-            response = await client.post(
+            response = await self._http_client.post(
                 f"{self._api_url}/messages",
                 params={"chat_id": self._chat_id},
                 headers={"Authorization": self._access_token},
                 json=body,
+                timeout=60.0,
             )
             response.raise_for_status()
         except httpx.HTTPStatusError as exc:

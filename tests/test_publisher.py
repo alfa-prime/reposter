@@ -1,7 +1,8 @@
 import asyncio
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, Mock
 
+import httpx
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -42,7 +43,6 @@ def max_settings() -> SimpleNamespace:
     return SimpleNamespace(
         max_access_token="secret",
         max_api_url="https://platform-api.max.ru",
-        max_ca_file=None,
     )
 
 
@@ -69,11 +69,12 @@ def test_publish_rejects_item_already_claimed_by_another_run(
     async def scenario() -> None:
         item = publishable_item(PublicationStatus.PUBLISHING)
         session = AsyncMock(spec=AsyncSession)
+        http_client = Mock(spec=httpx.AsyncClient)
         loaded = AsyncMock(return_value=item)
         monkeypatch.setattr(publisher, "_loaded_item", loaded)
 
         with pytest.raises(PublicationError, match="уже выполняется"):
-            await publisher.publish_queue_item(session, item.queue_item_id)
+            await publisher.publish_queue_item(session, item.queue_item_id, http_client)
 
         session.commit.assert_not_awaited()
 
@@ -88,13 +89,15 @@ def test_publish_commits_claim_before_calling_max(
     async def scenario() -> None:
         item = publishable_item()
         session = AsyncMock(spec=AsyncSession)
+        http_client = Mock(spec=httpx.AsyncClient)
         monkeypatch.setattr(
             publisher,
             "_loaded_item",
             AsyncMock(side_effect=[item, item]),
         )
         monkeypatch.setattr(publisher, "get_settings", max_settings)
-        monkeypatch.setattr(publisher, "MAXClient", lambda **_kwargs: SimpleNamespace())
+        max_client_factory = Mock(return_value=SimpleNamespace())
+        monkeypatch.setattr(publisher, "MAXClient", max_client_factory)
 
         async def fake_publish(*_args: object, **_kwargs: object) -> dict[str, object]:
             assert session.commit.await_count == 1
@@ -103,13 +106,23 @@ def test_publish_commits_claim_before_calling_max(
 
         monkeypatch.setattr(publisher, "_publish_with_media_retry", fake_publish)
 
-        result = await publisher.publish_queue_item(session, item.queue_item_id)
+        result = await publisher.publish_queue_item(
+            session,
+            item.queue_item_id,
+            http_client,
+        )
 
         assert result is item
         assert session.commit.await_count == 2
         assert item.publication.status == PublicationStatus.PUBLISHED
         assert item.status == QueueItemStatus.PUBLISHED
         assert item.publication.external_message_id == "mid-1"
+        max_client_factory.assert_called_once_with(
+            access_token="secret",
+            http_client=http_client,
+            chat_id=-123,
+            api_url="https://platform-api.max.ru",
+        )
 
     asyncio.run(scenario())
 
@@ -122,6 +135,7 @@ def test_unexpected_publish_error_releases_claim_as_failed(
     async def scenario() -> None:
         item = publishable_item()
         session = AsyncMock(spec=AsyncSession)
+        http_client = Mock(spec=httpx.AsyncClient)
         monkeypatch.setattr(publisher, "_loaded_item", AsyncMock(return_value=item))
         monkeypatch.setattr(publisher, "get_settings", max_settings)
         monkeypatch.setattr(publisher, "MAXClient", lambda **_kwargs: SimpleNamespace())
@@ -132,7 +146,7 @@ def test_unexpected_publish_error_releases_claim_as_failed(
         )
 
         with pytest.raises(PublicationError, match="unexpected"):
-            await publisher.publish_queue_item(session, item.queue_item_id)
+            await publisher.publish_queue_item(session, item.queue_item_id, http_client)
 
         assert session.commit.await_count == 2
         assert item.publication.status == PublicationStatus.FAILED

@@ -3,11 +3,12 @@ from hmac import compare_digest
 from typing import Annotated, Any
 from urllib.parse import urlsplit
 
+import httpx
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from news_reposter.api.dependencies import API_KEY_RESPONSES, ApiKeyDep
+from news_reposter.api.dependencies import API_KEY_RESPONSES, ApiKeyDep, HttpClientDep
 from news_reposter.config import get_settings
 from news_reposter.db.models import MAXChannel
 from news_reposter.db.session import get_db_session
@@ -17,7 +18,7 @@ router = APIRouter(prefix="/max", tags=["MAX"], responses=API_KEY_RESPONSES)
 Session = Annotated[AsyncSession, Depends(get_db_session)]
 
 
-def max_client_from_settings() -> MAXClient:
+def max_client_from_settings(http_client: httpx.AsyncClient) -> MAXClient:
     """Создаёт MAX-клиент из текущих настроек приложения."""
 
     settings = get_settings()
@@ -28,8 +29,8 @@ def max_client_from_settings() -> MAXClient:
         )
     return MAXClient(
         access_token=settings.max_access_token,
+        http_client=http_client,
         api_url=settings.max_api_url,
-        ca_file=settings.max_ca_file,
     )
 
 
@@ -92,6 +93,7 @@ def event_datetime(timestamp_ms: object) -> datetime | None:
 async def max_webhook(
     event: dict[str, Any],
     session: Session,
+    http_client: HttpClientDep,
     x_max_bot_api_secret: Annotated[
         str | None,
         Header(alias="X-Max-Bot-Api-Secret"),
@@ -129,7 +131,7 @@ async def max_webhook(
     chat_info: dict[str, Any] = {}
     if update_type != "bot_removed":
         try:
-            chat_info = await max_client_from_settings().get_chat(chat_id)
+            chat_info = await max_client_from_settings(http_client).get_chat(chat_id)
         except MAXAPIError as exc:
             raise max_bad_gateway(exc) from exc
 
@@ -170,6 +172,7 @@ async def max_webhook(
     response_description="Результат создания подписки MAX",
 )
 async def create_channel_discovery_subscription(
+    http_client: HttpClientDep,
     _api_key: ApiKeyDep,
 ) -> dict[str, Any]:
     """Создаёт webhook-подписку, через которую приложение получает chat_id."""
@@ -202,7 +205,7 @@ async def create_channel_discovery_subscription(
         )
 
     try:
-        return await max_client_from_settings().create_subscription(
+        return await max_client_from_settings(http_client).create_subscription(
             url=settings.max_webhook_url,
             secret=secret,
             update_types=["bot_added", "bot_removed", "chat_title_changed"],
@@ -272,11 +275,12 @@ async def get_max_channel_id(
     response_description="Текущие Webhook-подписки бота MAX",
 )
 async def get_max_subscriptions(
+    http_client: HttpClientDep,
     _api_key: ApiKeyDep,
 ) -> dict[str, Any]:
     """Возвращает Webhook-подписки текущего MAX-бота."""
 
     try:
-        return await max_client_from_settings().get_subscriptions()
+        return await max_client_from_settings(http_client).get_subscriptions()
     except MAXAPIError as exc:
         raise max_bad_gateway(exc) from exc

@@ -97,7 +97,7 @@ def test_lifespan_registers_and_closes_http_client(monkeypatch) -> None:
             assert app.state.http_client is client
             assert app.state.collection_scheduler is collection_scheduler
             collection_scheduler_factory.assert_called_once_with(client)
-            publication_scheduler_factory.assert_called_once_with()
+            publication_scheduler_factory.assert_called_once_with(client)
             collection_scheduler.start.assert_called_once_with()
             publication_scheduler.start.assert_called_once_with()
             client.aclose.assert_not_awaited()

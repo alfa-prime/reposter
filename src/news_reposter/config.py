@@ -32,7 +32,6 @@ class Settings(BaseSettings):
 
     max_access_token: str | None = None
     max_api_url: str = "https://platform-api2.max.ru"
-    max_ca_file: str | None = None
     max_webhook_url: str | None = None
     max_webhook_secret: str | None = None
 
