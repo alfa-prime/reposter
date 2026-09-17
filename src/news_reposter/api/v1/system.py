@@ -5,7 +5,7 @@ from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from news_reposter.api.dependencies import API_KEY_RESPONSES, ApiKeyDep
+from news_reposter.api.dependencies import API_KEY_RESPONSES, ApiKeyDep, HttpClientDep
 from news_reposter.config import get_settings
 from news_reposter.db.models import CollectionRunTrigger
 from news_reposter.db.session import get_db_session
@@ -81,7 +81,10 @@ async def database_health(
         503: {"description": "VK_ACCESS_TOKEN не настроен"},
     },
 )
-async def collect_now(_api_key: ApiKeyDep) -> dict[str, int | str]:
+async def collect_now(
+    http_client: HttpClientDep,
+    _api_key: ApiKeyDep,
+) -> dict[str, int | str]:
     """Запускает один проход сборщика вне расписания."""
 
     if not get_settings().vk_access_token:
@@ -91,7 +94,10 @@ async def collect_now(_api_key: ApiKeyDep) -> dict[str, int | str]:
         )
 
     try:
-        summary = await collect_active_sources_once(CollectionRunTrigger.MANUAL)
+        summary = await collect_active_sources_once(
+            http_client,
+            CollectionRunTrigger.MANUAL,
+        )
     except CollectionAlreadyRunningError as exc:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,

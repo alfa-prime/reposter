@@ -22,8 +22,6 @@ from news_reposter.services.publication_scheduler import PublicationScheduler
 from news_reposter.services.scheduler import CollectionScheduler
 
 settings = get_settings()
-collection_scheduler = CollectionScheduler()
-publication_scheduler = PublicationScheduler()
 
 OPENAPI_TAGS = [
     {
@@ -72,6 +70,8 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     """Запускает фоновые задачи и освобождает ресурсы при остановке."""
 
     http_client = create_http_client()
+    collection_scheduler = CollectionScheduler(http_client)
+    publication_scheduler = PublicationScheduler()
     _app.state.http_client = http_client
     _app.state.collection_scheduler = collection_scheduler
     collection_scheduler.start()

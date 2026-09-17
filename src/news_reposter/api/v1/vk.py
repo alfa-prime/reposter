@@ -1,7 +1,8 @@
+import httpx
 from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel
 
-from news_reposter.api.dependencies import API_KEY_RESPONSES, ApiKeyDep
+from news_reposter.api.dependencies import API_KEY_RESPONSES, ApiKeyDep, HttpClientDep
 from news_reposter.config import get_settings
 from news_reposter.integrations.vk import VKAPIError, VKClient, VKPost
 
@@ -14,7 +15,7 @@ class VKSourceInfo(BaseModel):
     icon_url: str | None = None
 
 
-def _client() -> VKClient:
+def _client(http_client: httpx.AsyncClient) -> VKClient:
     settings = get_settings()
     if not settings.vk_access_token:
         raise HTTPException(
@@ -23,6 +24,7 @@ def _client() -> VKClient:
         )
     return VKClient(
         access_token=settings.vk_access_token,
+        http_client=http_client,
         api_version=settings.vk_api_version,
         api_url=settings.vk_api_url,
     )
@@ -35,10 +37,11 @@ def _client() -> VKClient:
     description="Получает название и аватар сообщества VK по его ссылке.",
 )
 async def get_vk_source_info(
+    http_client: HttpClientDep,
     _api_key: ApiKeyDep,
     link: str = Query(..., description="Ссылка на сообщество VK"),
 ) -> VKSourceInfo:
-    client = _client()
+    client = _client(http_client)
     try:
         group = await client.get_group_info(link)
     except ValueError as exc:
@@ -80,6 +83,7 @@ async def get_vk_source_info(
     },
 )
 async def get_latest_vk_post(
+    http_client: HttpClientDep,
     _api_key: ApiKeyDep,
     group: str | None = Query(
         default=None,
@@ -97,7 +101,7 @@ async def get_latest_vk_post(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="Укажите параметр group или VK_GROUP в .env",
         )
-    client = _client()
+    client = _client(http_client)
     try:
         post = await client.get_latest_post(selected_group)
     except ValueError as exc:

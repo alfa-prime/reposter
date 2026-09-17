@@ -1,7 +1,9 @@
 import asyncio
 from datetime import datetime, time
+from unittest.mock import Mock
 from zoneinfo import ZoneInfo
 
+import httpx
 import pytest
 
 import news_reposter.services.scheduler as scheduler_module
@@ -81,14 +83,19 @@ def test_scheduler_run_once_marks_scheduled_trigger(
         "errors": 0,
     }
     triggers: list[CollectionRunTrigger] = []
+    http_client = Mock(spec=httpx.AsyncClient)
 
-    async def fake_collect(trigger: CollectionRunTrigger) -> dict[str, int]:
+    async def fake_collect(
+        client: object,
+        trigger: CollectionRunTrigger,
+    ) -> dict[str, int]:
+        assert client is http_client
         triggers.append(trigger)
         return expected
 
     monkeypatch.setattr(scheduler_module, "collect_active_sources_once", fake_collect)
 
-    result = asyncio.run(CollectionScheduler().run_once())
+    result = asyncio.run(CollectionScheduler(http_client).run_once())
 
     assert result == expected
     assert triggers == [CollectionRunTrigger.SCHEDULED]

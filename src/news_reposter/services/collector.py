@@ -3,6 +3,7 @@ import logging
 from collections import defaultdict
 from typing import Any
 
+import httpx
 from sqlalchemy import select
 
 from news_reposter.config import get_settings
@@ -51,6 +52,7 @@ def _get_collection_lock() -> asyncio.Lock:
 
 
 async def collect_active_sources_once(
+    http_client: httpx.AsyncClient,
     trigger: CollectionRunTrigger = CollectionRunTrigger.MANUAL,
 ) -> dict[str, int]:
     """Забирает новые посты активных VK-источников и создаёт очередь."""
@@ -59,10 +61,14 @@ async def collect_active_sources_once(
     if lock.locked():
         raise CollectionAlreadyRunningError("Сбор источников уже выполняется")
     async with lock:
-        return await _collect_active_sources_once(trigger=trigger)
+        return await _collect_active_sources_once(
+            http_client=http_client,
+            trigger=trigger,
+        )
 
 
 async def _collect_active_sources_once(
+    http_client: httpx.AsyncClient,
     trigger: CollectionRunTrigger = CollectionRunTrigger.MANUAL,
 ) -> dict[str, int]:
     """Выполняет один сериализованный проход сборщика."""
@@ -118,6 +124,7 @@ async def _collect_active_sources_once(
 
             client = VKClient(
                 access_token=settings.vk_access_token,
+                http_client=http_client,
                 api_version=settings.vk_api_version,
                 api_url=settings.vk_api_url,
             )

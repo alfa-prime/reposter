@@ -5,6 +5,8 @@ from dataclasses import dataclass
 from datetime import datetime, time, timedelta
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
+import httpx
+
 from news_reposter.db.models import CollectionRunTrigger, CollectionSettings
 from news_reposter.db.session import async_session_factory
 from news_reposter.repositories.collection import CollectionRepository
@@ -109,7 +111,8 @@ def next_run_at(now: datetime, schedule: CollectionSchedule) -> datetime:
 class CollectionScheduler:
     """Запускает сбор по сохранённому в PostgreSQL расписанию."""
 
-    def __init__(self) -> None:
+    def __init__(self, http_client: httpx.AsyncClient) -> None:
+        self._http_client = http_client
         self._task: asyncio.Task[None] | None = None
         self._settings_changed = asyncio.Event()
 
@@ -179,7 +182,10 @@ class CollectionScheduler:
                 await self._wait_for_change(60)
 
     async def run_once(self) -> dict[str, int]:
-        summary = await collect_active_sources_once(CollectionRunTrigger.SCHEDULED)
+        summary = await collect_active_sources_once(
+            self._http_client,
+            CollectionRunTrigger.SCHEDULED,
+        )
         logger.info(
             "Плановый сбор завершён: источников %s, постов %s, очередь %s, ошибок %s",
             summary["sources_checked"],

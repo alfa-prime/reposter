@@ -1,7 +1,8 @@
 import asyncio
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, Mock
 
+import httpx
 import pytest
 
 import news_reposter.services.collector as collector_module
@@ -74,11 +75,12 @@ def test_collector_stores_all_ten_posts_after_last_saved(
     )
     target_source = SimpleNamespace(target_id=7)
     session = FakeSession([(target_source, source)])
+    http_client = Mock(spec=httpx.AsyncClient)
     received_post_ids: list[int] = []
 
     class FakeVKClient:
-        def __init__(self, **_kwargs: object) -> None:
-            pass
+        def __init__(self, **kwargs: object) -> None:
+            assert kwargs["http_client"] is http_client
 
         async def get_posts_after(self, _url: str, after_post_id: int) -> list[VKPost]:
             assert after_post_id == 100
@@ -122,7 +124,7 @@ def test_collector_stores_all_ten_posts_after_last_saved(
     )
     monkeypatch.setattr(collector_module, "_store_post_and_queue_items", fake_store)
 
-    summary = asyncio.run(collector_module.collect_active_sources_once())
+    summary = asyncio.run(collector_module.collect_active_sources_once(http_client))
 
     assert received_post_ids == list(range(101, 111))
     assert summary == {
@@ -163,9 +165,10 @@ def test_collector_serializes_manual_and_scheduled_runs(
     monkeypatch.setattr(collector_module, "_collect_active_sources_once", fake_collect)
 
     async def scenario() -> None:
+        http_client = Mock(spec=httpx.AsyncClient)
         results = await asyncio.gather(
-            collector_module.collect_active_sources_once(),
-            collector_module.collect_active_sources_once(),
+            collector_module.collect_active_sources_once(http_client),
+            collector_module.collect_active_sources_once(http_client),
             return_exceptions=True,
         )
         assert sum(isinstance(item, Exception) for item in results) == 1
