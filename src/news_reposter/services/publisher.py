@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+import httpx
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -213,6 +214,7 @@ async def _loaded_item(
 async def publish_queue_item(
     session: AsyncSession,
     queue_item_id: int,
+    http_client: httpx.AsyncClient,
     *,
     allow_scheduled: bool = True,
 ) -> QueueItem:
@@ -264,9 +266,9 @@ async def publish_queue_item(
     try:
         client = MAXClient(
             access_token=settings.max_access_token,
+            http_client=http_client,
             chat_id=chat_id,
             api_url=settings.max_api_url,
-            ca_file=settings.max_ca_file,
         )
         text = _publication_text(item)
         attachments = await _max_attachments(item, client)
@@ -318,7 +320,10 @@ async def publish_queue_item(
     return refreshed
 
 
-async def publish_due_items(session: AsyncSession) -> tuple[int, int]:
+async def publish_due_items(
+    session: AsyncSession,
+    http_client: httpx.AsyncClient,
+) -> tuple[int, int]:
     """Публикует все MAX-посты, время которых уже наступило."""
 
     now = datetime.now(UTC)
@@ -339,7 +344,7 @@ async def publish_due_items(session: AsyncSession) -> tuple[int, int]:
     failed = 0
     for queue_item_id in ids:
         try:
-            await publish_queue_item(session, queue_item_id)
+            await publish_queue_item(session, queue_item_id, http_client)
             published += 1
         except PublicationError:
             failed += 1

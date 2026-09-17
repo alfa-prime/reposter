@@ -3,7 +3,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Path, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from news_reposter.api.dependencies import API_KEY_RESPONSES, ApiKeyDep
+from news_reposter.api.dependencies import API_KEY_RESPONSES, ApiKeyDep, HttpClientDep
 from news_reposter.api.v1.queue import queue_item_response
 from news_reposter.db.session import get_db_session
 from news_reposter.schemas.queue_item import QueueItemRead
@@ -33,10 +33,11 @@ Session = Annotated[AsyncSession, Depends(get_db_session)]
 async def publish_now(
     queue_item_id: Annotated[int, Path(gt=0)],
     session: Session,
+    http_client: HttpClientDep,
     _api_key: ApiKeyDep,
 ) -> QueueItemRead:
     try:
-        item = await publish_queue_item(session, queue_item_id)
+        item = await publish_queue_item(session, queue_item_id, http_client)
     except PublicationError as exc:
         detail = str(exc)
         upstream_markers = (
