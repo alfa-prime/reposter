@@ -1,6 +1,8 @@
 services:
   app:
     environment:
+      HTTP_CA_FILE: /app/certs/russian_trusted_ca.pem
+      # Временно нужен старому MAXClient до его перевода на общий транспорт.
       MAX_CA_FILE: /app/certs/russian_trusted_ca.pem
 
   frontend:

@@ -1,8 +1,22 @@
 """Общий асинхронный HTTP-клиент приложения."""
 
+import ssl
+
 import httpx
 
 from news_reposter.config import Settings, get_settings
+
+
+def create_http_ssl_context(ca_file: str | None = None) -> ssl.SSLContext:
+    """Создаёт TLS-контекст и при необходимости добавляет доверенный CA-файл."""
+
+    context = ssl.create_default_context()
+    if ca_file:
+        try:
+            context.load_verify_locations(cafile=ca_file)
+        except OSError as exc:
+            raise RuntimeError(f"Не удалось загрузить HTTP_CA_FILE: {ca_file}") from exc
+    return context
 
 
 def create_http_client(settings: Settings | None = None) -> httpx.AsyncClient:
@@ -14,6 +28,7 @@ def create_http_client(settings: Settings | None = None) -> httpx.AsyncClient:
     """
 
     resolved_settings = settings or get_settings()
+    ssl_context = create_http_ssl_context(resolved_settings.http_ca_file)
     timeout = httpx.Timeout(
         resolved_settings.http_timeout_seconds,
         connect=resolved_settings.http_connect_timeout_seconds,
@@ -24,6 +39,7 @@ def create_http_client(settings: Settings | None = None) -> httpx.AsyncClient:
         keepalive_expiry=resolved_settings.http_keepalive_expiry_seconds,
     )
     return httpx.AsyncClient(
+        verify=ssl_context,
         timeout=timeout,
         limits=limits,
         follow_redirects=True,
