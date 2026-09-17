@@ -111,9 +111,7 @@ def test_llm_test_returns_provider_response(monkeypatch: pytest.MonkeyPatch) -> 
             )
         )
     )
-    monkeypatch.setattr(system_api, "get_llm_provider", lambda: provider)
-
-    response = asyncio.run(llm_test(None))
+    response = asyncio.run(llm_test(provider, None))
 
     assert response == {
         "status": "ok",
@@ -127,23 +125,6 @@ def test_llm_test_returns_provider_response(monkeypatch: pytest.MonkeyPatch) -> 
     assert request.max_tokens == 128
 
 
-def test_llm_test_returns_503_when_provider_is_not_configured(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Проверка LLM сообщает об отсутствующей конфигурации отдельно от сетевой ошибки."""
-
-    def fail_build() -> None:
-        raise RuntimeError("Для GigaChat не задан GIGACHAT_CREDENTIALS")
-
-    monkeypatch.setattr(system_api, "get_llm_provider", fail_build)
-
-    with pytest.raises(HTTPException) as error:
-        asyncio.run(llm_test(None))
-
-    assert error.value.status_code == status.HTTP_503_SERVICE_UNAVAILABLE
-    assert "GIGACHAT_CREDENTIALS" in error.value.detail
-
-
 def test_llm_test_returns_502_when_provider_request_fails(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -154,10 +135,8 @@ def test_llm_test_returns_502_when_provider_request_fails(
             side_effect=LLMProviderError("GigaChat не выполнил запрос (401)")
         )
     )
-    monkeypatch.setattr(system_api, "get_llm_provider", lambda: provider)
-
     with pytest.raises(HTTPException) as error:
-        asyncio.run(llm_test(None))
+        asyncio.run(llm_test(provider, None))
 
     assert error.value.status_code == status.HTTP_502_BAD_GATEWAY
     assert error.value.detail == "GigaChat не выполнил запрос (401)"

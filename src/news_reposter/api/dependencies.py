@@ -6,6 +6,8 @@ from fastapi import Depends, HTTPException, Request, Security, status
 from fastapi.security import APIKeyHeader
 
 from news_reposter.config import get_settings
+from news_reposter.llm import LLMProvider
+from news_reposter.llm.factory import build_llm_provider
 
 api_key_header = APIKeyHeader(
     name="X-API-Key",
@@ -53,3 +55,24 @@ def get_http_client(request: Request) -> httpx.AsyncClient:
 
 
 HttpClientDep = Annotated[httpx.AsyncClient, Depends(get_http_client)]
+
+
+def get_llm_provider(request: Request) -> LLMProvider:
+    """Лениво создаёт один LLM-провайдер на процесс приложения."""
+
+    provider: LLMProvider | None = getattr(request.app.state, "llm_provider", None)
+    if provider is not None:
+        return provider
+
+    try:
+        provider = build_llm_provider(get_http_client(request))
+    except (RuntimeError, ValueError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=str(exc),
+        ) from exc
+    request.app.state.llm_provider = provider
+    return provider
+
+
+LLMProviderDep = Annotated[LLMProvider, Depends(get_llm_provider)]

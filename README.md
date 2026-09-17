@@ -114,7 +114,8 @@ HTTP_CA_FILE=/app/certs/russian_trusted_ca.pem
 ## GigaChat
 
 Рерайт необязателен. Для него задаются `GIGACHAT_CREDENTIALS`,
-`GIGACHAT_SCOPE`, `GIGACHAT_MODEL` и при необходимости `GIGACHAT_CA_FILE`.
+`GIGACHAT_SCOPE` и `GIGACHAT_MODEL`. Дополнительные доверенные сертификаты
+задаются для общего HTTP-клиента через `HTTP_CA_FILE`.
 Без credentials сбор, редактирование, модерация и публикация продолжают
 работать; недоступна только генерация текста.
 

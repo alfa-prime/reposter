@@ -3,7 +3,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Path, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from news_reposter.api.dependencies import API_KEY_RESPONSES, ApiKeyDep
+from news_reposter.api.dependencies import API_KEY_RESPONSES, ApiKeyDep, LLMProviderDep
 from news_reposter.api.v1.queue import (
     conflict_error,
     not_found_error,
@@ -12,7 +12,6 @@ from news_reposter.api.v1.queue import (
 from news_reposter.db.models import QueueItemStatus
 from news_reposter.db.session import get_db_session
 from news_reposter.llm import LLMProviderError
-from news_reposter.llm.factory import get_llm_provider
 from news_reposter.repositories.queue_item import QueueItemRepository
 from news_reposter.schemas.queue_item import QueueItemRead, QueueItemUpdate
 from news_reposter.services.rewrite import RewriteService, RewriteServiceError
@@ -55,6 +54,7 @@ async def rewrite_queue_item(
         int, Path(gt=0, description="Идентификатор элемента очереди")
     ],
     session: Session,
+    provider: LLMProviderDep,
     _api_key: ApiKeyDep,
 ) -> QueueItemRead:
     repository = QueueItemRepository(session)
@@ -65,14 +65,6 @@ async def rewrite_queue_item(
         raise conflict_error(f"Рерайт недоступен для статуса {item.status.value}")
 
     previous_status = item.status
-    try:
-        provider = get_llm_provider()
-    except (RuntimeError, ValueError) as exc:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=str(exc),
-        ) from exc
-
     service = RewriteService(provider)
     try:
         service.context_for(item)

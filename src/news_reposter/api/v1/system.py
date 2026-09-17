@@ -5,12 +5,16 @@ from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from news_reposter.api.dependencies import API_KEY_RESPONSES, ApiKeyDep, HttpClientDep
+from news_reposter.api.dependencies import (
+    API_KEY_RESPONSES,
+    ApiKeyDep,
+    HttpClientDep,
+    LLMProviderDep,
+)
 from news_reposter.config import get_settings
 from news_reposter.db.models import CollectionRunTrigger
 from news_reposter.db.session import get_db_session
 from news_reposter.llm import LLMProviderError, RewriteRequest
-from news_reposter.llm.factory import get_llm_provider
 from news_reposter.schemas import DatabaseHealthResponse, HealthResponse
 from news_reposter.services.collector import (
     CollectionAlreadyRunningError,
@@ -121,16 +125,11 @@ async def collect_now(
         503: {"description": "LLM-провайдер не настроен"},
     },
 )
-async def llm_test(_api_key: ApiKeyDep) -> dict[str, object]:
+async def llm_test(
+    provider: LLMProviderDep,
+    _api_key: ApiKeyDep,
+) -> dict[str, object]:
     """Проверяет реальную авторизацию и генерацию ответа у настроенного LLM."""
-
-    try:
-        provider = get_llm_provider()
-    except (RuntimeError, ValueError) as exc:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=str(exc),
-        ) from exc
 
     request = RewriteRequest(
         text="В Мурманске сегодня хорошая погода.",

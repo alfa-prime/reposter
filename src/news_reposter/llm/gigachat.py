@@ -1,5 +1,4 @@
 import asyncio
-import ssl
 import time
 from typing import Any
 from uuid import uuid4
@@ -18,13 +17,12 @@ class GigaChatProvider:
         self,
         *,
         credentials: str,
+        http_client: httpx.AsyncClient,
         scope: str,
         model: str,
         api_url: str,
         auth_url: str,
-        ca_file: str | None = None,
         timeout: float = 60.0,
-        transport: httpx.AsyncBaseTransport | None = None,
     ) -> None:
         if not credentials.strip():
             raise ValueError("Не задан ключ авторизации GigaChat")
@@ -35,17 +33,10 @@ class GigaChatProvider:
         self.api_url = api_url.rstrip("/")
         self.auth_url = auth_url
         self.timeout = timeout
-        self._transport = transport
+        self._http_client = http_client
         self._access_token: str | None = None
         self._access_token_expires_at = 0.0
         self._token_lock = asyncio.Lock()
-
-        if ca_file:
-            self._verify: ssl.SSLContext | bool = ssl.create_default_context(
-                cafile=ca_file
-            )
-        else:
-            self._verify = True
 
     async def rewrite(self, request: RewriteRequest) -> RewriteResult:
         text = request.text.strip()
@@ -111,15 +102,20 @@ class GigaChatProvider:
     async def _post_completion(
         self, payload: dict[str, Any], token: str
     ) -> httpx.Response:
-        async with self._client() as client:
-            return await client.post(
+        try:
+            return await self._http_client.post(
                 f"{self.api_url}/chat/completions",
                 headers={
                     "Accept": "application/json",
                     "Authorization": f"Bearer {token}",
                 },
                 json=payload,
+                timeout=self.timeout,
             )
+        except httpx.HTTPError as exc:
+            raise LLMProviderError(
+                f"Не удалось выполнить запрос к GigaChat: {exc}"
+            ) from exc
 
     async def _get_access_token(self) -> str:
         now = time.time()
@@ -131,8 +127,8 @@ class GigaChatProvider:
             if self._access_token and now < self._access_token_expires_at - 30:
                 return self._access_token
 
-            async with self._client() as client:
-                response = await client.post(
+            try:
+                response = await self._http_client.post(
                     self.auth_url,
                     headers={
                         "Accept": "application/json",
@@ -141,7 +137,12 @@ class GigaChatProvider:
                         "RqUID": str(uuid4()),
                     },
                     data={"scope": self.scope},
+                    timeout=self.timeout,
                 )
+            except httpx.HTTPError as exc:
+                raise LLMProviderError(
+                    f"Не удалось получить токен GigaChat: {exc}"
+                ) from exc
 
             if response.is_error:
                 raise self._http_error("Не удалось получить токен GigaChat", response)
@@ -162,13 +163,6 @@ class GigaChatProvider:
             self._access_token = token
             self._access_token_expires_at = expires_at
             return token
-
-    def _client(self) -> httpx.AsyncClient:
-        return httpx.AsyncClient(
-            verify=self._verify,
-            timeout=self.timeout,
-            transport=self._transport,
-        )
 
     @staticmethod
     def _http_error(prefix: str, response: httpx.Response) -> LLMProviderError:

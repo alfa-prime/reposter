@@ -48,7 +48,6 @@ class Settings(BaseSettings):
     gigachat_model: str = "GigaChat-2-Pro"
     gigachat_api_url: str = "https://api.giga.chat/v1"
     gigachat_auth_url: str = "https://ngw.devices.sberbank.ru:9443/api/v2/oauth"
-    gigachat_ca_file: str | None = None
 
     postgres_db: str = "news_reposter"
     postgres_user: str = "news_reposter"

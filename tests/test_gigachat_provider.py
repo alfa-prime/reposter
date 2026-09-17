@@ -16,6 +16,7 @@ def test_gigachat_rewrite_gets_token_and_reuses_it() -> None:
 
         if request.url.path == "/api/v2/oauth":
             auth_calls += 1
+            assert request.extensions["timeout"]["read"] == 60.0
             assert request.headers["Authorization"] == "Basic test-credentials"
             assert request.headers.get("RqUID")
             assert b"scope=GIGACHAT_API_PERS" in request.content
@@ -29,6 +30,7 @@ def test_gigachat_rewrite_gets_token_and_reuses_it() -> None:
 
         if request.url.path == "/v1/chat/completions":
             completion_calls += 1
+            assert request.extensions["timeout"]["read"] == 60.0
             assert request.headers["Authorization"] == "Bearer access-token"
             body = __import__("json").loads(request.content)
             assert body["model"] == "GigaChat-2-Pro"
@@ -52,27 +54,29 @@ def test_gigachat_rewrite_gets_token_and_reuses_it() -> None:
 
         return httpx.Response(404)
 
-    provider = GigaChatProvider(
-        credentials="test-credentials",
-        scope="GIGACHAT_API_PERS",
-        model="GigaChat-2-Pro",
-        api_url="https://api.giga.chat/v1",
-        auth_url="https://auth.example/api/v2/oauth",
-        transport=httpx.MockTransport(handler),
-    )
-
     async def run() -> None:
-        request = RewriteRequest(
-            text="Исходный текст", system_prompt="Перепиши новость"
-        )
-        first = await provider.rewrite(request)
-        second = await provider.rewrite(request)
+        async with httpx.AsyncClient(
+            transport=httpx.MockTransport(handler)
+        ) as http_client:
+            provider = GigaChatProvider(
+                credentials="test-credentials",
+                http_client=http_client,
+                scope="GIGACHAT_API_PERS",
+                model="GigaChat-2-Pro",
+                api_url="https://api.giga.chat/v1",
+                auth_url="https://auth.example/api/v2/oauth",
+            )
+            request = RewriteRequest(
+                text="Исходный текст", system_prompt="Перепиши новость"
+            )
+            first = await provider.rewrite(request)
+            second = await provider.rewrite(request)
 
-        assert first.text == "Готовый рерайт"
-        assert first.provider == "gigachat"
-        assert first.model == "GigaChat-2-Pro"
-        assert first.usage["total_tokens"] == 20
-        assert second.text == "Готовый рерайт"
+            assert first.text == "Готовый рерайт"
+            assert first.provider == "gigachat"
+            assert first.model == "GigaChat-2-Pro"
+            assert first.usage["total_tokens"] == 20
+            assert second.text == "Готовый рерайт"
 
     asyncio.run(run())
 
