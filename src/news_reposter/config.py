@@ -16,6 +16,14 @@ class Settings(BaseSettings):
 
     app_name: str = "Сервис публикации новостей"
     api_key: str | None = None
+
+    http_timeout_seconds: float = Field(default=30.0, gt=0, le=600)
+    http_connect_timeout_seconds: float = Field(default=10.0, gt=0, le=120)
+    http_max_connections: int = Field(default=50, ge=1, le=1000)
+    http_max_keepalive_connections: int = Field(default=20, ge=0, le=1000)
+    http_keepalive_expiry_seconds: float = Field(default=30.0, gt=0, le=600)
+    http_trust_env: bool = False
+
     vk_access_token: str | None = None
     vk_group: str | None = None
     vk_api_version: str = "5.199"

@@ -1,7 +1,8 @@
 from secrets import compare_digest
 from typing import Annotated
 
-from fastapi import Depends, HTTPException, Security, status
+import httpx
+from fastapi import Depends, HTTPException, Request, Security, status
 from fastapi.security import APIKeyHeader
 
 from news_reposter.config import get_settings
@@ -43,3 +44,12 @@ async def require_api_key(
 
 
 ApiKeyDep = Annotated[None, Depends(require_api_key)]
+
+
+def get_http_client(request: Request) -> httpx.AsyncClient:
+    """Возвращает общий HTTP-клиент текущего процесса FastAPI."""
+
+    return request.app.state.http_client
+
+
+HttpClientDep = Annotated[httpx.AsyncClient, Depends(get_http_client)]

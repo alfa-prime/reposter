@@ -17,6 +17,7 @@ from news_reposter.api.v1.targets import router as targets_router
 from news_reposter.api.v1.vk import router as vk_router
 from news_reposter.config import get_settings
 from news_reposter.db.session import close_database
+from news_reposter.http_client import create_http_client
 from news_reposter.services.publication_scheduler import PublicationScheduler
 from news_reposter.services.scheduler import CollectionScheduler
 
@@ -70,6 +71,8 @@ OPENAPI_TAGS = [
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     """Запускает фоновые задачи и освобождает ресурсы при остановке."""
 
+    http_client = create_http_client()
+    _app.state.http_client = http_client
     _app.state.collection_scheduler = collection_scheduler
     collection_scheduler.start()
     publication_scheduler.start()
@@ -78,6 +81,7 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     finally:
         await publication_scheduler.stop()
         await collection_scheduler.stop()
+        await http_client.aclose()
         await close_database()
 
 
