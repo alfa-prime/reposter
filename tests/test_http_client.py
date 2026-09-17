@@ -5,10 +5,11 @@ from unittest.mock import AsyncMock, Mock
 
 import httpx
 import pytest
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, status
 
+import news_reposter.api.dependencies as dependencies
 import news_reposter.main as main_module
-from news_reposter.api.dependencies import get_http_client
+from news_reposter.api.dependencies import get_http_client, get_llm_provider
 from news_reposter.config import Settings
 from news_reposter.http_client import create_http_client, create_http_ssl_context
 
@@ -70,6 +71,44 @@ def test_http_client_dependency_returns_app_state_client() -> None:
     assert get_http_client(request) is client
 
 
+def test_llm_provider_dependency_reuses_app_state_provider(monkeypatch) -> None:
+    http_client = Mock(spec=httpx.AsyncClient)
+    provider = SimpleNamespace(name="gigachat")
+    factory = Mock(return_value=provider)
+    request = SimpleNamespace(
+        app=SimpleNamespace(
+            state=SimpleNamespace(http_client=http_client, llm_provider=None)
+        )
+    )
+    monkeypatch.setattr(dependencies, "build_llm_provider", factory)
+
+    assert get_llm_provider(request) is provider
+    assert get_llm_provider(request) is provider
+    factory.assert_called_once_with(http_client)
+
+
+def test_llm_provider_dependency_reports_missing_configuration(monkeypatch) -> None:
+    request = SimpleNamespace(
+        app=SimpleNamespace(
+            state=SimpleNamespace(
+                http_client=Mock(spec=httpx.AsyncClient),
+                llm_provider=None,
+            )
+        )
+    )
+    monkeypatch.setattr(
+        dependencies,
+        "build_llm_provider",
+        Mock(side_effect=RuntimeError("Для GigaChat не задан GIGACHAT_CREDENTIALS")),
+    )
+
+    with pytest.raises(HTTPException) as error:
+        get_llm_provider(request)
+
+    assert error.value.status_code == status.HTTP_503_SERVICE_UNAVAILABLE
+    assert "GIGACHAT_CREDENTIALS" in error.value.detail
+
+
 def test_lifespan_registers_and_closes_http_client(monkeypatch) -> None:
     client = AsyncMock(spec=httpx.AsyncClient)
     collection_scheduler = SimpleNamespace(start=Mock(), stop=AsyncMock())
@@ -95,6 +134,7 @@ def test_lifespan_registers_and_closes_http_client(monkeypatch) -> None:
         app = FastAPI()
         async with main_module.lifespan(app):
             assert app.state.http_client is client
+            assert app.state.llm_provider is None
             assert app.state.collection_scheduler is collection_scheduler
             collection_scheduler_factory.assert_called_once_with(client)
             publication_scheduler_factory.assert_called_once_with(client)

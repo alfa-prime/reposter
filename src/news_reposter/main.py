@@ -73,6 +73,7 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     collection_scheduler = CollectionScheduler(http_client)
     publication_scheduler = PublicationScheduler(http_client)
     _app.state.http_client = http_client
+    _app.state.llm_provider = None
     _app.state.collection_scheduler = collection_scheduler
     collection_scheduler.start()
     publication_scheduler.start()
