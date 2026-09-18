@@ -18,10 +18,16 @@ from news_reposter.api.v1.vk import router as vk_router
 from news_reposter.config import get_settings
 from news_reposter.db.session import close_database
 from news_reposter.http_client import create_http_client
+from news_reposter.logging_config import configure_logging
+from news_reposter.observability import (
+    request_id_middleware,
+    unexpected_exception_handler,
+)
 from news_reposter.services.publication_scheduler import PublicationScheduler
 from news_reposter.services.scheduler import CollectionScheduler
 
 settings = get_settings()
+configure_logging(settings.log_level)
 
 OPENAPI_TAGS = [
     {
@@ -96,6 +102,8 @@ app = FastAPI(
     openapi_tags=OPENAPI_TAGS,
     lifespan=lifespan,
 )
+app.middleware("http")(request_id_middleware)
+app.add_exception_handler(Exception, unexpected_exception_handler)
 
 app.include_router(vk_router, prefix="/api/v1")
 app.include_router(max_router, prefix="/api/v1")
