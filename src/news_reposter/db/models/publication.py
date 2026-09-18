@@ -9,6 +9,7 @@ from sqlalchemy import (
     Index,
     String,
     Text,
+    UniqueConstraint,
     func,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -26,6 +27,11 @@ class Publication(Base):
     __tablename__ = "publications"
     __table_args__ = (
         CheckConstraint("attempts >= 0", name="ck_publications_attempts"),
+        UniqueConstraint(
+            "queue_item_id",
+            name="uq_publications_queue_item_id",
+        ),
+        Index("ix_publications_queue_item_id", "queue_item_id"),
         Index("ix_publications_status_created_at", "status", "created_at"),
     )
 
@@ -33,8 +39,6 @@ class Publication(Base):
     queue_item_id: Mapped[int] = mapped_column(
         ForeignKey("queue_items.queue_item_id", ondelete="CASCADE"),
         nullable=False,
-        unique=True,
-        index=True,
     )
     status: Mapped[PublicationStatus] = mapped_column(
         Enum(

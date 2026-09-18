@@ -33,6 +33,7 @@ def test_post_table_structure() -> None:
     assert table.c.original_text.nullable is False
     assert "rewritten_text" not in table.c
     assert table.c.status.default.arg == PostStatus.RECEIVED
+    assert table.c.status.type.length == 19
     assert set(table.c.status.type.enums) == {status.value for status in PostStatus}
     assert "uq_posts_source_id_external_post_id" in constraint_names(Post)
     assert {index.name for index in table.indexes} == {
@@ -107,7 +108,8 @@ def test_publication_table_structure() -> None:
     queue_item_fk = next(iter(table.c.queue_item_id.foreign_keys))
     assert queue_item_fk.target_fullname == "queue_items.queue_item_id"
     assert queue_item_fk.ondelete == "CASCADE"
-    assert table.c.queue_item_id.unique is True
+    assert "uq_publications_queue_item_id" in constraint_names(Publication)
+    assert "ix_publications_queue_item_id" in {index.name for index in table.indexes}
     assert table.c.status.default.arg == PublicationStatus.PENDING
     assert set(table.c.status.type.enums) == {
         status.value for status in PublicationStatus
