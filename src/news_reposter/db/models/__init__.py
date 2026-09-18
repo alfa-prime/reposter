@@ -13,6 +13,7 @@ from news_reposter.db.models.enums import (
     PublicationStatus,
     QueueItemStatus,
 )
+from news_reposter.db.models.login_attempt import LoginAttempt
 from news_reposter.db.models.max_channel import MAXChannel
 from news_reposter.db.models.permission import Permission
 from news_reposter.db.models.post import Post
@@ -25,6 +26,7 @@ from news_reposter.db.models.target import Target
 from news_reposter.db.models.target_source import TargetSource
 from news_reposter.db.models.user import User
 from news_reposter.db.models.user_role import UserRole
+from news_reposter.db.models.user_session import UserSession
 
 __all__ = [
     "AttachmentType",
@@ -35,6 +37,7 @@ __all__ = [
     "CollectionSourceRun",
     "CollectionSourceRunStatus",
     "MAXChannel",
+    "LoginAttempt",
     "Permission",
     "Post",
     "PostAttachment",
@@ -50,4 +53,5 @@ __all__ = [
     "TargetSource",
     "User",
     "UserRole",
+    "UserSession",
 ]

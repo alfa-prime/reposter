@@ -52,6 +52,7 @@ class Post(Base):
             native_enum=False,
             values_callable=enum_values,
             create_constraint=True,
+            length=19,
         ),
         default=PostStatus.RECEIVED,
         server_default=PostStatus.RECEIVED.value,
