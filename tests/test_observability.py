@@ -5,7 +5,11 @@ import re
 import httpx
 from fastapi import FastAPI
 
-from news_reposter.logging_config import RequestIdFilter, request_id_context
+from news_reposter.logging_config import (
+    RequestIdFilter,
+    configure_logging,
+    request_id_context,
+)
 from news_reposter.observability import (
     REQUEST_ID_HEADER,
     request_id_middleware,
@@ -107,3 +111,10 @@ def test_request_id_filter_uses_context_value() -> None:
         request_id_context.reset(token)
 
     assert record.request_id == "request-from-context"
+
+
+def test_http_client_info_logs_are_disabled() -> None:
+    configure_logging("INFO")
+
+    assert logging.getLogger("httpx").level == logging.WARNING
+    assert logging.getLogger("httpcore").level == logging.WARNING

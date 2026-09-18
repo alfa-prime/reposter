@@ -79,6 +79,19 @@ def configure_logging(level: str = "INFO") -> None:
                     "level": "WARNING",
                     "propagate": False,
                 },
+                # INFO-записи httpx содержат полный URL запроса. Некоторые API,
+                # включая VK, передают токен в query-параметрах, поэтому такие
+                # записи нельзя отправлять в production-логи.
+                "httpx": {
+                    "handlers": ["stdout"],
+                    "level": "WARNING",
+                    "propagate": False,
+                },
+                "httpcore": {
+                    "handlers": ["stdout"],
+                    "level": "WARNING",
+                    "propagate": False,
+                },
             },
         }
     )
