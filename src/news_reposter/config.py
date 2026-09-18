@@ -1,4 +1,5 @@
 from functools import lru_cache
+from typing import Literal
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -16,6 +17,7 @@ class Settings(BaseSettings):
 
     app_name: str = "Сервис публикации новостей"
     api_key: str | None = None
+    log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
 
     http_timeout_seconds: float = Field(default=30.0, gt=0, le=600)
     http_connect_timeout_seconds: float = Field(default=10.0, gt=0, le=120)
