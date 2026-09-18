@@ -7,7 +7,9 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from news_reposter.db.base import Base
 
 if TYPE_CHECKING:
+    from news_reposter.db.models.login_attempt import LoginAttempt
     from news_reposter.db.models.role import Role
+    from news_reposter.db.models.user_session import UserSession
 
 
 class User(Base):
@@ -70,5 +72,13 @@ class User(Base):
     roles: Mapped[list["Role"]] = relationship(
         secondary="user_roles",
         back_populates="users",
+        passive_deletes=True,
+    )
+    sessions: Mapped[list["UserSession"]] = relationship(
+        back_populates="user",
+        passive_deletes=True,
+    )
+    login_attempts: Mapped[list["LoginAttempt"]] = relationship(
+        back_populates="user",
         passive_deletes=True,
     )

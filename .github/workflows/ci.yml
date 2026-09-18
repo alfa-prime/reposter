@@ -80,6 +80,9 @@ jobs:
       - name: Upgrade database to head
         run: uv run alembic upgrade head
 
+      - name: Check ORM models match migrations
+        run: uv run alembic check
+
       - name: Downgrade database to base
         run: uv run alembic downgrade base
 
