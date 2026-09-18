@@ -1,7 +1,7 @@
 from functools import lru_cache
-from typing import Literal
+from typing import Literal, Self
 
-from pydantic import Field
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from sqlalchemy.engine import URL
 
@@ -57,6 +57,27 @@ class Settings(BaseSettings):
     postgres_host: str = "localhost"
     postgres_port: int = 5432
     database_echo: bool = False
+
+    auth_session_idle_minutes: int = Field(default=60, ge=5, le=1440)
+    auth_session_absolute_hours: int = Field(default=12, ge=1, le=720)
+    auth_session_touch_interval_minutes: int = Field(default=5, ge=1, le=60)
+    auth_max_sessions_per_user: int = Field(default=5, ge=1, le=100)
+
+    @model_validator(mode="after")
+    def validate_session_policy(self) -> Self:
+        """Проверяет согласованность сроков жизни серверной сессии."""
+
+        if self.auth_session_touch_interval_minutes >= self.auth_session_idle_minutes:
+            raise ValueError(
+                "AUTH_SESSION_TOUCH_INTERVAL_MINUTES должен быть меньше "
+                "AUTH_SESSION_IDLE_MINUTES"
+            )
+        if self.auth_session_idle_minutes >= self.auth_session_absolute_hours * 60:
+            raise ValueError(
+                "AUTH_SESSION_IDLE_MINUTES должен быть меньше "
+                "AUTH_SESSION_ABSOLUTE_HOURS"
+            )
+        return self
 
     @property
     def database_url(self) -> str:
