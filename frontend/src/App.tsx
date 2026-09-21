@@ -1,7 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { RefreshCw, Trash2, X } from "lucide-react";
 import { api, Source, Target, TargetSource } from "./api";
+import { AuthProvider, useAuth } from "./auth";
 import { AboutPage } from "./components/AboutPage";
+import {
+  AuthLoadingPage,
+  AuthUnavailablePage,
+  LoginPage,
+} from "./components/LoginPage";
 import { QueuePage } from "./components/QueuePage";
 import { SettingsPage } from "./components/SettingsPage";
 import { SchedulerLogsPage } from "./components/SchedulerLogsPage";
@@ -18,6 +24,23 @@ type ConfirmDialog = {
 } | null;
 
 export function App() {
+  return (
+    <AuthProvider>
+      <ApplicationGate />
+    </AuthProvider>
+  );
+}
+
+function ApplicationGate() {
+  const { status } = useAuth();
+
+  if (status === "loading") return <AuthLoadingPage />;
+  if (status === "unavailable") return <AuthUnavailablePage />;
+  if (status === "anonymous") return <LoginPage />;
+  return <AuthenticatedApp />;
+}
+
+function AuthenticatedApp() {
   const [section, setSection] = useState<Section>("queue");
   const [targets, setTargets] = useState<Target[]>([]);
   const [sources, setSources] = useState<Source[]>([]);

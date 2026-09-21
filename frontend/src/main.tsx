@@ -10,6 +10,8 @@ import "./brand.css";
 import "./mediaControls.css";
 import "./targetComponents.css";
 import "./sourceComponents.css";
+import "./auth.css";
+import "./userMenu.css";
 
 initializeTheme();
 
