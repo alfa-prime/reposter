@@ -40,9 +40,7 @@ SESSION_AUTH_RESPONSES = {
 
 PERMISSION_AUTH_RESPONSES = {
     **SESSION_AUTH_RESPONSES,
-    403: {
-        "description": "Недостаточно прав или требуется смена временного пароля"
-    },
+    403: {"description": "Недостаточно прав или требуется смена временного пароля"},
 }
 
 CSRF_AUTH_RESPONSES = {
@@ -258,3 +256,4 @@ def get_llm_provider(request: Request) -> LLMProvider:
     return provider
 
 
+LLMProviderDep = Annotated[LLMProvider, Depends(get_llm_provider)]
