@@ -8,16 +8,28 @@ from news_reposter.api.dependencies import (
     AuthContextDep,
     AuthenticationServiceDep,
     CsrfAuthContextDep,
+    PasswordChangeServiceDep,
     SameOriginDep,
     UserSessionServiceDep,
 )
 from news_reposter.auth.context import AuthContext
 from news_reposter.auth.cookies import clear_auth_cookies, set_auth_cookies
+from news_reposter.auth.passwords import PasswordValidationError
 from news_reposter.config import get_settings
-from news_reposter.schemas import CurrentUserResponse, CurrentUserRole, LoginRequest
+from news_reposter.schemas import (
+    CurrentUserResponse,
+    CurrentUserRole,
+    LoginRequest,
+    PasswordChangeRequest,
+)
 from news_reposter.services.authentication import (
     InvalidCredentialsError,
     LoginRateLimitedError,
+)
+from news_reposter.services.password_change import (
+    CurrentPasswordInvalidError,
+    PasswordChangeUserUnavailableError,
+    PasswordUnchangedError,
 )
 from news_reposter.services.user_sessions import SessionRevocationReason
 
@@ -28,6 +40,12 @@ LOGIN_RESPONSES = {
     401: {"description": "Неверный логин или пароль"},
     403: {"description": "Недопустимый источник запроса"},
     429: {"description": "Слишком много попыток входа"},
+}
+
+PASSWORD_CHANGE_RESPONSES = {
+    **CSRF_AUTH_RESPONSES,
+    400: {"description": "Текущий пароль неверен или новый совпадает с ним"},
+    422: {"description": "Новый пароль не соответствует политике безопасности"},
 }
 
 
@@ -96,6 +114,70 @@ async def current_user(
 
     response.headers["Cache-Control"] = CACHE_CONTROL_NO_STORE
     return _current_user_response(auth)
+
+
+@router.post(
+    "/change-password",
+    response_model=CurrentUserResponse,
+    responses=PASSWORD_CHANGE_RESPONSES,
+    summary="Сменить свой пароль",
+)
+async def change_password(
+    payload: PasswordChangeRequest,
+    request: Request,
+    response: Response,
+    auth: CsrfAuthContextDep,
+    password_change: PasswordChangeServiceDep,
+    _same_origin: SameOriginDep,
+) -> CurrentUserResponse:
+    """Меняет пароль, отзывает старые сессии и обновляет текущую cookie."""
+
+    try:
+        result = await password_change.change(
+            user_id=auth.user.user_id,
+            current_password=payload.current_password,
+            new_password=payload.new_password,
+            client_ip=request.client.host if request.client else None,
+            user_agent=request.headers.get("User-Agent"),
+        )
+    except CurrentPasswordInvalidError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Текущий пароль указан неверно",
+        ) from exc
+    except PasswordUnchangedError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Новый пароль должен отличаться от текущего",
+        ) from exc
+    except PasswordValidationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=str(exc),
+        ) from exc
+    except PasswordChangeUserUnavailableError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Требуется вход",
+            headers={"WWW-Authenticate": "Session"},
+        ) from exc
+
+    created = result.created_session
+    set_auth_cookies(
+        response,
+        tokens=created.tokens,
+        absolute_expires_at=created.session.absolute_expires_at,
+        settings=get_settings(),
+    )
+    response.headers["Cache-Control"] = CACHE_CONTROL_NO_STORE
+    return _current_user_response(
+        AuthContext(
+            session=created.session,
+            user=result.user,
+            role_codes=auth.role_codes,
+            permission_codes=auth.permission_codes,
+        )
+    )
 
 
 @router.post(

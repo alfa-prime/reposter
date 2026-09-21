@@ -19,6 +19,23 @@ class LoginRequest(BaseModel):
     )
 
 
+class PasswordChangeRequest(BaseModel):
+    """Текущий и новый пароли для безопасной замены."""
+
+    current_password: str = Field(
+        min_length=1,
+        max_length=1024,
+        repr=False,
+        description="Текущий пароль пользователя.",
+    )
+    new_password: str = Field(
+        min_length=1,
+        max_length=1024,
+        repr=False,
+        description="Новый пароль пользователя, не менее 15 символов.",
+    )
+
+
 class CurrentUserRole(BaseModel):
     """Активная роль текущего пользователя."""
 

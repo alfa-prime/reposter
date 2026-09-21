@@ -204,6 +204,56 @@ def test_create_rolls_back_when_commit_fails() -> None:
     asyncio.run(scenario())
 
 
+def test_password_change_replaces_all_sessions_in_one_commit() -> None:
+    async def scenario() -> None:
+        db = AsyncMock()
+        user = active_user()
+        repository = MemorySessionRepository(user=user)
+        repository.revoke_all_result = 3
+        service = UserSessionService(db, settings=settings(), repository=repository)
+
+        created = await service.replace_after_password_change(
+            user,
+            client_ip="192.0.2.25",
+            user_agent="new-browser-session",
+            now=NOW,
+        )
+
+        assert repository.revoke_all_arguments == (
+            7,
+            NOW,
+            SessionRevocationReason.PASSWORD_CHANGED.value,
+            None,
+        )
+        assert created.session is repository.added
+        assert created.session.token_hash == hash_token(created.tokens.session_token)
+        assert created.session.csrf_token_hash == hash_token(created.tokens.csrf_token)
+        assert created.session.ip_address == "192.0.2.25"
+        assert created.session.user_agent == "new-browser-session"
+        db.commit.assert_awaited_once()
+        db.refresh.assert_awaited_once_with(created.session)
+
+    asyncio.run(scenario())
+
+
+def test_password_change_session_replacement_rolls_back_on_commit_failure() -> None:
+    async def scenario() -> None:
+        db = AsyncMock()
+        db.commit.side_effect = RuntimeError("database unavailable")
+        repository = MemorySessionRepository(user=active_user())
+        service = UserSessionService(db, settings=settings(), repository=repository)
+
+        with pytest.raises(RuntimeError, match="database unavailable"):
+            await service.replace_after_password_change(active_user(), now=NOW)
+
+        assert repository.revoke_all_arguments is not None
+        assert repository.added is not None
+        db.rollback.assert_awaited_once()
+        db.refresh.assert_not_awaited()
+
+    asyncio.run(scenario())
+
+
 @pytest.mark.parametrize("user", [None, active_user(is_active=False)])
 def test_create_rejects_missing_or_inactive_user(user: User | None) -> None:
     async def scenario() -> None:
