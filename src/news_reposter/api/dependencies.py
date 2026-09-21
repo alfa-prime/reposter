@@ -1,3 +1,4 @@
+from collections.abc import Awaitable, Callable
 from secrets import compare_digest
 from typing import Annotated
 from urllib.parse import urlsplit
@@ -8,6 +9,7 @@ from fastapi.security import APIKeyCookie, APIKeyHeader
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from news_reposter.auth.context import AuthContext
+from news_reposter.auth.rbac import PermissionCode
 from news_reposter.auth.session_tokens import token_matches
 from news_reposter.config import get_settings
 from news_reposter.db.session import get_db_session
@@ -34,6 +36,13 @@ API_KEY_RESPONSES = {
 
 SESSION_AUTH_RESPONSES = {
     401: {"description": "Требуется действующая пользовательская сессия"},
+}
+
+PERMISSION_AUTH_RESPONSES = {
+    **SESSION_AUTH_RESPONSES,
+    403: {
+        "description": "Недостаточно прав или требуется смена временного пароля"
+    },
 }
 
 CSRF_AUTH_RESPONSES = {
@@ -132,6 +141,33 @@ async def get_current_auth(
 AuthContextDep = Annotated[AuthContext, Depends(get_current_auth)]
 
 
+def require_permission(
+    permission: PermissionCode,
+) -> Callable[[AuthContext], Awaitable[AuthContext]]:
+    """Создаёт FastAPI-зависимость для проверки одного разрешения.
+
+    Код разрешения задаётся через ``PermissionCode``, поэтому опечатка в имени
+    права не сможет незаметно закрыть или открыть endpoint. Актуальный набор
+    прав берётся из ``AuthContext`` и, следовательно, из базы при каждом
+    запросе.
+    """
+
+    async def permission_dependency(auth: AuthContextDep) -> AuthContext:
+        if auth.user.must_change_password:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Требуется сменить временный пароль",
+            )
+        if permission.value not in auth.permission_codes:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Недостаточно прав",
+            )
+        return auth
+
+    return permission_dependency
+
+
 async def require_csrf(
     request: Request,
     auth: AuthContextDep,
@@ -222,4 +258,3 @@ def get_llm_provider(request: Request) -> LLMProvider:
     return provider
 
 
-LLMProviderDep = Annotated[LLMProvider, Depends(get_llm_provider)]
