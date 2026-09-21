@@ -1,5 +1,6 @@
 import asyncio
 import os
+from collections.abc import Awaitable, Callable
 from uuid import uuid4
 
 import pytest
@@ -8,7 +9,7 @@ from sqlalchemy import select
 from news_reposter.auth.login_security import username_fingerprint
 from news_reposter.auth.passwords import PasswordManager
 from news_reposter.db.models import LoginAttempt, User, UserSession
-from news_reposter.db.session import async_session_factory
+from news_reposter.db.session import async_session_factory, engine
 from news_reposter.services.authentication import AuthenticationService
 from news_reposter.services.password_change import PasswordChangeService
 
@@ -16,6 +17,18 @@ pytestmark = pytest.mark.skipif(
     os.getenv("RUN_POSTGRES_TESTS") != "1",
     reason="requires the CI PostgreSQL service",
 )
+
+
+def run_postgres_scenario(scenario: Callable[[], Awaitable[None]]) -> None:
+    """Закрывает общий пул в том же event loop, где выполнялся тест."""
+
+    async def wrapped() -> None:
+        try:
+            await scenario()
+        finally:
+            await engine.dispose()
+
+    asyncio.run(wrapped())
 
 
 def test_authentication_round_trip_on_postgresql() -> None:
@@ -75,7 +88,7 @@ def test_authentication_round_trip_on_postgresql() -> None:
             assert str(persisted_attempt.ip_address) == "192.0.2.10"
             assert persisted_attempt.request_id == request_id
 
-    asyncio.run(scenario())
+    run_postgres_scenario(scenario)
 
 
 def test_password_change_is_atomic_on_postgresql() -> None:
@@ -146,4 +159,4 @@ def test_password_change_is_atomic_on_postgresql() -> None:
             assert sessions[1].revoked_at is None
             assert str(sessions[1].ip_address) == "192.0.2.20"
 
-    asyncio.run(scenario())
+    run_postgres_scenario(scenario)
