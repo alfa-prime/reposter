@@ -27,6 +27,11 @@ export type LoginCredentials = {
   password: string;
 };
 
+export type PasswordChange = {
+  current_password: string;
+  new_password: string;
+};
+
 export const AUTH_SESSION_EXPIRED_EVENT = "reposter:auth-session-expired";
 
 export class ApiError extends Error {
@@ -239,6 +244,14 @@ export const api = {
     "/api/v1/auth/me",
     undefined,
     { notifyUnauthorized: false },
+  ),
+  changePassword: (passwords: PasswordChange) => request<CurrentUser>(
+    "/api/v1/auth/change-password",
+    {
+      method: "POST",
+      headers: { "X-CSRF-Token": csrfToken() },
+      body: JSON.stringify(passwords),
+    },
   ),
   logout: () => request<void>("/api/v1/auth/logout", {
     method: "POST",

@@ -8,6 +8,7 @@ import {
   AuthUnavailablePage,
   LoginPage,
 } from "./components/LoginPage";
+import { PasswordChangePage } from "./components/PasswordChangePage";
 import { QueuePage } from "./components/QueuePage";
 import { SettingsPage } from "./components/SettingsPage";
 import { SchedulerLogsPage } from "./components/SchedulerLogsPage";
@@ -32,11 +33,13 @@ export function App() {
 }
 
 function ApplicationGate() {
-  const { status } = useAuth();
+  const { status, user } = useAuth();
 
   if (status === "loading") return <AuthLoadingPage />;
   if (status === "unavailable") return <AuthUnavailablePage />;
   if (status === "anonymous") return <LoginPage />;
+  if (user === null) return <AuthUnavailablePage />;
+  if (user.must_change_password) return <PasswordChangePage />;
   return <AuthenticatedApp />;
 }
 

@@ -50,6 +50,18 @@
 .auth-brand .eyebrow { margin-bottom: 9px; }
 .auth-brand h1 { font-size: 28px; }
 .auth-subtitle { margin: 10px 0 0; color: #8795ab; font-size: 13px; line-height: 1.5; }
+.auth-account {
+  display: inline-flex;
+  gap: 5px;
+  margin: 14px 0 0;
+  padding: 6px 10px;
+  border: 1px solid rgba(129,151,242,.16);
+  border-radius: 999px;
+  color: #cbd5e6;
+  background: rgba(94,117,219,.08);
+  font-size: 11px;
+}
+.auth-account span { color: #7f8da4; }
 
 .auth-form { display: grid; gap: 16px; margin-top: 28px; }
 .auth-form label { display: grid; gap: 8px; }
@@ -85,6 +97,7 @@
   background: transparent;
 }
 .auth-password-field button:hover { color: #dce5f4; background: rgba(255,255,255,.05); }
+.auth-field-hint { color: #6f7e95; font-size: 10px; line-height: 1.35; }
 .auth-submit { width: 100%; min-height: 44px; margin-top: 2px; }
 .auth-error {
   padding: 10px 12px;
@@ -107,6 +120,21 @@
   line-height: 1.45;
 }
 .auth-security-note svg { flex: 0 0 auto; margin-top: 1px; color: #8197f2; }
+.auth-logout {
+  width: 100%;
+  min-height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 9px;
+  border: 0;
+  border-radius: 10px;
+  color: #79879d;
+  background: transparent;
+  font-size: 11px;
+}
+.auth-logout:hover:not(:disabled) { color: #b9c5d7; background: rgba(255,255,255,.04); }
 .auth-footer { margin: 0; color: #65738a; font-size: 11px; }
 .auth-state { display: grid; justify-items: center; text-align: center; padding: 24px 4px; }
 .auth-state > svg { color: #8197f2; }
@@ -128,12 +156,17 @@ html[data-theme="light"] .auth-brand-logo { border-color: rgba(42,58,88,.12); bo
 html[data-theme="light"] .auth-subtitle,
 html[data-theme="light"] .auth-state p,
 html[data-theme="light"] .auth-footer { color: #6e7c91; }
+html[data-theme="light"] .auth-account { color: #46566e; border-color: rgba(81,101,198,.14); background: rgba(81,101,198,.06); }
+html[data-theme="light"] .auth-account span,
+html[data-theme="light"] .auth-field-hint { color: #718098; }
 html[data-theme="light"] .auth-form label > span:first-child { color: #596a82; }
 html[data-theme="light"] .auth-form input { color: #1f2b3d; background: #fff; border-color: rgba(42,58,88,.15); }
 html[data-theme="light"] .auth-password-field button { color: #66768d; }
 html[data-theme="light"] .auth-password-field button:hover { color: #293951; background: #eef2f8; }
 html[data-theme="light"] .auth-error { color: #963e4e; border-color: rgba(202,77,97,.2); background: rgba(202,77,97,.08); }
 html[data-theme="light"] .auth-security-note { color: #68778d; border-color: rgba(42,58,88,.09); }
+html[data-theme="light"] .auth-logout { color: #718098; }
+html[data-theme="light"] .auth-logout:hover:not(:disabled) { color: #34445b; background: #f2f5fa; }
 
 @media (max-width: 520px) {
   .auth-page { align-content: start; padding-top: 72px; }

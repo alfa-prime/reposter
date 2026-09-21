@@ -1,47 +1,16 @@
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useState } from "react";
 import {
   Eye,
   EyeOff,
   LoaderCircle,
   LockKeyhole,
   LogIn,
-  Moon,
   RefreshCw,
-  Sun,
 } from "lucide-react";
 import { ApiError } from "../api";
 import { useAuth } from "../auth";
 import { projectLogo } from "../logoData";
-import { applyTheme, getInitialTheme, Theme } from "../theme";
-
-function AuthThemeToggle() {
-  const [theme, setTheme] = useState<Theme>(getInitialTheme);
-  const isLight = theme === "light";
-
-  useEffect(() => applyTheme(theme), [theme]);
-
-  return (
-    <button
-      className="auth-theme-toggle"
-      type="button"
-      onClick={() => setTheme(isLight ? "dark" : "light")}
-      aria-label={isLight ? "Включить тёмную тему" : "Включить светлую тему"}
-      title={isLight ? "Включить тёмную тему" : "Включить светлую тему"}
-    >
-      {isLight ? <Moon size={18} /> : <Sun size={18} />}
-    </button>
-  );
-}
-
-function AuthFrame({ children }: { children: React.ReactNode }) {
-  return (
-    <main className="auth-page">
-      <AuthThemeToggle />
-      <section className="auth-card">{children}</section>
-      <p className="auth-footer">Редакционная система · защищённая сессия</p>
-    </main>
-  );
-}
+import { AuthFrame } from "./AuthFrame";
 
 export function LoginPage() {
   const { login } = useAuth();
