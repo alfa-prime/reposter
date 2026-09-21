@@ -1,5 +1,10 @@
 """Схемы запросов и ответов API."""
 
+from news_reposter.schemas.auth import (
+    CurrentUserResponse,
+    CurrentUserRole,
+    LoginRequest,
+)
 from news_reposter.schemas.collection import (
     CollectionRunDetail,
     CollectionRunPage,
@@ -32,8 +37,11 @@ __all__ = [
     "CollectionSettingsUpdate",
     "CollectionSourceRunRead",
     "CollectionStatusRead",
+    "CurrentUserResponse",
+    "CurrentUserRole",
     "DatabaseHealthResponse",
     "HealthResponse",
+    "LoginRequest",
     "QueueItemCreate",
     "QueueItemRead",
     "QueueItemSchedule",

@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
+from news_reposter.api.v1.auth import router as auth_router
 from news_reposter.api.v1.collection import router as collection_router
 from news_reposter.api.v1.max import router as max_router
 from news_reposter.api.v1.queue import router as queue_router
@@ -30,6 +31,10 @@ settings = get_settings()
 configure_logging(settings.log_level)
 
 OPENAPI_TAGS = [
+    {
+        "name": "Авторизация",
+        "description": "Вход, текущий профиль и завершение пользовательских сессий.",
+    },
     {
         "name": "Планировщик сбора",
         "description": "Настройки автоматического сбора и журнал запусков.",
@@ -105,6 +110,7 @@ app = FastAPI(
 app.middleware("http")(request_id_middleware)
 app.add_exception_handler(Exception, unexpected_exception_handler)
 
+app.include_router(auth_router, prefix="/api/v1")
 app.include_router(vk_router, prefix="/api/v1")
 app.include_router(max_router, prefix="/api/v1")
 app.include_router(sources_router, prefix="/api/v1")

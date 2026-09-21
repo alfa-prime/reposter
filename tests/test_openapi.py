@@ -1,6 +1,10 @@
 from news_reposter.main import app
 
 EXPECTED_OPERATIONS = {
+    ("/api/v1/auth/login", "post"): "Войти в приложение",
+    ("/api/v1/auth/me", "get"): "Получить текущего пользователя",
+    ("/api/v1/auth/logout", "post"): "Выйти из текущей сессии",
+    ("/api/v1/auth/logout-all", "post"): "Завершить все свои сессии",
     ("/health", "get"): "Проверить работу приложения",
     ("/health/database", "get"): "Проверить подключение к PostgreSQL",
     ("/api/v1/system/collect-now", "post"): "Запустить сбор источников сейчас",
@@ -69,6 +73,7 @@ def test_openapi_has_ordered_russian_tags() -> None:
     tags = app.openapi()["tags"]
 
     assert [tag["name"] for tag in tags] == [
+        "Авторизация",
         "Планировщик сбора",
         "Система",
         "Источники",
@@ -99,23 +104,47 @@ def test_openapi_models_have_field_descriptions() -> None:
         )
 
 
-def test_openapi_describes_api_key_security() -> None:
-    """Проверяет API-ключ, кроме публичного MAX webhook с собственным секретом."""
+def test_openapi_describes_api_security_boundaries() -> None:
+    """Разделяет API-key, публичный вход и пользовательскую сессию."""
 
     schema = app.openapi()
     security_scheme = schema["components"]["securitySchemes"]["APIKeyHeader"]
+    session_scheme = schema["components"]["securitySchemes"]["SessionCookie"]
 
     assert security_scheme["type"] == "apiKey"
     assert security_scheme["in"] == "header"
     assert security_scheme["name"] == "X-API-Key"
+    assert session_scheme == {
+        "type": "apiKey",
+        "description": "Непрозрачный токен серверной пользовательской сессии.",
+        "in": "cookie",
+        "name": "__Host-rp_session",
+    }
 
     for path, path_item in schema["paths"].items():
-        for operation in path_item.values():
-            if path == "/api/v1/max/webhook":
+        for method, operation in path_item.items():
+            if path in {"/api/v1/max/webhook", "/api/v1/auth/login"}:
                 assert "security" not in operation
+            elif path.startswith("/api/v1/auth/"):
+                assert operation["security"] == [{"SessionCookie": []}]
+                assert "401" in operation["responses"]
+                if method == "post":
+                    assert "403" in operation["responses"]
             elif path.startswith("/api/v1/"):
                 assert operation["security"] == [{"APIKeyHeader": []}]
                 assert "401" in operation["responses"]
                 assert "503" in operation["responses"]
             elif path.startswith("/health"):
                 assert "security" not in operation
+
+
+def test_openapi_documents_csrf_header_for_logout() -> None:
+    """Показывает frontend обязательный заголовок изменяющих auth-запросов."""
+
+    schema = app.openapi()
+    for path in ("/api/v1/auth/logout", "/api/v1/auth/logout-all"):
+        parameters = schema["paths"][path]["post"]["parameters"]
+        assert any(
+            parameter["in"] == "header" and parameter["name"] == "X-CSRF-Token"
+            for parameter in parameters
+        )

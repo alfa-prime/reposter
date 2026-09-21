@@ -15,6 +15,16 @@ def test_session_policy_has_safe_defaults() -> None:
     assert settings.auth_login_block_minutes == 15
     assert settings.auth_login_max_attempts_per_username == 5
     assert settings.auth_login_max_attempts_per_ip == 20
+    assert settings.auth_cookie_secure is True
+    assert settings.auth_session_cookie_name == "__Host-rp_session"
+    assert settings.auth_csrf_cookie_name == "__Host-rp_csrf"
+
+
+def test_insecure_local_mode_uses_names_without_host_prefix() -> None:
+    settings = Settings(_env_file=None, auth_cookie_secure=False)
+
+    assert settings.auth_session_cookie_name == "rp_session"
+    assert settings.auth_csrf_cookie_name == "rp_csrf"
 
 
 @pytest.mark.parametrize(

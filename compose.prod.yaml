@@ -2,6 +2,17 @@ services:
   app:
     environment:
       HTTP_CA_FILE: /app/certs/russian_trusted_ca.pem
+    # Backend доступен только из внутренней Docker-сети через Caddy, поэтому
+    # можно доверять переданному Caddy реальному IP для защиты входа от перебора.
+    command:
+      - uvicorn
+      - news_reposter.main:app
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8000"
+      - --proxy-headers
+      - --forwarded-allow-ips=*
 
   frontend:
     environment:
