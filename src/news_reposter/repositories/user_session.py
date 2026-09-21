@@ -36,6 +36,7 @@ class UserSessionRepository:
                 .selectinload(User.roles)
                 .selectinload(Role.permissions)
             )
+            .execution_options(populate_existing=True)
         )
 
     async def list_usable_for_user(

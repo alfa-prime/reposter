@@ -66,6 +66,7 @@ class Settings(BaseSettings):
     auth_login_block_minutes: int = Field(default=15, ge=1, le=1440)
     auth_login_max_attempts_per_username: int = Field(default=5, ge=1, le=100)
     auth_login_max_attempts_per_ip: int = Field(default=20, ge=1, le=1000)
+    auth_cookie_secure: bool = True
 
     @model_validator(mode="after")
     def validate_session_policy(self) -> Self:
@@ -96,6 +97,22 @@ class Settings(BaseSettings):
             database=self.postgres_db,
         )
         return url.render_as_string(hide_password=False)
+
+    @property
+    def auth_session_cookie_name(self) -> str:
+        """Возвращает имя cookie сессии для текущего режима HTTPS."""
+
+        if self.auth_cookie_secure:
+            return "__Host-rp_session"
+        return "rp_session"
+
+    @property
+    def auth_csrf_cookie_name(self) -> str:
+        """Возвращает имя cookie CSRF для текущего режима HTTPS."""
+
+        if self.auth_cookie_secure:
+            return "__Host-rp_csrf"
+        return "rp_csrf"
 
 
 @lru_cache
