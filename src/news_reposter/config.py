@@ -62,6 +62,10 @@ class Settings(BaseSettings):
     auth_session_absolute_hours: int = Field(default=12, ge=1, le=720)
     auth_session_touch_interval_minutes: int = Field(default=5, ge=1, le=60)
     auth_max_sessions_per_user: int = Field(default=5, ge=1, le=100)
+    auth_login_attempt_window_minutes: int = Field(default=15, ge=1, le=1440)
+    auth_login_block_minutes: int = Field(default=15, ge=1, le=1440)
+    auth_login_max_attempts_per_username: int = Field(default=5, ge=1, le=100)
+    auth_login_max_attempts_per_ip: int = Field(default=20, ge=1, le=1000)
 
     @model_validator(mode="after")
     def validate_session_policy(self) -> Self:

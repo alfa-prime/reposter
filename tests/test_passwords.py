@@ -1,6 +1,9 @@
+from unittest.mock import Mock
+
 import pytest
 
 from news_reposter.auth.passwords import (
+    DUMMY_PASSWORD_HASH,
     MAX_PASSWORD_LENGTH,
     MIN_PASSWORD_LENGTH,
     PasswordManager,
@@ -37,6 +40,18 @@ def test_current_hash_does_not_need_rehashing() -> None:
 
     assert verified is True
     assert updated_hash is None
+
+
+def test_dummy_verification_uses_precomputed_argon2id_hash() -> None:
+    password_hash = Mock()
+    manager = PasswordManager(password_hash)
+
+    manager.verify_dummy("unknown user password")
+
+    password_hash.verify.assert_called_once_with(
+        "unknown user password",
+        DUMMY_PASSWORD_HASH,
+    )
 
 
 @pytest.mark.parametrize(

@@ -60,6 +60,6 @@ class LoginAttempt(Base):
         nullable=False,
         index=True,
     )
-    request_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    request_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
     user: Mapped["User | None"] = relationship(back_populates="login_attempts")

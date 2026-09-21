@@ -83,6 +83,11 @@ jobs:
       - name: Check ORM models match migrations
         run: uv run alembic check
 
+      - name: Run PostgreSQL authentication integration test
+        env:
+          RUN_POSTGRES_TESTS: "1"
+        run: uv run pytest tests/test_auth_postgres.py
+
       - name: Downgrade database to base
         run: uv run alembic downgrade base
 

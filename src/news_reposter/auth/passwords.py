@@ -4,6 +4,10 @@ from pwdlib import PasswordHash
 
 MIN_PASSWORD_LENGTH = 15
 MAX_PASSWORD_LENGTH = 1024
+DUMMY_PASSWORD_HASH = (
+    "$argon2id$v=19$m=65536,t=3,p=4$liG2joXKEv1ltp8OiH2D8w$"
+    "DgBNIc2kDhd8y2MhNuGaUQ7Rp0xh7CfbGuv64D8zbQE"
+)
 
 
 class PasswordValidationError(ValueError):
@@ -35,6 +39,11 @@ class PasswordManager:
         """Проверяет пароль и при необходимости возвращает обновлённый хеш."""
 
         return self._password_hash.verify_and_update(password, password_hash)
+
+    def verify_dummy(self, password: str) -> None:
+        """Выполняет Argon2id для неизвестной учётной записи."""
+
+        self._password_hash.verify(password, DUMMY_PASSWORD_HASH)
 
 
 def validate_password(password: str) -> None:

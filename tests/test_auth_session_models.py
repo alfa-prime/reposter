@@ -112,7 +112,7 @@ def test_login_attempt_contains_throttling_and_correlation_fields() -> None:
     assert table.c.was_successful.nullable is False
     assert table.c.attempted_at.type.timezone is True
     assert table.c.attempted_at.nullable is False
-    assert table.c.request_id.type.length == 32
+    assert table.c.request_id.type.length == 64
     assert table.c.request_id.nullable is True
 
     assert {
