@@ -19,7 +19,10 @@ class UserSessionRepository:
         """Блокирует пользователя до конца транзакции создания сессии."""
 
         return await self.session.scalar(
-            select(User).where(User.user_id == user_id).with_for_update()
+            select(User)
+            .where(User.user_id == user_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
         )
 
     async def get_by_token_hash(self, token_hash: bytes) -> UserSession | None:

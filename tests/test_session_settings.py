@@ -11,6 +11,10 @@ def test_session_policy_has_safe_defaults() -> None:
     assert settings.auth_session_absolute_hours == 12
     assert settings.auth_session_touch_interval_minutes == 5
     assert settings.auth_max_sessions_per_user == 5
+    assert settings.auth_login_attempt_window_minutes == 15
+    assert settings.auth_login_block_minutes == 15
+    assert settings.auth_login_max_attempts_per_username == 5
+    assert settings.auth_login_max_attempts_per_ip == 20
 
 
 @pytest.mark.parametrize(

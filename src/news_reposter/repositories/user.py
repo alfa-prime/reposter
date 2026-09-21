@@ -19,6 +19,19 @@ class UserRepository:
             select(User).where(User.username_normalized == username)
         )
 
+    async def get_by_normalized_username_for_update(
+        self,
+        username: str,
+    ) -> User | None:
+        """Блокирует пользователя и перечитывает его актуальное состояние."""
+
+        return await self.session.scalar(
+            select(User)
+            .where(User.username_normalized == username)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+
     def add(self, user: User) -> None:
         """Добавляет пользователя в текущую транзакцию."""
 

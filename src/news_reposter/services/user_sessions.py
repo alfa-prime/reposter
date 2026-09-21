@@ -3,17 +3,20 @@
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from enum import StrEnum
-from ipaddress import ip_address
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from news_reposter.auth.client_metadata import (
+    normalize_client_ip,
+    normalize_user_agent,
+)
 from news_reposter.auth.session_tokens import (
     SessionTokens,
     generate_session_tokens,
     hash_token,
 )
 from news_reposter.config import Settings, get_settings
-from news_reposter.db.models import UserSession
+from news_reposter.db.models import User, UserSession
 from news_reposter.repositories.user_session import UserSessionRepository
 
 
@@ -72,12 +75,31 @@ class UserSessionService:
 
         current_time = _utc_time(now)
         user = await self.sessions.lock_user(user_id)
+        return await self.create_for_locked_user(
+            user,
+            client_ip=client_ip,
+            user_agent=user_agent,
+            now=current_time,
+        )
+
+    async def create_for_locked_user(
+        self,
+        user: User | None,
+        *,
+        client_ip: str | None = None,
+        user_agent: str | None = None,
+        now: datetime | None = None,
+    ) -> CreatedSession:
+        """Создаёт сессию для уже заблокированной строки пользователя."""
+
+        current_time = _utc_time(now)
         if user is None or not user.is_active:
             await self.session.rollback()
             raise SessionUserUnavailableError(
                 "Пользователь не найден или его учётная запись отключена"
             )
 
+        user_id = user.user_id
         idle_cutoff = current_time - self._idle_lifetime
         usable_sessions = await self.sessions.list_usable_for_user(
             user_id,
@@ -102,8 +124,8 @@ class UserSessionService:
             created_at=current_time,
             last_seen_at=current_time,
             absolute_expires_at=current_time + self._absolute_lifetime,
-            ip_address=_normalize_ip(client_ip),
-            user_agent=_normalize_user_agent(user_agent),
+            ip_address=normalize_client_ip(client_ip),
+            user_agent=normalize_user_agent(user_agent),
         )
         self.sessions.add(user_session)
 
@@ -250,18 +272,3 @@ def _utc_time(value: datetime | None) -> datetime:
     if value.tzinfo is None or value.utcoffset() is None:
         raise ValueError("Время сессии должно содержать часовой пояс")
     return value.astimezone(UTC)
-
-
-def _normalize_ip(value: str | None) -> str | None:
-    if not value:
-        return None
-    try:
-        return str(ip_address(value))
-    except ValueError:
-        return None
-
-
-def _normalize_user_agent(value: str | None) -> str | None:
-    if not value:
-        return None
-    return value[:512]
