@@ -13,6 +13,7 @@ import { applyTheme, getInitialTheme, Theme } from "../theme";
 import "../sidebarQueue.css";
 import { QueueSidebarNav } from "./QueueSidebarNav";
 import { SettingsSidebarNav } from "./SettingsSidebarNav";
+import { UserMenu } from "./UserMenu";
 
 type SidebarProps = {
   section: Section;
@@ -59,6 +60,7 @@ export function Sidebar({ section, targets, selectedQueueTargetId, onSectionChan
       </nav>
 
       <div className="sidebar-foot">
+        <UserMenu />
         <div className="sidebar-theme-row">
           <span className="sidebar-theme-label">
             {isLight ? <Sun size={15} /> : <Moon size={15} />}

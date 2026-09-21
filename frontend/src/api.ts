@@ -7,6 +7,40 @@ export type QueuePhoto = {
   media_id?: string | null;
 };
 
+export type CurrentUserRole = {
+  code: string;
+  name: string;
+};
+
+export type CurrentUser = {
+  user_id: number;
+  username: string;
+  display_name: string;
+  avatar_url?: string | null;
+  must_change_password: boolean;
+  roles: CurrentUserRole[];
+  permissions: string[];
+};
+
+export type LoginCredentials = {
+  username: string;
+  password: string;
+};
+
+export const AUTH_SESSION_EXPIRED_EVENT = "reposter:auth-session-expired";
+
+export class ApiError extends Error {
+  readonly status: number;
+  readonly retryAfter: number | null;
+
+  constructor(message: string, status: number, retryAfter: number | null = null) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+    this.retryAfter = retryAfter;
+  }
+}
+
 export type QueueItem = {
   queue_item_id: number;
   post_id: number;
@@ -95,8 +129,17 @@ function detectPlatform(value: string, requirePath = false): TargetPlatform | nu
 export function detectTargetPlatform(value: string): TargetPlatform | null { return detectPlatform(value); }
 export function detectSourcePlatform(value: string): SourcePlatform | null { return detectPlatform(value, true); }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(path, { ...init, cache: init?.cache ?? "no-store", headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) } });
+async function request<T>(
+  path: string,
+  init?: RequestInit,
+  options: { notifyUnauthorized?: boolean } = {},
+): Promise<T> {
+  const response = await fetch(path, {
+    ...init,
+    cache: init?.cache ?? "no-store",
+    credentials: init?.credentials ?? "same-origin",
+    headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) },
+  });
   if (!response.ok) {
     let detail = `${response.status} ${response.statusText}`;
     try {
@@ -113,10 +156,35 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
         if (messages.length) detail = messages.join("; ");
       }
     } catch { /* ignore malformed error body */ }
-    throw new Error(detail);
+    if (response.status === 401 && options.notifyUnauthorized !== false) {
+      window.dispatchEvent(new Event(AUTH_SESSION_EXPIRED_EVENT));
+    }
+    const retryAfterHeader = response.headers.get("Retry-After");
+    const retryAfter = retryAfterHeader === null ? null : Number.parseInt(retryAfterHeader, 10);
+    throw new ApiError(
+      detail,
+      response.status,
+      Number.isFinite(retryAfter) ? retryAfter : null,
+    );
   }
   if (response.status === 204) return undefined as T;
   return response.json() as Promise<T>;
+}
+
+function cookieValue(name: string): string | null {
+  const prefix = `${encodeURIComponent(name)}=`;
+  const item = document.cookie
+    .split(";")
+    .map((part) => part.trim())
+    .find((part) => part.startsWith(prefix));
+  if (!item) return null;
+  return decodeURIComponent(item.slice(prefix.length));
+}
+
+function csrfToken(): string {
+  const token = cookieValue("__Host-rp_csrf") ?? cookieValue("rp_csrf");
+  if (!token) throw new ApiError("CSRF-токен сессии отсутствует", 403);
+  return token;
 }
 
 function fileToBase64(file: File): Promise<string> {
@@ -162,6 +230,24 @@ async function fetchQueuePage(options: {
 }
 
 export const api = {
+  login: (credentials: LoginCredentials) => request<CurrentUser>(
+    "/api/v1/auth/login",
+    { method: "POST", body: JSON.stringify(credentials) },
+    { notifyUnauthorized: false },
+  ),
+  currentUser: () => request<CurrentUser>(
+    "/api/v1/auth/me",
+    undefined,
+    { notifyUnauthorized: false },
+  ),
+  logout: () => request<void>("/api/v1/auth/logout", {
+    method: "POST",
+    headers: { "X-CSRF-Token": csrfToken() },
+  }),
+  logoutAll: () => request<void>("/api/v1/auth/logout-all", {
+    method: "POST",
+    headers: { "X-CSRF-Token": csrfToken() },
+  }),
   queuePage: fetchQueuePage,
   queueItem: (id: number) => request<QueueItem>(`/api/v1/queue/${id}`),
   queueMediaState: (id: number) => request<QueueMediaState>(`/api/v1/queue/${id}/media-state`),
