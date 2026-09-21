@@ -116,22 +116,52 @@ class UserSessionService:
                 reason=SessionRevocationReason.SESSION_LIMIT.value,
             )
 
-        tokens = generate_session_tokens()
-        user_session = UserSession(
-            user_id=user_id,
-            token_hash=hash_token(tokens.session_token),
-            csrf_token_hash=hash_token(tokens.csrf_token),
-            created_at=current_time,
-            last_seen_at=current_time,
-            absolute_expires_at=current_time + self._absolute_lifetime,
-            ip_address=normalize_client_ip(client_ip),
-            user_agent=normalize_user_agent(user_agent),
+        created = self._prepare_session(
+            user_id,
+            client_ip=client_ip,
+            user_agent=user_agent,
+            now=current_time,
         )
-        self.sessions.add(user_session)
 
         await self._commit()
-        await self.session.refresh(user_session)
-        return CreatedSession(session=user_session, tokens=tokens)
+        await self.session.refresh(created.session)
+        return created
+
+    async def replace_after_password_change(
+        self,
+        user: User | None,
+        *,
+        client_ip: str | None = None,
+        user_agent: str | None = None,
+        now: datetime | None = None,
+    ) -> CreatedSession:
+        """Отзывает прежние сессии и атомарно выдаёт одну новую.
+
+        Строка пользователя должна быть заранее заблокирована вызывающим
+        сервисом. Commit включает и уже внесённое изменение пароля.
+        """
+
+        current_time = _utc_time(now)
+        if user is None or not user.is_active:
+            await self.session.rollback()
+            raise SessionUserUnavailableError(
+                "Пользователь не найден или его учётная запись отключена"
+            )
+
+        await self.sessions.revoke_all_for_user(
+            user.user_id,
+            revoked_at=current_time,
+            reason=SessionRevocationReason.PASSWORD_CHANGED.value,
+        )
+        created = self._prepare_session(
+            user.user_id,
+            client_ip=client_ip,
+            user_agent=user_agent,
+            now=current_time,
+        )
+        await self._commit()
+        await self.session.refresh(created.session)
+        return created
 
     async def validate(
         self,
@@ -245,6 +275,28 @@ class UserSessionService:
             reason=reason.value,
         )
         await self._commit()
+
+    def _prepare_session(
+        self,
+        user_id: int,
+        *,
+        client_ip: str | None,
+        user_agent: str | None,
+        now: datetime,
+    ) -> CreatedSession:
+        tokens = generate_session_tokens()
+        user_session = UserSession(
+            user_id=user_id,
+            token_hash=hash_token(tokens.session_token),
+            csrf_token_hash=hash_token(tokens.csrf_token),
+            created_at=now,
+            last_seen_at=now,
+            absolute_expires_at=now + self._absolute_lifetime,
+            ip_address=normalize_client_ip(client_ip),
+            user_agent=normalize_user_agent(user_agent),
+        )
+        self.sessions.add(user_session)
+        return CreatedSession(session=user_session, tokens=tokens)
 
     async def _commit(self) -> None:
         try:

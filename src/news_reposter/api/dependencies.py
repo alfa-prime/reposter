@@ -14,6 +14,7 @@ from news_reposter.db.session import get_db_session
 from news_reposter.llm import LLMProvider
 from news_reposter.llm.factory import build_llm_provider
 from news_reposter.services.authentication import AuthenticationService
+from news_reposter.services.password_change import PasswordChangeService
 from news_reposter.services.user_sessions import (
     InvalidSessionError,
     UserSessionService,
@@ -90,6 +91,18 @@ def get_user_session_service(session: DbSessionDep) -> UserSessionService:
 UserSessionServiceDep = Annotated[
     UserSessionService,
     Depends(get_user_session_service),
+]
+
+
+def get_password_change_service(session: DbSessionDep) -> PasswordChangeService:
+    """Создаёт сервис атомарной смены пароля текущего пользователя."""
+
+    return PasswordChangeService(session)
+
+
+PasswordChangeServiceDep = Annotated[
+    PasswordChangeService,
+    Depends(get_password_change_service),
 ]
 
 settings = get_settings()

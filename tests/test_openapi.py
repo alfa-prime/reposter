@@ -5,6 +5,7 @@ EXPECTED_OPERATIONS = {
     ("/api/v1/auth/me", "get"): "Получить текущего пользователя",
     ("/api/v1/auth/logout", "post"): "Выйти из текущей сессии",
     ("/api/v1/auth/logout-all", "post"): "Завершить все свои сессии",
+    ("/api/v1/auth/change-password", "post"): "Сменить свой пароль",
     ("/health", "get"): "Проверить работу приложения",
     ("/health/database", "get"): "Проверить подключение к PostgreSQL",
     ("/api/v1/system/collect-now", "post"): "Запустить сбор источников сейчас",
@@ -138,11 +139,15 @@ def test_openapi_describes_api_security_boundaries() -> None:
                 assert "security" not in operation
 
 
-def test_openapi_documents_csrf_header_for_logout() -> None:
+def test_openapi_documents_csrf_header_for_auth_mutations() -> None:
     """Показывает frontend обязательный заголовок изменяющих auth-запросов."""
 
     schema = app.openapi()
-    for path in ("/api/v1/auth/logout", "/api/v1/auth/logout-all"):
+    for path in (
+        "/api/v1/auth/change-password",
+        "/api/v1/auth/logout",
+        "/api/v1/auth/logout-all",
+    ):
         parameters = schema["paths"][path]["post"]["parameters"]
         assert any(
             parameter["in"] == "header" and parameter["name"] == "X-CSRF-Token"

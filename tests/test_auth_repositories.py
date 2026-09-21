@@ -63,3 +63,20 @@ def test_authentication_user_lookup_locks_and_refreshes_user() -> None:
         assert statement._for_update_arg is not None
 
     asyncio.run(scenario())
+
+
+def test_password_change_user_lookup_locks_and_refreshes_user() -> None:
+    async def scenario() -> None:
+        db = AsyncMock()
+        expected = User(user_id=7, is_active=True)
+        db.scalar.return_value = expected
+        repository = UserRepository(db)
+
+        result = await repository.get_by_id_for_update(7)
+
+        assert result is expected
+        statement = db.scalar.await_args.args[0]
+        assert statement.get_execution_options()["populate_existing"] is True
+        assert statement._for_update_arg is not None
+
+    asyncio.run(scenario())

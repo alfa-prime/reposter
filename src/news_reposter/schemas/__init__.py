@@ -4,6 +4,7 @@ from news_reposter.schemas.auth import (
     CurrentUserResponse,
     CurrentUserRole,
     LoginRequest,
+    PasswordChangeRequest,
 )
 from news_reposter.schemas.collection import (
     CollectionRunDetail,
@@ -42,6 +43,7 @@ __all__ = [
     "DatabaseHealthResponse",
     "HealthResponse",
     "LoginRequest",
+    "PasswordChangeRequest",
     "QueueItemCreate",
     "QueueItemRead",
     "QueueItemSchedule",

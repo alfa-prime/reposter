@@ -2,8 +2,9 @@
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
-from news_reposter.db.models import User
+from news_reposter.db.models import Role, User
 
 
 class UserRepository:
@@ -28,6 +29,17 @@ class UserRepository:
         return await self.session.scalar(
             select(User)
             .where(User.username_normalized == username)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+
+    async def get_by_id_for_update(self, user_id: int) -> User | None:
+        """Блокирует пользователя по ID и перечитывает актуальное состояние."""
+
+        return await self.session.scalar(
+            select(User)
+            .where(User.user_id == user_id)
+            .options(selectinload(User.roles).selectinload(Role.permissions))
             .with_for_update()
             .execution_options(populate_existing=True)
         )
