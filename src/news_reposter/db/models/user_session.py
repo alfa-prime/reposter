@@ -6,6 +6,7 @@ from sqlalchemy.dialects.postgresql import INET
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from news_reposter.db.base import Base
+from news_reposter.db.models.types import IPAddress
 
 if TYPE_CHECKING:
     from news_reposter.db.models.user import User
@@ -72,7 +73,7 @@ class UserSession(Base):
         nullable=True,
     )
     revoked_reason: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    ip_address: Mapped[str | None] = mapped_column(INET, nullable=True)
+    ip_address: Mapped[IPAddress | None] = mapped_column(INET, nullable=True)
     user_agent: Mapped[str | None] = mapped_column(String(512), nullable=True)
 
     user: Mapped["User"] = relationship(back_populates="sessions")

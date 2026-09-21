@@ -67,10 +67,11 @@ def test_authentication_round_trip_on_postgresql() -> None:
             assert persisted_user is not None
             assert persisted_user.last_login_at is not None
             assert persisted_session is not None
-            assert persisted_session.ip_address == "192.0.2.10"
+            assert str(persisted_session.ip_address) == "192.0.2.10"
             assert persisted_attempt is not None
             assert persisted_attempt.user_id == user_id
             assert persisted_attempt.was_successful is True
+            assert str(persisted_attempt.ip_address) == "192.0.2.10"
             assert persisted_attempt.request_id == request_id
 
     asyncio.run(scenario())

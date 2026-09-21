@@ -15,6 +15,7 @@ from sqlalchemy.dialects.postgresql import INET
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from news_reposter.db.base import Base
+from news_reposter.db.models.types import IPAddress
 
 if TYPE_CHECKING:
     from news_reposter.db.models.user import User
@@ -53,7 +54,7 @@ class LoginAttempt(Base):
         nullable=True,
         index=True,
     )
-    ip_address: Mapped[str | None] = mapped_column(INET, nullable=True)
+    ip_address: Mapped[IPAddress | None] = mapped_column(INET, nullable=True)
     was_successful: Mapped[bool] = mapped_column(Boolean, nullable=False)
     attempted_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
