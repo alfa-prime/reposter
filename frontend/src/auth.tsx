@@ -13,6 +13,7 @@ import {
   AUTH_SESSION_EXPIRED_EVENT,
   CurrentUser,
   LoginCredentials,
+  PasswordChange,
 } from "./api";
 
 export type AuthStatus = "loading" | "anonymous" | "authenticated" | "unavailable";
@@ -22,6 +23,7 @@ type AuthContextValue = {
   user: CurrentUser | null;
   error: string;
   login: (credentials: LoginCredentials) => Promise<void>;
+  changePassword: (passwords: PasswordChange) => Promise<void>;
   logout: (allSessions?: boolean) => Promise<void>;
   restore: () => Promise<void>;
 };
@@ -72,6 +74,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setStatus("authenticated");
   }, []);
 
+  const changePassword = useCallback(async (passwords: PasswordChange) => {
+    const currentUser = await api.changePassword(passwords);
+    setUser(currentUser);
+    setError("");
+    setStatus("authenticated");
+  }, []);
+
   const logout = useCallback(async (allSessions = false) => {
     if (allSessions) {
       await api.logoutAll();
@@ -84,8 +93,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo<AuthContextValue>(
-    () => ({ status, user, error, login, logout, restore }),
-    [status, user, error, login, logout, restore],
+    () => ({ status, user, error, login, changePassword, logout, restore }),
+    [status, user, error, login, changePassword, logout, restore],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
