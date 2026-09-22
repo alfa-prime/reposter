@@ -17,7 +17,6 @@ services:
   frontend:
     environment:
       SITE_ADDRESS: ${SITE_ADDRESS}
-      API_KEY: ${API_KEY}
       ADMIN_USER: ${ADMIN_USER}
       ADMIN_PASSWORD_HASH: ${ADMIN_PASSWORD_HASH}
     volumes:

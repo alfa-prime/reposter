@@ -5,7 +5,7 @@ from urllib.parse import urlsplit
 
 import httpx
 from fastapi import Depends, Header, HTTPException, Request, Security, status
-from fastapi.security import APIKeyCookie, APIKeyHeader
+from fastapi.security import APIKeyCookie
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from news_reposter.auth.context import AuthContext
@@ -21,18 +21,6 @@ from news_reposter.services.user_sessions import (
     InvalidSessionError,
     UserSessionService,
 )
-
-api_key_header = APIKeyHeader(
-    name="X-API-Key",
-    scheme_name="APIKeyHeader",
-    description="API-ключ сервиса из переменной окружения `API_KEY`.",
-    auto_error=False,
-)
-
-API_KEY_RESPONSES = {
-    401: {"description": "Неверный или отсутствующий API-ключ"},
-    503: {"description": "API-ключ не настроен на сервере"},
-}
 
 SESSION_AUTH_RESPONSES = {
     401: {"description": "Требуется действующая пользовательская сессия"},
@@ -58,31 +46,6 @@ PERMISSION_CSRF_AUTH_RESPONSES = {
     },
 }
 
-
-async def require_api_key(
-    provided_api_key: Annotated[str | None, Security(api_key_header)],
-) -> None:
-    """Проверяет API-ключ из заголовка запроса."""
-
-    expected_api_key = get_settings().api_key
-    if not expected_api_key:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="API_KEY не настроен",
-        )
-
-    if provided_api_key is None or not compare_digest(
-        provided_api_key,
-        expected_api_key,
-    ):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Неверный или отсутствующий API-ключ",
-            headers={"WWW-Authenticate": "ApiKey"},
-        )
-
-
-ApiKeyDep = Annotated[None, Depends(require_api_key)]
 
 DbSessionDep = Annotated[AsyncSession, Depends(get_db_session)]
 

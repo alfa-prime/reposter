@@ -5,10 +5,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from news_reposter.api.dependencies import (
-    API_KEY_RESPONSES,
     PERMISSION_AUTH_RESPONSES,
     PERMISSION_CSRF_AUTH_RESPONSES,
-    ApiKeyDep,
     CsrfAuthContextDep,
     HttpClientDep,
     SameOriginDep,
@@ -171,14 +169,14 @@ async def list_targets(
     summary="Определить канал MAX по ссылке",
     description="Возвращает chat_id, название и аватар канала MAX по публичной ссылке.",
     responses={
-        **API_KEY_RESPONSES,
+        **PERMISSION_AUTH_RESPONSES,
         404: {"description": "Канал ещё не обнаружен webhook-ом"},
     },
 )
 async def resolve_max_target(
+    _auth: TargetsManageDep,
     session: Session,
     http_client: HttpClientDep,
-    _api_key: ApiKeyDep,
     link: str = Query(description="Публичная ссылка MAX"),
 ) -> dict[str, Any]:
     try:

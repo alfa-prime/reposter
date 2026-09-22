@@ -1,12 +1,28 @@
+from typing import Annotated
+
 import httpx
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 
-from news_reposter.api.dependencies import API_KEY_RESPONSES, ApiKeyDep, HttpClientDep
+from news_reposter.api.dependencies import (
+    PERMISSION_AUTH_RESPONSES,
+    HttpClientDep,
+    require_permission,
+)
+from news_reposter.auth.context import AuthContext
+from news_reposter.auth.rbac import PermissionCode
 from news_reposter.config import get_settings
 from news_reposter.integrations.vk import VKAPIError, VKClient, VKPost
 
-router = APIRouter(prefix="/vk", tags=["VK"], responses=API_KEY_RESPONSES)
+router = APIRouter(prefix="/vk", tags=["VK"])
+SourcesReadDep = Annotated[
+    AuthContext,
+    Depends(require_permission(PermissionCode.SOURCES_READ)),
+]
+SourcesManageDep = Annotated[
+    AuthContext,
+    Depends(require_permission(PermissionCode.SOURCES_MANAGE)),
+]
 
 
 class VKSourceInfo(BaseModel):
@@ -35,10 +51,11 @@ def _client(http_client: httpx.AsyncClient) -> VKClient:
     response_model=VKSourceInfo,
     summary="Определить источник VK",
     description="Получает название и аватар сообщества VK по его ссылке.",
+    responses=PERMISSION_AUTH_RESPONSES,
 )
 async def get_vk_source_info(
+    _auth: SourcesManageDep,
     http_client: HttpClientDep,
-    _api_key: ApiKeyDep,
     link: str = Query(..., description="Ссылка на сообщество VK"),
 ) -> VKSourceInfo:
     client = _client(http_client)
@@ -76,6 +93,7 @@ async def get_vk_source_info(
     ),
     response_description="Последний обычный пост группы VK",
     responses={
+        **PERMISSION_AUTH_RESPONSES,
         404: {"description": "В группе нет постов"},
         422: {"description": "Группа не указана или имеет неверный формат"},
         502: {"description": "VK API вернул ошибку"},
@@ -83,8 +101,8 @@ async def get_vk_source_info(
     },
 )
 async def get_latest_vk_post(
+    _auth: SourcesReadDep,
     http_client: HttpClientDep,
-    _api_key: ApiKeyDep,
     group: str | None = Query(
         default=None,
         description=(

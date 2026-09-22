@@ -62,7 +62,6 @@ chmod 600 .env
 For the current IP-only demo set at least:
 
 ```dotenv
-API_KEY=<random-secret>
 VK_ACCESS_TOKEN=<token>
 MAX_ACCESS_TOKEN=<token>
 POSTGRES_PASSWORD=<strong-random-password>
@@ -71,7 +70,7 @@ ADMIN_USER=demo
 ADMIN_PASSWORD_HASH='<bcrypt-hash>'
 ```
 
-Generate a strong API key and database password, for example:
+Generate a strong database password, for example:
 
 ```bash
 openssl rand -hex 32
