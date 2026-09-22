@@ -10,6 +10,7 @@ import { QueueSchedulePanel } from "./components/QueueSchedulePanel";
 import { queueTabConfig, QueueTabs, QueueTab } from "./components/QueueTabs";
 import { QueueTextEditor } from "./components/QueueTextEditor";
 import { PostSignatureSection } from "./components/SignatureSections";
+import { scheduleInputValue, scheduleValidationMessage } from "./scheduleDateTime";
 import "./queueExperience.css";
 import "./queueLightTheme.css";
 
@@ -70,16 +71,6 @@ function scheduleLabel(value?: string | null) {
     hour: "2-digit",
     minute: "2-digit",
   }).format(new Date(value));
-}
-
-function scheduleValidationMessage(value: string) {
-  if (!value) return "";
-  const scheduledDate = new Date(value);
-  if (Number.isNaN(scheduledDate.getTime())) return "Укажите корректную дату и время публикации";
-  if (scheduledDate.getTime() <= Date.now()) {
-    return "Выбранное время уже прошло.";
-  }
-  return "";
 }
 
 function mediaKey(photo: QueuePhoto) {
@@ -190,7 +181,7 @@ export function QueueExperience({ collectSignal = 0, targetId }: QueueExperience
         setItems((current) => current.map((row) => row.queue_item_id === item.queue_item_id ? item : row));
         setText(item.rewritten_text ?? item.original_text ?? "");
         setMediaOrder(state.media_order);
-        setScheduleAt(item.scheduled_at ? item.scheduled_at.slice(0, 16) : "");
+        setScheduleAt(scheduleInputValue(item.scheduled_at));
         setScheduleError("");
         setScheduleTimeTouched(false);
         setEditing(false);
