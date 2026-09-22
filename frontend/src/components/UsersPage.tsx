@@ -179,6 +179,9 @@ export function UsersPage() {
   const [displayName, setDisplayName] = useState("");
   const [roleCodes, setRoleCodes] = useState<string[]>([]);
   const [resetPassword, setResetPassword] = useState(generateTemporaryPassword);
+  const [resetOpen, setResetOpen] = useState(false);
+  const [resetCompleted, setResetCompleted] = useState(false);
+  const [resetCopied, setResetCopied] = useState(false);
   const [createForm, setCreateForm] = useState<CreateForm>(emptyCreateForm);
   const [createOpen, setCreateOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -220,7 +223,10 @@ export function UsersPage() {
     setDisplayName(selected.display_name);
     setRoleCodes(normalizeRoleCodes(selected.roles.map((role) => role.code)));
     setResetPassword(generateTemporaryPassword());
-  }, [selected]);
+    setResetOpen(false);
+    setResetCompleted(false);
+    setResetCopied(false);
+  }, [selected?.user_id]);
 
   useEffect(() => {
     if (!notice) return;
@@ -279,7 +285,7 @@ export function UsersPage() {
     try {
       const data = await api.resetAdminUserPassword(selected.user_id, resetPassword);
       replaceUser(data);
-      setNotice("Пароль сброшен. Передайте пользователю временный пароль безопасным способом.");
+      setResetCompleted(true);
     } catch (exc) {
       setError(exc instanceof Error ? exc.message : "Не удалось сбросить пароль");
     } finally { setBusy(false); }
@@ -308,6 +314,19 @@ export function UsersPage() {
   async function copyPassword(value: string) {
     await navigator.clipboard.writeText(value);
     setNotice("Временный пароль скопирован.");
+  }
+
+  async function copyResetPassword() {
+    await navigator.clipboard.writeText(resetPassword);
+    setResetCopied(true);
+  }
+
+  function openPasswordReset() {
+    setError("");
+    setResetPassword(generateTemporaryPassword());
+    setResetCompleted(false);
+    setResetCopied(false);
+    setResetOpen(true);
   }
 
   return (
@@ -357,13 +376,63 @@ export function UsersPage() {
 
             {canManage && <div className="user-section security-section">
               <div className="user-section-title"><div><strong>Безопасность</strong><span>Восстановление доступа и управление активными сессиями</span></div><KeyRound size={19} /></div>
-              <p className="user-hint security-hint">Если пользователь забыл пароль, задайте временный. При следующем входе система потребует заменить его на собственный.</p>
-              <div className="temporary-password-row"><input type="text" value={resetPassword} disabled={busy || Boolean(isSelf)} onChange={(event) => setResetPassword(event.target.value)} /><button className="icon-button" title="Скопировать" disabled={Boolean(isSelf)} onClick={() => void copyPassword(resetPassword)}><Clipboard size={17} /></button><button className="secondary" disabled={busy || Boolean(isSelf)} onClick={() => setResetPassword(generateTemporaryPassword())}><RefreshCw size={15} />Новый</button></div>
-              <div className="user-actions"><button className="secondary" disabled={busy || Boolean(isSelf) || resetPassword.length < 15} onClick={() => void resetUserPassword()}><KeyRound size={16} />Сбросить пароль</button><button className="secondary" disabled={busy || Boolean(isSelf)} onClick={() => void revokeSessions()}><X size={16} />Завершить все сессии</button></div>
+              <div className="security-actions">
+                <div className="security-action">
+                  <div><strong>Пользователь забыл пароль</strong><span>Создать временный пароль и потребовать его смену при следующем входе.</span></div>
+                  <button className="secondary" disabled={busy || Boolean(isSelf)} onClick={openPasswordReset}><KeyRound size={16} />Сбросить пароль</button>
+                </div>
+                <div className="security-action">
+                  <div><strong>Завершить активные входы</strong><span>Выйти из учётной записи на всех устройствах без изменения пароля.</span></div>
+                  <button className="secondary" disabled={busy || Boolean(isSelf)} onClick={() => void revokeSessions()}><X size={16} />Завершить все сессии</button>
+                </div>
+              </div>
+              {isSelf && <p className="user-hint security-hint">Свой пароль можно сменить через меню профиля в левом нижнем углу.</p>}
             </div>}
           </>}
         </div>
       </div>
+
+      {resetOpen && selected && <div className="modal-backdrop" onMouseDown={() => !busy && setResetOpen(false)}>
+        <div className="modal-card password-reset-modal" onMouseDown={(event) => event.stopPropagation()}>
+          <div className="modal-head">
+            <div><p className="eyebrow">ВОССТАНОВЛЕНИЕ ДОСТУПА</p><h2>{resetCompleted ? "Пароль сброшен" : "Сбросить пароль?"}</h2></div>
+            <button className="icon-button" aria-label="Закрыть" onClick={() => setResetOpen(false)} disabled={busy}><X size={18} /></button>
+          </div>
+
+          {resetCompleted ? (
+            <p className="password-reset-message success">Готово. Передайте этот временный пароль пользователю <strong>{selected.display_name}</strong> безопасным способом.</p>
+          ) : (
+            <p className="password-reset-message">Для пользователя <strong>{selected.display_name}</strong> будет установлен временный пароль. Все его активные сессии завершатся, а при следующем входе система потребует задать собственный пароль.</p>
+          )}
+
+          <label className="password-reset-field">
+            <span>Временный пароль</span>
+            <span className="temporary-password-row">
+              <input type="text" value={resetPassword} readOnly={resetCompleted} disabled={busy} onChange={(event) => setResetPassword(event.target.value)} />
+              <button type="button" className="icon-button" title="Скопировать пароль" aria-label="Скопировать пароль" onClick={() => void copyResetPassword()}><Clipboard size={17} /></button>
+              {!resetCompleted && <button type="button" className="secondary" disabled={busy} onClick={() => { setResetPassword(generateTemporaryPassword()); setResetCopied(false); }}><RefreshCw size={15} />Другой пароль</button>}
+            </span>
+          </label>
+
+          {error && <div className="auth-error password-reset-error" role="alert">{error}</div>}
+          {resetCopied && <p className="password-reset-copied"><CheckCircle2 size={14} />Пароль скопирован</p>}
+
+          <div className="password-reset-effects">
+            <span><CheckCircle2 size={14} />Старый пароль перестанет работать</span>
+            <span><CheckCircle2 size={14} />Все активные сессии завершатся</span>
+            <span><CheckCircle2 size={14} />После входа потребуется смена пароля</span>
+          </div>
+
+          <div className="password-reset-actions">
+            {resetCompleted ? (
+              <button className="primary" type="button" onClick={() => setResetOpen(false)}>Готово</button>
+            ) : <>
+              <button className="secondary" type="button" onClick={() => setResetOpen(false)} disabled={busy}>Отмена</button>
+              <button className="primary" type="button" disabled={busy || resetPassword.length < 15} onClick={() => void resetUserPassword()}><KeyRound size={16} />{busy ? "Сбрасываем…" : "Сбросить пароль"}</button>
+            </>}
+          </div>
+        </div>
+      </div>}
 
       {createOpen && <div className="modal-backdrop" onMouseDown={() => setCreateOpen(false)}>
         <div className="modal-card user-create-modal" onMouseDown={(event) => event.stopPropagation()}>
