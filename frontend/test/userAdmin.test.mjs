@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-const { generateTemporaryPassword, toggleRoleCode } = await import("../src/userAdmin.ts");
+const { generateTemporaryPassword, normalizeRoleCodes, toggleRoleCode } = await import("../src/userAdmin.ts");
 
 test("генерирует временный пароль нужной длины без неоднозначных символов", () => {
   const password = generateTemporaryPassword();
@@ -19,4 +19,14 @@ test("добавляет и удаляет код роли без изменен
   assert.deepEqual(initial, ["editor"]);
   assert.deepEqual(added, ["editor", "publisher"]);
   assert.deepEqual(removed, ["publisher"]);
+});
+
+test("делает роль администратора исключительной", () => {
+  assert.deepEqual(toggleRoleCode(["editor", "viewer"], "administrator"), ["administrator"]);
+  assert.deepEqual(toggleRoleCode(["administrator"], "administrator"), []);
+  assert.deepEqual(toggleRoleCode(["administrator"], "editor"), ["editor"]);
+  assert.deepEqual(
+    normalizeRoleCodes(["administrator", "publisher"]),
+    ["administrator"],
+  );
 });

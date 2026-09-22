@@ -35,6 +35,10 @@ class RolesNotFoundError(RuntimeError):
         super().__init__(f"Роли не найдены или отключены: {', '.join(sorted(codes))}")
 
 
+class RoleCombinationError(RuntimeError):
+    """Набор ролей содержит взаимоисключающие назначения."""
+
+
 class SelfManagementError(RuntimeError):
     """Администратор попытался лишить доступа собственную сессию."""
 
@@ -248,6 +252,10 @@ class UserService:
     async def _resolve_roles(self, codes: set[str]) -> list[Role]:
         if not codes:
             raise RolesNotFoundError(codes)
+        if SystemRoleCode.ADMINISTRATOR.value in codes and len(codes) > 1:
+            raise RoleCombinationError(
+                "Роль administrator уже включает все разрешения и назначается отдельно"
+            )
         roles = await self.roles.get_active_by_codes(codes)
         found_codes = {role.code for role in roles}
         missing_codes = codes - found_codes

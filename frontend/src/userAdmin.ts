@@ -9,7 +9,15 @@ export function generateTemporaryPassword(): string {
 }
 
 export function toggleRoleCode(codes: string[], code: string): string[] {
+  const administrator = "administrator";
+  if (code === administrator) {
+    return codes.includes(administrator) ? [] : [administrator];
+  }
   return codes.includes(code)
     ? codes.filter((item) => item !== code)
-    : [...codes, code];
+    : [...codes.filter((item) => item !== administrator), code];
+}
+
+export function normalizeRoleCodes(codes: string[]): string[] {
+  return codes.includes("administrator") ? ["administrator"] : codes;
 }

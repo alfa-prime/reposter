@@ -26,6 +26,7 @@ from news_reposter.schemas import (
     RevokedSessionsResponse,
 )
 from news_reposter.services.users import (
+    RoleCombinationError,
     RolesNotFoundError,
     SelfManagementError,
     UserAlreadyExistsError,
@@ -120,6 +121,7 @@ async def create_user(
         IdentityValidationError,
         PasswordValidationError,
         RolesNotFoundError,
+        RoleCombinationError,
     ) as exc:
         raise HTTPException(
             status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -166,7 +168,7 @@ async def update_user(
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except SelfManagementError as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
-    except (IdentityValidationError, RolesNotFoundError) as exc:
+    except (IdentityValidationError, RolesNotFoundError, RoleCombinationError) as exc:
         raise HTTPException(
             status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=str(exc),
