@@ -3,6 +3,7 @@ import { RefreshCw, Trash2, X } from "lucide-react";
 import { api, Source, Target, TargetSource } from "./api";
 import { AuthProvider, useAuth } from "./auth";
 import { AboutPage } from "./components/AboutPage";
+import { ChangePasswordModal } from "./components/ChangePasswordModal";
 import {
   AuthLoadingPage,
   AuthUnavailablePage,
@@ -57,6 +58,7 @@ function AuthenticatedApp() {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialog>(null);
+  const [passwordChangeOpen, setPasswordChangeOpen] = useState(false);
 
   const selectedQueueTarget = useMemo(
     () => targets.find((item) => item.target_id === selectedQueueTargetId) ?? null,
@@ -233,6 +235,7 @@ function AuthenticatedApp() {
         selectedQueueTargetId={selectedQueueTargetId}
         onSectionChange={changeSection}
         onQueueTargetChange={changeQueueTarget}
+        onChangePassword={() => setPasswordChangeOpen(true)}
       />
 
       <main className="workspace">
@@ -255,6 +258,13 @@ function AuthenticatedApp() {
             </div>
           )}
         </>}
+
+        {standalonePage && notice && (
+          <div className="toast">
+            {notice}
+            <button onClick={() => setNotice("")}>×</button>
+          </div>
+        )}
 
         {section === "about" && <AboutPage />}
         {section === "scheduler" && <SettingsPage />}
@@ -313,6 +323,16 @@ function AuthenticatedApp() {
             </div>
           </div>
         </div>
+      )}
+
+      {passwordChangeOpen && (
+        <ChangePasswordModal
+          onClose={() => setPasswordChangeOpen(false)}
+          onChanged={() => {
+            setPasswordChangeOpen(false);
+            setNotice("Пароль изменён. Остальные активные сессии завершены.");
+          }}
+        />
       )}
     </div>
   );

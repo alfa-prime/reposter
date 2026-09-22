@@ -60,6 +60,7 @@
 .temporary-password-row { display: grid; grid-template-columns: minmax(0, 1fr) 36px auto; gap: 8px; align-items: center; }
 .temporary-password-row .icon-button { width: 36px; height: 39px; }
 .security-section .temporary-password-row { max-width: 610px; }
+.security-hint { max-width: 640px; margin: -4px 0 13px; }
 .users-empty { margin: 0; padding: 24px; color: #7d8ba3; text-align: center; font-size: 12px; }
 .users-empty.large { min-height: 540px; display: grid; place-content: center; }
 .user-create-modal { width: min(720px, 100%); max-height: calc(100vh - 40px); overflow: auto; }

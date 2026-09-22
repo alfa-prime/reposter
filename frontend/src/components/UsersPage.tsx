@@ -273,13 +273,13 @@ export function UsersPage() {
     } finally { setBusy(false); }
   }
 
-  async function applyTemporaryPassword() {
+  async function resetUserPassword() {
     if (!selected || isSelf) return;
     setBusy(true); setError(""); setNotice("");
     try {
       const data = await api.resetAdminUserPassword(selected.user_id, resetPassword);
       replaceUser(data);
-      setNotice("Временный пароль установлен, активные сессии завершены.");
+      setNotice("Пароль сброшен. Передайте пользователю временный пароль безопасным способом.");
     } catch (exc) {
       setError(exc instanceof Error ? exc.message : "Не удалось сбросить пароль");
     } finally { setBusy(false); }
@@ -356,9 +356,10 @@ export function UsersPage() {
             </div>
 
             {canManage && <div className="user-section security-section">
-              <div className="user-section-title"><div><strong>Безопасность</strong><span>Сброс пароля сразу завершает все сессии</span></div><KeyRound size={19} /></div>
+              <div className="user-section-title"><div><strong>Безопасность</strong><span>Восстановление доступа и управление активными сессиями</span></div><KeyRound size={19} /></div>
+              <p className="user-hint security-hint">Если пользователь забыл пароль, задайте временный. При следующем входе система потребует заменить его на собственный.</p>
               <div className="temporary-password-row"><input type="text" value={resetPassword} disabled={busy || Boolean(isSelf)} onChange={(event) => setResetPassword(event.target.value)} /><button className="icon-button" title="Скопировать" disabled={Boolean(isSelf)} onClick={() => void copyPassword(resetPassword)}><Clipboard size={17} /></button><button className="secondary" disabled={busy || Boolean(isSelf)} onClick={() => setResetPassword(generateTemporaryPassword())}><RefreshCw size={15} />Новый</button></div>
-              <div className="user-actions"><button className="secondary" disabled={busy || Boolean(isSelf) || resetPassword.length < 15} onClick={() => void applyTemporaryPassword()}><KeyRound size={16} />Установить временный пароль</button><button className="secondary" disabled={busy || Boolean(isSelf)} onClick={() => void revokeSessions()}><X size={16} />Завершить все сессии</button></div>
+              <div className="user-actions"><button className="secondary" disabled={busy || Boolean(isSelf) || resetPassword.length < 15} onClick={() => void resetUserPassword()}><KeyRound size={16} />Сбросить пароль</button><button className="secondary" disabled={busy || Boolean(isSelf)} onClick={() => void revokeSessions()}><X size={16} />Завершить все сессии</button></div>
             </div>}
           </>}
         </div>

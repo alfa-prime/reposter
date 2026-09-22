@@ -1,6 +1,10 @@
 import { useEffect, useRef, useState } from "react";
-import { LogOut, ShieldOff } from "lucide-react";
+import { KeyRound, LogOut, ShieldOff } from "lucide-react";
 import { useAuth } from "../auth";
+
+type Props = {
+  onChangePassword: () => void;
+};
 
 function initials(displayName: string, username: string): string {
   const parts = displayName.trim().split(/\s+/).filter(Boolean);
@@ -10,7 +14,7 @@ function initials(displayName: string, username: string): string {
   return value.toLocaleUpperCase("ru-RU");
 }
 
-export function UserMenu() {
+export function UserMenu({ onChangePassword }: Props) {
   const { user, logout } = useAuth();
   const detailsRef = useRef<HTMLDetailsElement>(null);
   const [busy, setBusy] = useState(false);
@@ -86,6 +90,9 @@ export function UserMenu() {
           </div>
         ) : (
           <div className="user-menu-actions">
+            <button type="button" onClick={() => { detailsRef.current?.removeAttribute("open"); onChangePassword(); }} disabled={busy}>
+              <KeyRound size={16} />Сменить пароль
+            </button>
             <button type="button" onClick={() => void performLogout(false)} disabled={busy}>
               <LogOut size={16} />Выйти
             </button>
