@@ -48,6 +48,16 @@ CSRF_AUTH_RESPONSES = {
     403: {"description": "Недействительный CSRF-токен или источник запроса"},
 }
 
+PERMISSION_CSRF_AUTH_RESPONSES = {
+    **SESSION_AUTH_RESPONSES,
+    403: {
+        "description": (
+            "Недостаточно прав, требуется смена временного пароля либо "
+            "недействителен CSRF-токен или источник запроса"
+        )
+    },
+}
+
 
 async def require_api_key(
     provided_api_key: Annotated[str | None, Security(api_key_header)],

@@ -192,6 +192,10 @@ function csrfToken(): string {
   return token;
 }
 
+function csrfHeaders(): Record<string, string> {
+  return { "X-CSRF-Token": csrfToken() };
+}
+
 function fileToBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -208,7 +212,7 @@ async function createTargetFromLink(data: { url: string; is_active?: boolean }):
   const channel = await request<MaxChannelInfo>(`/api/v1/targets/resolve-max?link=${encodeURIComponent(url)}`);
   const name = channel.title?.trim();
   if (!name) throw new Error("MAX не вернул название канала");
-  return request<Target>("/api/v1/targets", { method: "POST", body: JSON.stringify({ name, platform: "max", external_id: String(channel.chat_id), url: channel.link || url, icon_url: channel.icon_url || null, is_active: data.is_active ?? true }) });
+  return request<Target>("/api/v1/targets", { method: "POST", headers: csrfHeaders(), body: JSON.stringify({ name, platform: "max", external_id: String(channel.chat_id), url: channel.link || url, icon_url: channel.icon_url || null, is_active: data.is_active ?? true }) });
 }
 
 async function createSourceFromLink(data: { url: string; is_active?: boolean }): Promise<Source> {
@@ -216,7 +220,7 @@ async function createSourceFromLink(data: { url: string; is_active?: boolean }):
   if (!url) throw new Error("Укажите ссылку на источник");
   if (detectSourcePlatform(url) !== "vk") throw new Error("Укажите ссылку на источник VK, например https://vk.ru/peninsula51");
   const info = await request<VKSourceInfo>(`/api/v1/vk/source-info?link=${encodeURIComponent(url)}`);
-  return request<Source>("/api/v1/sources", { method: "POST", body: JSON.stringify({ name: info.name, platform: "vk", url: info.url || url, icon_url: info.icon_url || null, is_active: data.is_active ?? true }) });
+  return request<Source>("/api/v1/sources", { method: "POST", headers: csrfHeaders(), body: JSON.stringify({ name: info.name, platform: "vk", url: info.url || url, icon_url: info.icon_url || null, is_active: data.is_active ?? true }) });
 }
 
 async function fetchQueuePage(options: {
@@ -285,14 +289,14 @@ export const api = {
   collectionRun: (id: number) => request<CollectionRunDetail>(`/api/v1/system/collection/runs/${id}`),
   maxChannelByLink: (link: string) => request<MaxChannelInfo>(`/api/v1/targets/resolve-max?link=${encodeURIComponent(link)}`),
   createTarget: (data: { url: string; is_active?: boolean }) => createTargetFromLink(data),
-  updateTarget: (id: number, data: Partial<Omit<Target, "target_id">>) => request<Target>(`/api/v1/targets/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
-  deleteTarget: (id: number) => request<void>(`/api/v1/targets/${id}`, { method: "DELETE" }),
+  updateTarget: (id: number, data: Partial<Omit<Target, "target_id">>) => request<Target>(`/api/v1/targets/${id}`, { method: "PATCH", headers: csrfHeaders(), body: JSON.stringify(data) }),
+  deleteTarget: (id: number) => request<void>(`/api/v1/targets/${id}`, { method: "DELETE", headers: csrfHeaders() }),
   createSource: (data: { url: string; is_active?: boolean }) => createSourceFromLink(data),
-  updateSource: (id: number, data: Partial<Omit<Source, "source_id">>) => request<Source>(`/api/v1/sources/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
-  deleteSource: (id: number) => request<void>(`/api/v1/sources/${id}`, { method: "DELETE" }),
-  attachSource: (targetId: number, sourceId: number) => request<TargetSource>(`/api/v1/targets/${targetId}/sources`, { method: "POST", body: JSON.stringify({ source_id: sourceId, is_active: true, rewrite_enabled: true }) }),
-  updateTargetSource: (targetId: number, targetSourceId: number, data: Partial<Pick<TargetSource, "is_active" | "rewrite_enabled">>) => request<TargetSource>(`/api/v1/targets/${targetId}/sources/${targetSourceId}`, { method: "PATCH", body: JSON.stringify(data) }),
-  detachSource: (targetId: number, targetSourceId: number) => request<void>(`/api/v1/targets/${targetId}/sources/${targetSourceId}`, { method: "DELETE" }),
+  updateSource: (id: number, data: Partial<Omit<Source, "source_id">>) => request<Source>(`/api/v1/sources/${id}`, { method: "PATCH", headers: csrfHeaders(), body: JSON.stringify(data) }),
+  deleteSource: (id: number) => request<void>(`/api/v1/sources/${id}`, { method: "DELETE", headers: csrfHeaders() }),
+  attachSource: (targetId: number, sourceId: number) => request<TargetSource>(`/api/v1/targets/${targetId}/sources`, { method: "POST", headers: csrfHeaders(), body: JSON.stringify({ source_id: sourceId, is_active: true, rewrite_enabled: true }) }),
+  updateTargetSource: (targetId: number, targetSourceId: number, data: Partial<Pick<TargetSource, "is_active" | "rewrite_enabled">>) => request<TargetSource>(`/api/v1/targets/${targetId}/sources/${targetSourceId}`, { method: "PATCH", headers: csrfHeaders(), body: JSON.stringify(data) }),
+  detachSource: (targetId: number, targetSourceId: number) => request<void>(`/api/v1/targets/${targetId}/sources/${targetSourceId}`, { method: "DELETE", headers: csrfHeaders() }),
   rewriteQueueItem: (id: number) => request<QueueItem>(`/api/v1/queue/${id}/rewrite`, { method: "POST" }),
   updateQueueText: (id: number, rewritten_text: string) => request<QueueItem>(`/api/v1/queue/${id}`, { method: "PATCH", body: JSON.stringify({ rewritten_text }) }),
   updateQueueSignature: (id: number, signature_text: string | null) => request<QueueItem>(`/api/v1/queue/${id}`, { method: "PATCH", body: JSON.stringify({ signature_text }) }),

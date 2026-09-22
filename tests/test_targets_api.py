@@ -10,11 +10,16 @@ import httpx
 import pytest
 
 import news_reposter.api.v1.targets as targets_api
-from news_reposter.api.dependencies import get_current_auth, require_api_key
+from news_reposter.api.dependencies import get_current_auth
 from news_reposter.auth.rbac import PermissionCode
+from news_reposter.auth.session_tokens import hash_token
+from news_reposter.config import get_settings
 from news_reposter.main import app
 from news_reposter.repositories import TargetAlreadyExistsError
 from news_reposter.schemas import TargetCreate, TargetUpdate
+
+CSRF_TOKEN = "targets-csrf-token"
+CSRF_COOKIE_NAME = get_settings().auth_csrf_cookie_name
 
 
 class MemoryTargetRepository:
@@ -111,23 +116,24 @@ class MemoryTargetRepository:
 def memory_target_repository(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     """Подменяет репозиторий целей хранилищем в памяти."""
 
-    async def allow_api_key() -> None:
-        """Разрешает тестовые запросы без настоящего ключа."""
-
     async def allow_targets_read() -> SimpleNamespace:
         return SimpleNamespace(
             user=SimpleNamespace(must_change_password=False),
-            permission_codes=frozenset({PermissionCode.TARGETS_READ.value}),
+            session=SimpleNamespace(csrf_token_hash=hash_token(CSRF_TOKEN)),
+            permission_codes=frozenset(
+                {
+                    PermissionCode.TARGETS_READ.value,
+                    PermissionCode.TARGETS_MANAGE.value,
+                }
+            ),
         )
 
     MemoryTargetRepository.reset()
     monkeypatch.setattr(targets_api, "TargetRepository", MemoryTargetRepository)
-    app.dependency_overrides[require_api_key] = allow_api_key
     app.dependency_overrides[get_current_auth] = allow_targets_read
     try:
         yield
     finally:
-        app.dependency_overrides.pop(require_api_key, None)
         app.dependency_overrides.pop(get_current_auth, None)
 
 
@@ -141,6 +147,8 @@ def test_targets_crud(memory_target_repository: None) -> None:
         async with httpx.AsyncClient(
             transport=transport,
             base_url="http://test",
+            cookies={CSRF_COOKIE_NAME: CSRF_TOKEN},
+            headers={"X-CSRF-Token": CSRF_TOKEN},
         ) as client:
             created = await client.post(
                 "/api/v1/targets",
@@ -203,6 +211,8 @@ def test_target_validation(memory_target_repository: None) -> None:
         async with httpx.AsyncClient(
             transport=transport,
             base_url="http://test",
+            cookies={CSRF_COOKIE_NAME: CSRF_TOKEN},
+            headers={"X-CSRF-Token": CSRF_TOKEN},
         ) as client:
             without_url = await client.post(
                 "/api/v1/targets",
@@ -249,5 +259,38 @@ def test_targets_read_requires_permission(memory_target_repository: None) -> Non
         assert forbidden.json() == {"detail": "Недостаточно прав"}
         assert unauthorized.status_code == 401
         assert unauthorized.json() == {"detail": "Требуется вход"}
+
+    asyncio.run(scenario())
+
+
+def test_targets_manage_requires_permission_and_csrf(
+    memory_target_repository: None,
+) -> None:
+    payload = {"name": "Канал", "platform": "max", "external_id": "-1"}
+
+    async def scenario() -> None:
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(
+            transport=transport,
+            base_url="https://test",
+            cookies={CSRF_COOKIE_NAME: CSRF_TOKEN},
+        ) as client:
+            missing_csrf = await client.post("/api/v1/targets", json=payload)
+
+            app.dependency_overrides[get_current_auth] = lambda: SimpleNamespace(
+                user=SimpleNamespace(must_change_password=False),
+                session=SimpleNamespace(csrf_token_hash=hash_token(CSRF_TOKEN)),
+                permission_codes=frozenset({PermissionCode.TARGETS_READ.value}),
+            )
+            forbidden = await client.post(
+                "/api/v1/targets",
+                json=payload,
+                headers={"X-CSRF-Token": CSRF_TOKEN},
+            )
+
+        assert missing_csrf.status_code == 403
+        assert missing_csrf.json() == {"detail": "Недействительный CSRF-токен"}
+        assert forbidden.status_code == 403
+        assert forbidden.json() == {"detail": "Недостаточно прав"}
 
     asyncio.run(scenario())
