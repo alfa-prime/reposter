@@ -13,7 +13,11 @@ import {
 } from "lucide-react";
 import { AdminRole, AdminUser, api } from "../api";
 import { useAuth } from "../auth";
-import { generateTemporaryPassword, toggleRoleCode } from "../userAdmin";
+import {
+  generateTemporaryPassword,
+  normalizeRoleCodes,
+  toggleRoleCode,
+} from "../userAdmin";
 import "../users.css";
 
 type CreateForm = {
@@ -49,14 +53,22 @@ function RolePicker({
   disabled: boolean;
   onChange: (codes: string[]) => void;
 }) {
+  const administratorSelected = selected.includes("administrator");
+
   return (
     <div className="user-role-picker">
-      {roles.map((role) => (
-        <label key={role.code} className={selected.includes(role.code) ? "selected" : ""}>
+      {roles.map((role) => {
+        const unavailable = disabled || (administratorSelected && role.code !== "administrator");
+        return (
+        <label
+          key={role.code}
+          className={`${selected.includes(role.code) ? "selected" : ""} ${unavailable ? "disabled" : ""}`.trim()}
+          title={administratorSelected && role.code !== "administrator" ? "Права этой роли уже включены в роль администратора" : undefined}
+        >
           <input
             type="checkbox"
             checked={selected.includes(role.code)}
-            disabled={disabled}
+            disabled={unavailable}
             onChange={() => onChange(toggleRoleCode(selected, role.code))}
           />
           <span>
@@ -64,7 +76,13 @@ function RolePicker({
             <small>{role.description || `${role.permissions.length} разрешений`}</small>
           </span>
         </label>
-      ))}
+        );
+      })}
+      {administratorSelected && (
+        <p className="administrator-role-hint">
+          Администратор уже имеет все разрешения — дополнительные роли не требуются.
+        </p>
+      )}
     </div>
   );
 }
@@ -200,7 +218,7 @@ export function UsersPage() {
   useEffect(() => {
     if (!selected) return;
     setDisplayName(selected.display_name);
-    setRoleCodes(selected.roles.map((role) => role.code));
+    setRoleCodes(normalizeRoleCodes(selected.roles.map((role) => role.code)));
     setResetPassword(generateTemporaryPassword());
   }, [selected]);
 

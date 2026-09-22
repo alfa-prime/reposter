@@ -6,6 +6,7 @@ from sqlalchemy.exc import IntegrityError
 
 from news_reposter.db.models import Role, User
 from news_reposter.services.users import (
+    RoleCombinationError,
     RolesNotFoundError,
     SelfManagementError,
     SystemRoleNotFoundError,
@@ -384,6 +385,35 @@ def test_create_user_rejects_unknown_role_before_hashing() -> None:
                 role_codes=["missing-role"],
             )
 
+        passwords.hash.assert_not_called()
+        session.commit.assert_not_awaited()
+
+    asyncio.run(scenario())
+
+
+def test_create_user_rejects_administrator_with_other_roles() -> None:
+    async def scenario() -> None:
+        session = AsyncMock()
+        users = MemoryUserRepository()
+        roles = MemoryRoleRepository(None)
+        roles.get_active_by_codes = AsyncMock()
+        passwords = Mock()
+        service = UserService(
+            session,
+            password_manager=passwords,
+            user_repository=users,
+            role_repository=roles,
+        )
+
+        with pytest.raises(RoleCombinationError, match="назначается отдельно"):
+            await service.create_user(
+                username="administrator.two",
+                display_name="Второй администратор",
+                temporary_password="temporary password 123",
+                role_codes=["administrator", "editor"],
+            )
+
+        roles.get_active_by_codes.assert_not_awaited()
         passwords.hash.assert_not_called()
         session.commit.assert_not_awaited()
 
