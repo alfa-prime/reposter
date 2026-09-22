@@ -9,8 +9,16 @@ from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 import news_reposter.api.v1.system as system_api
+from news_reposter.api.dependencies import get_current_auth, get_http_client
 from news_reposter.api.v1.system import collect_now, database_health, health, llm_test
+from news_reposter.auth.rbac import PermissionCode
+from news_reposter.auth.session_tokens import hash_token
+from news_reposter.config import get_settings
 from news_reposter.llm import LLMProviderError, RewriteResult
+from news_reposter.main import app
+
+CSRF_TOKEN = "collect-now-csrf-token"
+CSRF_COOKIE_NAME = get_settings().auth_csrf_cookie_name
 
 
 def test_health() -> None:
@@ -72,7 +80,7 @@ def test_collect_now_returns_summary(monkeypatch: pytest.MonkeyPatch) -> None:
     )
     monkeypatch.setattr(system_api, "collect_active_sources_once", fake_collect)
 
-    response = asyncio.run(collect_now(http_client, None))
+    response = asyncio.run(collect_now(None, None, None, http_client))
 
     assert response == {
         "status": "ok",
@@ -93,9 +101,84 @@ def test_collect_now_requires_vk_token(monkeypatch: pytest.MonkeyPatch) -> None:
     )
 
     with pytest.raises(HTTPException) as error:
-        asyncio.run(collect_now(Mock(spec=httpx.AsyncClient), None))
+        asyncio.run(collect_now(None, None, None, Mock(spec=httpx.AsyncClient)))
 
     assert error.value.status_code == status.HTTP_503_SERVICE_UNAVAILABLE
+
+
+def test_collect_now_requires_permission_csrf_and_same_origin(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    http_client = Mock(spec=httpx.AsyncClient)
+
+    async def fake_collect(_client: object, _trigger: object) -> dict[str, int]:
+        return {
+            "sources_checked": 1,
+            "posts_created": 0,
+            "queue_items_created": 0,
+            "errors": 0,
+        }
+
+    monkeypatch.setattr(
+        system_api,
+        "get_settings",
+        lambda: SimpleNamespace(vk_access_token="secret"),
+    )
+    monkeypatch.setattr(system_api, "collect_active_sources_once", fake_collect)
+    app.dependency_overrides[get_http_client] = lambda: http_client
+
+    def auth_context(*permissions: PermissionCode) -> SimpleNamespace:
+        return SimpleNamespace(
+            user=SimpleNamespace(must_change_password=False),
+            session=SimpleNamespace(csrf_token_hash=hash_token(CSRF_TOKEN)),
+            permission_codes=frozenset(permission.value for permission in permissions),
+        )
+
+    async def scenario() -> None:
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(
+            transport=transport,
+            base_url="https://test",
+            cookies={CSRF_COOKIE_NAME: CSRF_TOKEN},
+        ) as client:
+            app.dependency_overrides[get_current_auth] = lambda: auth_context(
+                PermissionCode.COLLECTION_RUN
+            )
+            allowed = await client.post(
+                "/api/v1/system/collect-now",
+                headers={"X-CSRF-Token": CSRF_TOKEN},
+            )
+            missing_csrf = await client.post("/api/v1/system/collect-now")
+            foreign_origin = await client.post(
+                "/api/v1/system/collect-now",
+                headers={
+                    "X-CSRF-Token": CSRF_TOKEN,
+                    "Origin": "https://evil.example",
+                },
+            )
+
+            app.dependency_overrides[get_current_auth] = lambda: auth_context(
+                PermissionCode.SCHEDULER_READ
+            )
+            forbidden = await client.post(
+                "/api/v1/system/collect-now",
+                headers={"X-CSRF-Token": CSRF_TOKEN},
+            )
+
+        assert allowed.status_code == 200
+        assert allowed.json()["sources_checked"] == 1
+        assert missing_csrf.status_code == 403
+        assert missing_csrf.json() == {"detail": "Недействительный CSRF-токен"}
+        assert foreign_origin.status_code == 403
+        assert foreign_origin.json() == {"detail": "Недопустимый источник запроса"}
+        assert forbidden.status_code == 403
+        assert forbidden.json() == {"detail": "Недостаточно прав"}
+
+    try:
+        asyncio.run(scenario())
+    finally:
+        app.dependency_overrides.pop(get_current_auth, None)
+        app.dependency_overrides.pop(get_http_client, None)
 
 
 def test_llm_test_returns_provider_response(monkeypatch: pytest.MonkeyPatch) -> None:

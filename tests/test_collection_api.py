@@ -10,6 +10,8 @@ from pydantic import ValidationError
 import news_reposter.api.v1.collection as collection_api
 from news_reposter.api.dependencies import get_current_auth
 from news_reposter.auth.rbac import PermissionCode
+from news_reposter.auth.session_tokens import hash_token
+from news_reposter.config import get_settings
 from news_reposter.db.models import (
     CollectionRun,
     CollectionRunStatus,
@@ -20,6 +22,9 @@ from news_reposter.db.session import get_db_session
 from news_reposter.main import app
 from news_reposter.schemas.collection import CollectionSettingsUpdate
 from news_reposter.services.collection_history import safe_error_message
+
+CSRF_TOKEN = "collection-csrf-token"
+CSRF_COOKIE_NAME = get_settings().auth_csrf_cookie_name
 
 
 def make_settings() -> CollectionSettings:
@@ -101,7 +106,14 @@ def test_update_settings_notifies_running_scheduler(
     )
 
     result = asyncio.run(
-        collection_api.update_collection_settings(data, request, None, None)
+        collection_api.update_collection_settings(
+            data,
+            request,
+            None,
+            None,
+            None,
+            None,
+        )
     )
 
     assert result.enabled is True
@@ -216,6 +228,96 @@ def test_scheduler_read_route_enforces_user_permission(
         assert forbidden.json() == {"detail": "Недостаточно прав"}
         assert unauthorized.status_code == 401
         assert unauthorized.json() == {"detail": "Требуется вход"}
+
+    try:
+        asyncio.run(scenario())
+    finally:
+        app.dependency_overrides.pop(get_current_auth, None)
+        app.dependency_overrides.pop(get_db_session, None)
+
+
+def test_scheduler_settings_update_requires_permission_csrf_and_same_origin(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    settings = make_settings()
+
+    class FakeRepository:
+        def __init__(self, _session: object) -> None:
+            pass
+
+        async def get_settings(self) -> CollectionSettings:
+            return settings
+
+        async def update_settings(
+            self, model: CollectionSettings, **changes: object
+        ) -> CollectionSettings:
+            for field, value in changes.items():
+                setattr(model, field, value)
+            return model
+
+    monkeypatch.setattr(collection_api, "CollectionRepository", FakeRepository)
+    app.dependency_overrides[get_db_session] = lambda: None
+
+    def auth_context(*permissions: PermissionCode) -> SimpleNamespace:
+        return SimpleNamespace(
+            user=SimpleNamespace(must_change_password=False),
+            session=SimpleNamespace(csrf_token_hash=hash_token(CSRF_TOKEN)),
+            permission_codes=frozenset(permission.value for permission in permissions),
+        )
+
+    payload = {
+        "enabled": True,
+        "interval_minutes": 30,
+        "start_time": "08:00:00",
+        "end_time": "20:00:00",
+        "timezone": "Europe/Moscow",
+    }
+
+    async def scenario() -> None:
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(
+            transport=transport,
+            base_url="https://test",
+            cookies={CSRF_COOKIE_NAME: CSRF_TOKEN},
+        ) as client:
+            app.dependency_overrides[get_current_auth] = lambda: auth_context(
+                PermissionCode.SCHEDULER_MANAGE
+            )
+            allowed = await client.put(
+                "/api/v1/system/collection/settings",
+                json=payload,
+                headers={"X-CSRF-Token": CSRF_TOKEN},
+            )
+            missing_csrf = await client.put(
+                "/api/v1/system/collection/settings",
+                json=payload,
+            )
+            foreign_origin = await client.put(
+                "/api/v1/system/collection/settings",
+                json=payload,
+                headers={
+                    "X-CSRF-Token": CSRF_TOKEN,
+                    "Origin": "https://evil.example",
+                },
+            )
+
+            app.dependency_overrides[get_current_auth] = lambda: auth_context(
+                PermissionCode.SCHEDULER_READ
+            )
+            forbidden = await client.put(
+                "/api/v1/system/collection/settings",
+                json=payload,
+                headers={"X-CSRF-Token": CSRF_TOKEN},
+            )
+
+        assert allowed.status_code == 200
+        assert allowed.json()["interval_minutes"] == 30
+        assert missing_csrf.status_code == 403
+        assert missing_csrf.json() == {"detail": "Недействительный CSRF-токен"}
+        assert foreign_origin.status_code == 403
+        assert foreign_origin.json() == {"detail": "Недопустимый источник запроса"}
+        assert forbidden.status_code == 403
+        assert forbidden.json() == {"detail": "Недостаточно прав"}
 
     try:
         asyncio.run(scenario())

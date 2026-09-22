@@ -7,10 +7,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from news_reposter.api.dependencies import (
     API_KEY_RESPONSES,
+    PERMISSION_CSRF_AUTH_RESPONSES,
     ApiKeyDep,
+    CsrfAuthContextDep,
     HttpClientDep,
     LLMProviderDep,
+    SameOriginDep,
+    require_permission,
 )
+from news_reposter.auth.context import AuthContext
+from news_reposter.auth.rbac import PermissionCode
 from news_reposter.config import get_settings
 from news_reposter.db.models import CollectionRunTrigger
 from news_reposter.db.session import get_db_session
@@ -22,6 +28,10 @@ from news_reposter.services.collector import (
 )
 
 router = APIRouter(tags=["Система"])
+CollectionRunDep = Annotated[
+    AuthContext,
+    Depends(require_permission(PermissionCode.COLLECTION_RUN)),
+]
 
 
 @router.get(
@@ -80,14 +90,16 @@ async def database_health(
     ),
     response_description="Сводка выполненного сбора",
     responses={
-        **API_KEY_RESPONSES,
+        **PERMISSION_CSRF_AUTH_RESPONSES,
         409: {"description": "Другой сбор уже выполняется"},
         503: {"description": "VK_ACCESS_TOKEN не настроен"},
     },
 )
 async def collect_now(
+    _auth: CollectionRunDep,
+    _csrf_auth: CsrfAuthContextDep,
+    _same_origin: SameOriginDep,
     http_client: HttpClientDep,
-    _api_key: ApiKeyDep,
 ) -> dict[str, int | str]:
     """Запускает один проход сборщика вне расписания."""
 

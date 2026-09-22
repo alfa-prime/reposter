@@ -56,6 +56,11 @@ SCHEDULER_READ_OPERATIONS = {
     ("/api/v1/system/collection/runs/{run_id}", "get"),
 }
 
+COLLECTION_WRITE_OPERATIONS = {
+    ("/api/v1/system/collect-now", "post"),
+    ("/api/v1/system/collection/settings", "put"),
+}
+
 QUEUE_READ_OPERATIONS = {
     ("/api/v1/queue", "get"),
     ("/api/v1/queue/page", "get"),
@@ -188,6 +193,7 @@ def test_openapi_describes_api_security_boundaries() -> None:
                     assert "403" in operation["responses"]
             elif (path, method) in (
                 SCHEDULER_READ_OPERATIONS
+                | COLLECTION_WRITE_OPERATIONS
                 | QUEUE_READ_OPERATIONS
                 | QUEUE_WRITE_OPERATIONS
                 | DIRECTORY_READ_OPERATIONS
@@ -240,6 +246,18 @@ def test_openapi_documents_csrf_header_for_queue_mutations() -> None:
 
     schema = app.openapi()
     for path, method in QUEUE_WRITE_OPERATIONS:
+        parameters = schema["paths"][path][method]["parameters"]
+        assert any(
+            parameter["in"] == "header" and parameter["name"] == "X-CSRF-Token"
+            for parameter in parameters
+        )
+
+
+def test_openapi_documents_csrf_header_for_collection_mutations() -> None:
+    """Документирует CSRF-заголовок ручного сбора и настройки расписания."""
+
+    schema = app.openapi()
+    for path, method in COLLECTION_WRITE_OPERATIONS:
         parameters = schema["paths"][path][method]["parameters"]
         assert any(
             parameter["in"] == "header" and parameter["name"] == "X-CSRF-Token"
