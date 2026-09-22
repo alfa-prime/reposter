@@ -5,9 +5,10 @@ from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, sta
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from news_reposter.api.dependencies import (
-    API_KEY_RESPONSES,
     PERMISSION_AUTH_RESPONSES,
-    ApiKeyDep,
+    PERMISSION_CSRF_AUTH_RESPONSES,
+    CsrfAuthContextDep,
+    SameOriginDep,
     require_permission,
 )
 from news_reposter.auth.context import AuthContext
@@ -34,6 +35,10 @@ SchedulerReadDep = Annotated[
     AuthContext,
     Depends(require_permission(PermissionCode.SCHEDULER_READ)),
 ]
+SchedulerManageDep = Annotated[
+    AuthContext,
+    Depends(require_permission(PermissionCode.SCHEDULER_MANAGE)),
+]
 
 
 @router.get(
@@ -52,13 +57,15 @@ async def get_collection_settings(
 @router.put(
     "/settings",
     response_model=CollectionSettingsRead,
-    responses=API_KEY_RESPONSES,
+    responses=PERMISSION_CSRF_AUTH_RESPONSES,
 )
 async def update_collection_settings(
     data: CollectionSettingsUpdate,
     request: Request,
     session: Session,
-    _api_key: ApiKeyDep,
+    _auth: SchedulerManageDep,
+    _csrf_auth: CsrfAuthContextDep,
+    _same_origin: SameOriginDep,
 ) -> CollectionSettingsRead:
     repository = CollectionRepository(session)
     settings = await repository.get_settings()

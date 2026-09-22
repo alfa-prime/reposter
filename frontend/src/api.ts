@@ -276,9 +276,9 @@ export const api = {
   target: (id: number) => request<Target>(`/api/v1/targets/${id}`),
   sources: () => request<Source[]>("/api/v1/sources?limit=100"),
   targetSources: (targetId: number) => request<TargetSource[]>(`/api/v1/targets/${targetId}/sources`),
-  collectNow: () => request<CollectSummary>("/api/v1/system/collect-now", { method: "POST" }),
+  collectNow: () => request<CollectSummary>("/api/v1/system/collect-now", { method: "POST", headers: csrfHeaders() }),
   collectionSettings: () => request<CollectionSettings>("/api/v1/system/collection/settings"),
-  updateCollectionSettings: (data: Omit<CollectionSettings, "updated_at">) => request<CollectionSettings>("/api/v1/system/collection/settings", { method: "PUT", body: JSON.stringify(data) }),
+  updateCollectionSettings: (data: Omit<CollectionSettings, "updated_at">) => request<CollectionSettings>("/api/v1/system/collection/settings", { method: "PUT", headers: csrfHeaders(), body: JSON.stringify(data) }),
   collectionStatus: () => request<CollectionStatus>("/api/v1/system/collection/status"),
   collectionRuns: (options: { offset: number; limit: number; status?: string; trigger?: string }) => {
     const params = new URLSearchParams({ offset: String(options.offset), limit: String(options.limit) });
