@@ -49,6 +49,13 @@ EXPECTED_OPERATIONS = {
     ("/api/v1/queue/{queue_item_id}/publish-now", "post"): "Опубликовать пост сейчас",
 }
 
+SCHEDULER_READ_OPERATIONS = {
+    ("/api/v1/system/collection/settings", "get"),
+    ("/api/v1/system/collection/status", "get"),
+    ("/api/v1/system/collection/runs", "get"),
+    ("/api/v1/system/collection/runs/{run_id}", "get"),
+}
+
 
 def test_openapi_has_russian_operation_descriptions() -> None:
     """Проверяет русские заголовки и описания всех прикладных эндпоинтов."""
@@ -131,6 +138,11 @@ def test_openapi_describes_api_security_boundaries() -> None:
                 assert "401" in operation["responses"]
                 if method == "post":
                     assert "403" in operation["responses"]
+            elif (path, method) in SCHEDULER_READ_OPERATIONS:
+                assert operation["security"] == [{"SessionCookie": []}]
+                assert "401" in operation["responses"]
+                assert "403" in operation["responses"]
+                assert "503" not in operation["responses"]
             elif path.startswith("/api/v1/"):
                 assert operation["security"] == [{"APIKeyHeader": []}]
                 assert "401" in operation["responses"]

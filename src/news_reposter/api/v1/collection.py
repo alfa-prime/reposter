@@ -4,7 +4,14 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from news_reposter.api.dependencies import API_KEY_RESPONSES, ApiKeyDep
+from news_reposter.api.dependencies import (
+    API_KEY_RESPONSES,
+    PERMISSION_AUTH_RESPONSES,
+    ApiKeyDep,
+    require_permission,
+)
+from news_reposter.auth.context import AuthContext
+from news_reposter.auth.rbac import PermissionCode
 from news_reposter.db.models import CollectionRunStatus, CollectionRunTrigger
 from news_reposter.db.session import get_db_session
 from news_reposter.repositories.collection import CollectionRepository
@@ -21,20 +28,32 @@ from news_reposter.services.scheduler import CollectionSchedule, next_run_at
 router = APIRouter(
     prefix="/system/collection",
     tags=["Планировщик сбора"],
-    responses=API_KEY_RESPONSES,
 )
 Session = Annotated[AsyncSession, Depends(get_db_session)]
+SchedulerReadDep = Annotated[
+    AuthContext,
+    Depends(require_permission(PermissionCode.SCHEDULER_READ)),
+]
 
 
-@router.get("/settings", response_model=CollectionSettingsRead)
+@router.get(
+    "/settings",
+    response_model=CollectionSettingsRead,
+    responses=PERMISSION_AUTH_RESPONSES,
+)
 async def get_collection_settings(
-    session: Session, _api_key: ApiKeyDep
+    session: Session,
+    _auth: SchedulerReadDep,
 ) -> CollectionSettingsRead:
     settings = await CollectionRepository(session).get_settings()
     return CollectionSettingsRead.model_validate(settings)
 
 
-@router.put("/settings", response_model=CollectionSettingsRead)
+@router.put(
+    "/settings",
+    response_model=CollectionSettingsRead,
+    responses=API_KEY_RESPONSES,
+)
 async def update_collection_settings(
     data: CollectionSettingsUpdate,
     request: Request,
@@ -50,9 +69,14 @@ async def update_collection_settings(
     return CollectionSettingsRead.model_validate(settings)
 
 
-@router.get("/status", response_model=CollectionStatusRead)
+@router.get(
+    "/status",
+    response_model=CollectionStatusRead,
+    responses=PERMISSION_AUTH_RESPONSES,
+)
 async def get_collection_status(
-    session: Session, _api_key: ApiKeyDep
+    session: Session,
+    _auth: SchedulerReadDep,
 ) -> CollectionStatusRead:
     repository = CollectionRepository(session)
     settings = await repository.get_settings()
@@ -74,10 +98,14 @@ async def get_collection_status(
     )
 
 
-@router.get("/runs", response_model=CollectionRunPage)
+@router.get(
+    "/runs",
+    response_model=CollectionRunPage,
+    responses=PERMISSION_AUTH_RESPONSES,
+)
 async def list_collection_runs(
     session: Session,
-    _api_key: ApiKeyDep,
+    _auth: SchedulerReadDep,
     offset: Annotated[int, Query(ge=0)] = 0,
     limit: Annotated[int, Query(ge=1, le=100)] = 20,
     run_status: Annotated[CollectionRunStatus | None, Query(alias="status")] = None,
@@ -100,12 +128,15 @@ async def list_collection_runs(
 @router.get(
     "/runs/{run_id}",
     response_model=CollectionRunDetail,
-    responses={404: {"description": "Запуск не найден"}},
+    responses={
+        **PERMISSION_AUTH_RESPONSES,
+        404: {"description": "Запуск не найден"},
+    },
 )
 async def get_collection_run(
     run_id: Annotated[int, Path(gt=0)],
     session: Session,
-    _api_key: ApiKeyDep,
+    _auth: SchedulerReadDep,
 ) -> CollectionRunDetail:
     run = await CollectionRepository(session).get_run(run_id)
     if run is None:
