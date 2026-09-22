@@ -3,7 +3,14 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from news_reposter.api.dependencies import API_KEY_RESPONSES, ApiKeyDep
+from news_reposter.api.dependencies import (
+    API_KEY_RESPONSES,
+    PERMISSION_AUTH_RESPONSES,
+    ApiKeyDep,
+    require_permission,
+)
+from news_reposter.auth.context import AuthContext
+from news_reposter.auth.rbac import PermissionCode
 from news_reposter.db.session import get_db_session
 from news_reposter.repositories import SourceAlreadyExistsError, SourceRepository
 from news_reposter.schemas import SourceCreate, SourceRead, SourceUpdate
@@ -12,9 +19,12 @@ from news_reposter.services.media_storage import cleanup_queue_items_media
 router = APIRouter(
     prefix="/sources",
     tags=["Источники"],
-    responses=API_KEY_RESPONSES,
 )
 Session = Annotated[AsyncSession, Depends(get_db_session)]
+SourcesReadDep = Annotated[
+    AuthContext,
+    Depends(require_permission(PermissionCode.SOURCES_READ)),
+]
 
 
 def not_found_error() -> HTTPException:
@@ -46,6 +56,7 @@ def duplicate_error() -> HTTPException:
     ),
     response_description="Созданный источник",
     responses={
+        **API_KEY_RESPONSES,
         409: {"description": "Источник с такой ссылкой уже существует"},
         422: {"description": "Переданы некорректные данные"},
     },
@@ -74,10 +85,11 @@ async def create_source(
         "отфильтровать по платформе и активности."
     ),
     response_description="Список найденных источников",
+    responses=PERMISSION_AUTH_RESPONSES,
 )
 async def list_sources(
     session: Session,
-    _api_key: ApiKeyDep,
+    _auth: SourcesReadDep,
     offset: Annotated[
         int,
         Query(ge=0, description="Сколько записей пропустить от начала списка"),
@@ -117,7 +129,10 @@ async def list_sources(
     summary="Получить источник",
     description="Возвращает один источник по его ID в нашей базе.",
     response_description="Найденный источник",
-    responses={404: {"description": "Источник не найден"}},
+    responses={
+        **PERMISSION_AUTH_RESPONSES,
+        404: {"description": "Источник не найден"},
+    },
 )
 async def get_source(
     source_id: Annotated[
@@ -125,7 +140,7 @@ async def get_source(
         Path(gt=0, description="Идентификатор источника в нашей базе"),
     ],
     session: Session,
-    _api_key: ApiKeyDep,
+    _auth: SourcesReadDep,
 ) -> SourceRead:
     """Возвращает один источник по идентификатору."""
 
@@ -145,6 +160,7 @@ async def get_source(
     ),
     response_description="Изменённый источник",
     responses={
+        **API_KEY_RESPONSES,
         404: {"description": "Источник не найден"},
         409: {"description": "Источник с такой ссылкой уже существует"},
         422: {"description": "Нет изменений или переданы некорректные данные"},
@@ -181,7 +197,10 @@ async def update_source(
         "приостановить источник через `is_active=false`."
     ),
     response_description="Источник удалён",
-    responses={404: {"description": "Источник не найден"}},
+    responses={
+        **API_KEY_RESPONSES,
+        404: {"description": "Источник не найден"},
+    },
 )
 async def delete_source(
     source_id: Annotated[

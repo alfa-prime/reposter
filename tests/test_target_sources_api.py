@@ -8,7 +8,8 @@ import httpx
 import pytest
 
 import news_reposter.api.v1.target_sources as target_sources_api
-from news_reposter.api.dependencies import require_api_key
+from news_reposter.api.dependencies import get_current_auth, require_api_key
+from news_reposter.auth.rbac import PermissionCode
 from news_reposter.main import app
 from news_reposter.repositories import TargetSourceAlreadyExistsError
 from news_reposter.schemas import TargetSourceCreate, TargetSourceUpdate
@@ -100,6 +101,17 @@ def memory_target_source_repository(monkeypatch: pytest.MonkeyPatch) -> Iterator
     async def allow_api_key() -> None:
         pass
 
+    async def allow_directory_read() -> SimpleNamespace:
+        return SimpleNamespace(
+            user=SimpleNamespace(must_change_password=False),
+            permission_codes=frozenset(
+                {
+                    PermissionCode.SOURCES_READ.value,
+                    PermissionCode.TARGETS_READ.value,
+                }
+            ),
+        )
+
     MemoryTargetSourceRepository.reset()
     monkeypatch.setattr(
         target_sources_api,
@@ -107,10 +119,12 @@ def memory_target_source_repository(monkeypatch: pytest.MonkeyPatch) -> Iterator
         MemoryTargetSourceRepository,
     )
     app.dependency_overrides[require_api_key] = allow_api_key
+    app.dependency_overrides[get_current_auth] = allow_directory_read
     try:
         yield
     finally:
         app.dependency_overrides.pop(require_api_key, None)
+        app.dependency_overrides.pop(get_current_auth, None)
 
 
 def test_target_sources_crud(memory_target_source_repository: None) -> None:
@@ -164,5 +178,39 @@ def test_target_sources_crud(memory_target_source_repository: None) -> None:
                 json={"is_active": True},
             )
             assert missing.status_code == 404
+
+    asyncio.run(scenario())
+
+
+def test_target_sources_read_requires_both_permissions(
+    memory_target_source_repository: None,
+) -> None:
+    async def scenario() -> None:
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(
+            transport=transport,
+            base_url="https://test",
+        ) as client:
+            allowed = await client.get("/api/v1/targets/1/sources")
+
+            app.dependency_overrides[get_current_auth] = lambda: SimpleNamespace(
+                user=SimpleNamespace(must_change_password=False),
+                permission_codes=frozenset({PermissionCode.TARGETS_READ.value}),
+            )
+            missing_sources = await client.get("/api/v1/targets/1/sources")
+
+            app.dependency_overrides[get_current_auth] = lambda: SimpleNamespace(
+                user=SimpleNamespace(must_change_password=False),
+                permission_codes=frozenset({PermissionCode.SOURCES_READ.value}),
+            )
+            missing_targets = await client.get("/api/v1/targets/1/sources")
+
+            app.dependency_overrides.pop(get_current_auth, None)
+            unauthorized = await client.get("/api/v1/targets/1/sources")
+
+        assert allowed.status_code == 200
+        assert missing_sources.status_code == 403
+        assert missing_targets.status_code == 403
+        assert unauthorized.status_code == 401
 
     asyncio.run(scenario())

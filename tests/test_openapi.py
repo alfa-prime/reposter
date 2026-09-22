@@ -66,6 +66,14 @@ QUEUE_READ_OPERATIONS = {
     ("/api/v1/queue/{queue_item_id}/video/{media_id}", "get"),
 }
 
+DIRECTORY_READ_OPERATIONS = {
+    ("/api/v1/sources", "get"),
+    ("/api/v1/sources/{source_id}", "get"),
+    ("/api/v1/targets", "get"),
+    ("/api/v1/targets/{target_id}", "get"),
+    ("/api/v1/targets/{target_id}/sources", "get"),
+}
+
 
 def test_openapi_has_russian_operation_descriptions() -> None:
     """Проверяет русские заголовки и описания всех прикладных эндпоинтов."""
@@ -148,7 +156,11 @@ def test_openapi_describes_api_security_boundaries() -> None:
                 assert "401" in operation["responses"]
                 if method == "post":
                     assert "403" in operation["responses"]
-            elif (path, method) in SCHEDULER_READ_OPERATIONS | QUEUE_READ_OPERATIONS:
+            elif (path, method) in (
+                SCHEDULER_READ_OPERATIONS
+                | QUEUE_READ_OPERATIONS
+                | DIRECTORY_READ_OPERATIONS
+            ):
                 assert operation["security"] == [{"SessionCookie": []}]
                 assert "401" in operation["responses"]
                 assert "403" in operation["responses"]
