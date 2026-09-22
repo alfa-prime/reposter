@@ -8,13 +8,12 @@ from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from news_reposter.api.dependencies import (
-    API_KEY_RESPONSES,
     PERMISSION_AUTH_RESPONSES,
-    ApiKeyDep,
-    require_permission,
+    PERMISSION_CSRF_AUTH_RESPONSES,
+    CsrfAuthContextDep,
+    SameOriginDep,
 )
-from news_reposter.auth.context import AuthContext
-from news_reposter.auth.rbac import PermissionCode
+from news_reposter.api.v1.queue_permissions import QueueEditDep, QueueReadDep
 from news_reposter.db.models import AttachmentType
 from news_reposter.db.session import get_db_session
 from news_reposter.repositories.queue_item import QueueItemRepository
@@ -28,10 +27,6 @@ router = APIRouter(
     tags=["Очередь постов"],
 )
 Session = Annotated[AsyncSession, Depends(get_db_session)]
-QueueReadDep = Annotated[
-    AuthContext,
-    Depends(require_permission(PermissionCode.QUEUE_READ)),
-]
 
 
 class QueueMediaState(BaseModel):
@@ -124,13 +119,15 @@ async def get_media_state(
         "Сохраняет фотографии, которые войдут в публикацию, и их порядок. "
         "Фото, которых нет в media_order, считаются исключёнными из публикации."
     ),
-    responses=API_KEY_RESPONSES,
+    responses=PERMISSION_CSRF_AUTH_RESPONSES,
 )
 async def update_media_state(
     queue_item_id: Annotated[int, ApiPath(gt=0)],
     data: QueueMediaState,
     session: Session,
-    _api_key: ApiKeyDep,
+    _auth: QueueEditDep,
+    _csrf_auth: CsrfAuthContextDep,
+    _same_origin: SameOriginDep,
 ) -> QueueMediaState:
     item = await QueueItemRepository(session).get(queue_item_id)
     if item is None:

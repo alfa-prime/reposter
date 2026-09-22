@@ -3,8 +3,14 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Path, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from news_reposter.api.dependencies import API_KEY_RESPONSES, ApiKeyDep, HttpClientDep
+from news_reposter.api.dependencies import (
+    PERMISSION_CSRF_AUTH_RESPONSES,
+    CsrfAuthContextDep,
+    HttpClientDep,
+    SameOriginDep,
+)
 from news_reposter.api.v1.queue import queue_item_response
+from news_reposter.api.v1.queue_permissions import QueuePublishDep
 from news_reposter.db.session import get_db_session
 from news_reposter.schemas.queue_item import QueueItemRead
 from news_reposter.services.publisher import PublicationError, publish_queue_item
@@ -12,7 +18,7 @@ from news_reposter.services.publisher import PublicationError, publish_queue_ite
 router = APIRouter(
     prefix="/queue",
     tags=["Очередь постов"],
-    responses=API_KEY_RESPONSES,
+    responses=PERMISSION_CSRF_AUTH_RESPONSES,
 )
 Session = Annotated[AsyncSession, Depends(get_db_session)]
 
@@ -33,8 +39,10 @@ Session = Annotated[AsyncSession, Depends(get_db_session)]
 async def publish_now(
     queue_item_id: Annotated[int, Path(gt=0)],
     session: Session,
+    _auth: QueuePublishDep,
+    _csrf_auth: CsrfAuthContextDep,
+    _same_origin: SameOriginDep,
     http_client: HttpClientDep,
-    _api_key: ApiKeyDep,
 ) -> QueueItemRead:
     try:
         item = await publish_queue_item(session, queue_item_id, http_client)

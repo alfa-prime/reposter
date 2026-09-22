@@ -9,13 +9,18 @@ from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from news_reposter.api.dependencies import (
-    API_KEY_RESPONSES,
     PERMISSION_AUTH_RESPONSES,
-    ApiKeyDep,
-    require_permission,
+    PERMISSION_CSRF_AUTH_RESPONSES,
+    CsrfAuthContextDep,
+    SameOriginDep,
 )
-from news_reposter.auth.context import AuthContext
-from news_reposter.auth.rbac import PermissionCode
+from news_reposter.api.v1.queue_permissions import (
+    QueueEditDep,
+    QueueModerateDep,
+    QueueReadDep,
+    QueueScheduleDep,
+    QueueSubmitDep,
+)
 from news_reposter.db.models import AttachmentType, QueueItemStatus
 from news_reposter.db.session import get_db_session
 from news_reposter.repositories.queue_item import (
@@ -40,10 +45,6 @@ router = APIRouter(
     tags=["Очередь постов"],
 )
 Session = Annotated[AsyncSession, Depends(get_db_session)]
-QueueReadDep = Annotated[
-    AuthContext,
-    Depends(require_permission(PermissionCode.QUEUE_READ)),
-]
 
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024
 ALLOWED_IMAGE_TYPES = {
@@ -161,7 +162,7 @@ def queue_item_response(item: Any) -> QueueItemRead:
     ),
     response_description="Созданный элемент очереди с исходным текстом и фото",
     responses={
-        **API_KEY_RESPONSES,
+        **PERMISSION_CSRF_AUTH_RESPONSES,
         404: {"description": "Исходный пост или целевой канал не найдены"},
         409: {"description": "Пост уже находится в очереди этого канала"},
     },
@@ -169,7 +170,9 @@ def queue_item_response(item: Any) -> QueueItemRead:
 async def create_queue_item(
     data: QueueItemCreate,
     session: Session,
-    _api_key: ApiKeyDep,
+    _auth: QueueEditDep,
+    _csrf_auth: CsrfAuthContextDep,
+    _same_origin: SameOriginDep,
 ) -> QueueItemRead:
     repository = QueueItemRepository(session)
     if not await repository.post_exists(data.post_id):
@@ -301,7 +304,7 @@ async def get_queue_item(
         "элемента очереди. Максимальный размер одного файла — 10 МБ."
     ),
     responses={
-        **API_KEY_RESPONSES,
+        **PERMISSION_CSRF_AUTH_RESPONSES,
         404: {"description": "Элемент очереди не найден"},
         413: {"description": "Файл слишком большой"},
     },
@@ -312,7 +315,9 @@ async def upload_queue_media(
     ],
     data: QueueMediaUpload,
     session: Session,
-    _api_key: ApiKeyDep,
+    _auth: QueueEditDep,
+    _csrf_auth: CsrfAuthContextDep,
+    _same_origin: SameOriginDep,
 ) -> QueueItemRead:
     repository = QueueItemRepository(session)
     item = await repository.get(queue_item_id)
@@ -372,7 +377,7 @@ async def get_queue_media(
     response_model=QueueItemRead,
     summary="Удалить загруженное фото",
     responses={
-        **API_KEY_RESPONSES,
+        **PERMISSION_CSRF_AUTH_RESPONSES,
         404: {"description": "Элемент очереди или файл не найден"},
     },
 )
@@ -380,7 +385,9 @@ async def delete_queue_media(
     queue_item_id: Annotated[int, Path(gt=0)],
     media_id: Annotated[str, Path(min_length=1, max_length=100)],
     session: Session,
-    _api_key: ApiKeyDep,
+    _auth: QueueEditDep,
+    _csrf_auth: CsrfAuthContextDep,
+    _same_origin: SameOriginDep,
 ) -> QueueItemRead:
     repository = QueueItemRepository(session)
     item = await repository.get(queue_item_id)
@@ -406,7 +413,7 @@ async def delete_queue_media(
         "для модерации используются отдельные операции."
     ),
     responses={
-        **API_KEY_RESPONSES,
+        **PERMISSION_CSRF_AUTH_RESPONSES,
         404: {"description": "Элемент очереди не найден"},
     },
 )
@@ -416,7 +423,9 @@ async def update_queue_item(
     ],
     data: QueueItemUpdate,
     session: Session,
-    _api_key: ApiKeyDep,
+    _auth: QueueEditDep,
+    _csrf_auth: CsrfAuthContextDep,
+    _same_origin: SameOriginDep,
 ) -> QueueItemRead:
     repository = QueueItemRepository(session)
     item = await repository.get(queue_item_id)
@@ -432,7 +441,7 @@ async def update_queue_item(
     summary="Отправить пост на модерацию",
     description="Переводит подготовленный пост в статус awaiting_moderation.",
     responses={
-        **API_KEY_RESPONSES,
+        **PERMISSION_CSRF_AUTH_RESPONSES,
         404: {"description": "Элемент очереди не найден"},
         409: {"description": "Недопустимый переход статуса"},
     },
@@ -442,7 +451,9 @@ async def submit_queue_item(
         int, Path(gt=0, description="Идентификатор элемента очереди")
     ],
     session: Session,
-    _api_key: ApiKeyDep,
+    _auth: QueueSubmitDep,
+    _csrf_auth: CsrfAuthContextDep,
+    _same_origin: SameOriginDep,
 ) -> QueueItemRead:
     repository = QueueItemRepository(session)
     item = await repository.get(queue_item_id)
@@ -464,7 +475,7 @@ async def submit_queue_item(
     summary="Одобрить пост",
     description="Одобряет пост, находящийся на модерации.",
     responses={
-        **API_KEY_RESPONSES,
+        **PERMISSION_CSRF_AUTH_RESPONSES,
         404: {"description": "Элемент очереди не найден"},
         409: {"description": "Недопустимый переход статуса"},
     },
@@ -474,7 +485,9 @@ async def approve_queue_item(
         int, Path(gt=0, description="Идентификатор элемента очереди")
     ],
     session: Session,
-    _api_key: ApiKeyDep,
+    _auth: QueueModerateDep,
+    _csrf_auth: CsrfAuthContextDep,
+    _same_origin: SameOriginDep,
 ) -> QueueItemRead:
     repository = QueueItemRepository(session)
     item = await repository.get(queue_item_id)
@@ -491,7 +504,7 @@ async def approve_queue_item(
     summary="Отклонить пост",
     description="Отклоняет пост, находящийся на модерации.",
     responses={
-        **API_KEY_RESPONSES,
+        **PERMISSION_CSRF_AUTH_RESPONSES,
         404: {"description": "Элемент очереди не найден"},
         409: {"description": "Недопустимый переход статуса"},
     },
@@ -501,7 +514,9 @@ async def reject_queue_item(
         int, Path(gt=0, description="Идентификатор элемента очереди")
     ],
     session: Session,
-    _api_key: ApiKeyDep,
+    _auth: QueueModerateDep,
+    _csrf_auth: CsrfAuthContextDep,
+    _same_origin: SameOriginDep,
 ) -> QueueItemRead:
     repository = QueueItemRepository(session)
     item = await repository.get(queue_item_id)
@@ -521,7 +536,7 @@ async def reject_queue_item(
         "Можно использовать после модерации, одобрения или планирования."
     ),
     responses={
-        **API_KEY_RESPONSES,
+        **PERMISSION_CSRF_AUTH_RESPONSES,
         404: {"description": "Элемент очереди не найден"},
         409: {"description": "Недопустимый переход статуса"},
     },
@@ -531,7 +546,9 @@ async def reopen_queue_item(
         int, Path(gt=0, description="Идентификатор элемента очереди")
     ],
     session: Session,
-    _api_key: ApiKeyDep,
+    _auth: QueueModerateDep,
+    _csrf_auth: CsrfAuthContextDep,
+    _same_origin: SameOriginDep,
 ) -> QueueItemRead:
     repository = QueueItemRepository(session)
     item = await repository.get(queue_item_id)
@@ -556,7 +573,7 @@ async def reopen_queue_item(
     summary="Запланировать публикацию",
     description="Назначает время публикации для одобренного поста.",
     responses={
-        **API_KEY_RESPONSES,
+        **PERMISSION_CSRF_AUTH_RESPONSES,
         404: {"description": "Элемент очереди не найден"},
         409: {"description": "Недопустимый переход статуса"},
     },
@@ -567,7 +584,9 @@ async def schedule_queue_item(
     ],
     data: QueueItemSchedule,
     session: Session,
-    _api_key: ApiKeyDep,
+    _auth: QueueScheduleDep,
+    _csrf_auth: CsrfAuthContextDep,
+    _same_origin: SameOriginDep,
 ) -> QueueItemRead:
     repository = QueueItemRepository(session)
     item = await repository.get(queue_item_id)
@@ -588,7 +607,7 @@ async def schedule_queue_item(
     summary="Удалить элемент очереди",
     description="Удаляет редакционный элемент очереди до технической публикации.",
     responses={
-        **API_KEY_RESPONSES,
+        **PERMISSION_CSRF_AUTH_RESPONSES,
         404: {"description": "Элемент очереди не найден"},
     },
 )
@@ -597,7 +616,9 @@ async def delete_queue_item(
         int, Path(gt=0, description="Идентификатор элемента очереди")
     ],
     session: Session,
-    _api_key: ApiKeyDep,
+    _auth: QueueEditDep,
+    _csrf_auth: CsrfAuthContextDep,
+    _same_origin: SameOriginDep,
 ) -> Response:
     repository = QueueItemRepository(session)
     item = await repository.get(queue_item_id)
