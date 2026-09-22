@@ -59,8 +59,24 @@
 .danger.subtle { box-shadow: none; }
 .temporary-password-row { display: grid; grid-template-columns: minmax(0, 1fr) 36px auto; gap: 8px; align-items: center; }
 .temporary-password-row .icon-button { width: 36px; height: 39px; }
-.security-section .temporary-password-row { max-width: 610px; }
 .security-hint { max-width: 640px; margin: -4px 0 13px; }
+.security-actions { display: grid; gap: 10px; }
+.security-action { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 13px 14px; border: 1px solid rgba(255,255,255,.07); border-radius: 12px; background: rgba(255,255,255,.018); }
+.security-action > div { display: grid; gap: 4px; min-width: 0; }
+.security-action strong { color: #dce4f1; font-size: 12px; }
+.security-action span { color: #74839a; font-size: 10px; line-height: 1.45; }
+.security-action button { flex: 0 0 auto; }
+.password-reset-modal { width: min(560px, 100%); }
+.password-reset-message { margin: -4px 0 18px; color: #8d9bb0; font-size: 12px; line-height: 1.55; }
+.password-reset-message strong { color: #dce4f1; }
+.password-reset-message.success { color: #a8dfc0; }
+.password-reset-field { display: grid; gap: 8px; color: #8f9db4; font-size: 11px; font-weight: 650; }
+.password-reset-error { margin-top: 10px; }
+.password-reset-copied { display: flex; align-items: center; gap: 6px; margin: 9px 0 0; color: #86d7aa; font-size: 10px; }
+.password-reset-effects { display: grid; gap: 8px; margin-top: 17px; padding: 13px 14px; border-radius: 11px; color: #8492a8; background: rgba(255,255,255,.025); font-size: 10px; }
+.password-reset-effects span { display: flex; align-items: center; gap: 7px; }
+.password-reset-effects svg { flex: 0 0 auto; color: #8197f2; }
+.password-reset-actions { display: flex; justify-content: flex-end; gap: 9px; margin-top: 18px; }
 .users-empty { margin: 0; padding: 24px; color: #7d8ba3; text-align: center; font-size: 12px; }
 .users-empty.large { min-height: 540px; display: grid; place-content: center; }
 .user-create-modal { width: min(720px, 100%); max-height: calc(100vh - 40px); overflow: auto; }
@@ -96,6 +112,10 @@ html[data-theme="light"] .user-field input,
 html[data-theme="light"] .temporary-password-row input { color: #1f2b3d; background: #fff; border-color: rgba(42,58,88,.14); }
 html[data-theme="light"] .user-role-picker label { border-color: rgba(42,58,88,.11); background: #fff; }
 html[data-theme="light"] .user-role-picker label.selected { border-color: rgba(87,109,227,.30); background: #f1f4ff; }
+html[data-theme="light"] .security-action { border-color: rgba(42,58,88,.10); background: #f8f9fc; }
+html[data-theme="light"] .security-action strong,
+html[data-theme="light"] .password-reset-message strong { color: #26354c; }
+html[data-theme="light"] .password-reset-effects { color: #64738a; background: #f5f7fa; }
 html[data-theme="light"] .role-comparison { border-color: rgba(42,58,88,.11); background: #f8f9fc; }
 html[data-theme="light"] .role-comparison-title strong,
 html[data-theme="light"] .role-comparison tbody th { color: #26354c; }
@@ -118,6 +138,8 @@ html[data-theme="light"] .role-comparison th:first-child { background: #f8f9fc; 
   .user-detail-head { display: grid; }
   .user-badges { justify-content: flex-start; }
   .user-role-picker { grid-template-columns: 1fr; }
+  .security-action { align-items: stretch; flex-direction: column; }
+  .security-action button { width: 100%; }
   .form-grid > .wide { grid-column: auto; }
   .temporary-password-row { grid-template-columns: minmax(0, 1fr) 36px; }
   .temporary-password-row .secondary { grid-column: 1 / -1; }
