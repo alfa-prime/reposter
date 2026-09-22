@@ -32,6 +32,39 @@ export type PasswordChange = {
   new_password: string;
 };
 
+export type AdminRole = {
+  code: string;
+  name: string;
+  description?: string | null;
+  is_system: boolean;
+  permissions: string[];
+};
+
+export type AdminUser = {
+  user_id: number;
+  username: string;
+  display_name: string;
+  is_active: boolean;
+  must_change_password: boolean;
+  last_login_at?: string | null;
+  created_at: string;
+  updated_at: string;
+  roles: AdminRole[];
+};
+
+export type AdminUserCreate = {
+  username: string;
+  display_name: string;
+  temporary_password: string;
+  role_codes: string[];
+};
+
+export type AdminUserUpdate = {
+  display_name?: string;
+  is_active?: boolean;
+  role_codes?: string[];
+};
+
 export const AUTH_SESSION_EXPIRED_EVENT = "reposter:auth-session-expired";
 
 export class ApiError extends Error {
@@ -265,6 +298,24 @@ export const api = {
     method: "POST",
     headers: { "X-CSRF-Token": csrfToken() },
   }),
+  adminUsers: () => request<AdminUser[]>("/api/v1/admin/users"),
+  adminRoles: () => request<AdminRole[]>("/api/v1/admin/roles"),
+  createAdminUser: (data: AdminUserCreate) => request<AdminUser>(
+    "/api/v1/admin/users",
+    { method: "POST", headers: csrfHeaders(), body: JSON.stringify(data) },
+  ),
+  updateAdminUser: (id: number, data: AdminUserUpdate) => request<AdminUser>(
+    `/api/v1/admin/users/${id}`,
+    { method: "PATCH", headers: csrfHeaders(), body: JSON.stringify(data) },
+  ),
+  resetAdminUserPassword: (id: number, temporaryPassword: string) => request<AdminUser>(
+    `/api/v1/admin/users/${id}/reset-password`,
+    { method: "POST", headers: csrfHeaders(), body: JSON.stringify({ temporary_password: temporaryPassword }) },
+  ),
+  revokeAdminUserSessions: (id: number) => request<{ revoked_sessions: number }>(
+    `/api/v1/admin/users/${id}/revoke-sessions`,
+    { method: "POST", headers: csrfHeaders() },
+  ),
   queuePage: fetchQueuePage,
   queueItem: (id: number) => request<QueueItem>(`/api/v1/queue/${id}`),
   queueMediaState: (id: number) => request<QueueMediaState>(`/api/v1/queue/${id}/media-state`),

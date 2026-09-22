@@ -21,6 +21,7 @@ from news_reposter.services.user_sessions import (
     InvalidSessionError,
     UserSessionService,
 )
+from news_reposter.services.users import UserService
 
 SESSION_AUTH_RESPONSES = {
     401: {"description": "Требуется действующая пользовательская сессия"},
@@ -84,6 +85,15 @@ PasswordChangeServiceDep = Annotated[
     PasswordChangeService,
     Depends(get_password_change_service),
 ]
+
+
+def get_user_service(session: DbSessionDep) -> UserService:
+    """Создаёт сервис административного управления пользователями."""
+
+    return UserService(session)
+
+
+UserServiceDep = Annotated[UserService, Depends(get_user_service)]
 
 settings = get_settings()
 session_cookie = APIKeyCookie(

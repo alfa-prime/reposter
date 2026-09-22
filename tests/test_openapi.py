@@ -6,6 +6,18 @@ EXPECTED_OPERATIONS = {
     ("/api/v1/auth/logout", "post"): "Выйти из текущей сессии",
     ("/api/v1/auth/logout-all", "post"): "Завершить все свои сессии",
     ("/api/v1/auth/change-password", "post"): "Сменить свой пароль",
+    ("/api/v1/admin/users", "get"): "Получить список пользователей",
+    ("/api/v1/admin/users", "post"): "Создать пользователя",
+    ("/api/v1/admin/roles", "get"): "Получить список ролей",
+    ("/api/v1/admin/users/{user_id}", "patch"): "Изменить пользователя",
+    (
+        "/api/v1/admin/users/{user_id}/reset-password",
+        "post",
+    ): "Сбросить пароль пользователя",
+    (
+        "/api/v1/admin/users/{user_id}/revoke-sessions",
+        "post",
+    ): "Завершить сессии пользователя",
     ("/health", "get"): "Проверить работу приложения",
     ("/health/database", "get"): "Проверить подключение к PostgreSQL",
     ("/api/v1/system/collect-now", "post"): "Запустить сбор источников сейчас",
@@ -131,6 +143,18 @@ INTEGRATION_WRITE_OPERATIONS = {
     ("/api/v1/system/llm-test", "post"),
 }
 
+ADMIN_READ_OPERATIONS = {
+    ("/api/v1/admin/users", "get"),
+    ("/api/v1/admin/roles", "get"),
+}
+
+ADMIN_WRITE_OPERATIONS = {
+    ("/api/v1/admin/users", "post"),
+    ("/api/v1/admin/users/{user_id}", "patch"),
+    ("/api/v1/admin/users/{user_id}/reset-password", "post"),
+    ("/api/v1/admin/users/{user_id}/revoke-sessions", "post"),
+}
+
 
 def test_openapi_has_russian_operation_descriptions() -> None:
     """Проверяет русские заголовки и описания всех прикладных эндпоинтов."""
@@ -158,6 +182,7 @@ def test_openapi_has_ordered_russian_tags() -> None:
     assert [tag["name"] for tag in tags] == [
         "Авторизация",
         "Планировщик сбора",
+        "Администрирование",
         "Система",
         "Источники",
         "Цели публикаций",
@@ -219,6 +244,8 @@ def test_openapi_describes_api_security_boundaries() -> None:
                 | DIRECTORY_MANAGE_OPERATIONS
                 | INTEGRATION_READ_OPERATIONS
                 | INTEGRATION_WRITE_OPERATIONS
+                | ADMIN_READ_OPERATIONS
+                | ADMIN_WRITE_OPERATIONS
             ):
                 assert operation["security"] == [{"SessionCookie": []}]
                 assert "401" in operation["responses"]
@@ -252,6 +279,18 @@ def test_openapi_documents_csrf_header_for_directory_mutations() -> None:
 
     schema = app.openapi()
     for path, method in DIRECTORY_MANAGE_OPERATIONS:
+        parameters = schema["paths"][path][method]["parameters"]
+        assert any(
+            parameter["in"] == "header" and parameter["name"] == "X-CSRF-Token"
+            for parameter in parameters
+        )
+
+
+def test_openapi_documents_csrf_header_for_admin_mutations() -> None:
+    """Документирует CSRF-заголовок управления пользователями."""
+
+    schema = app.openapi()
+    for path, method in ADMIN_WRITE_OPERATIONS:
         parameters = schema["paths"][path][method]["parameters"]
         assert any(
             parameter["in"] == "header" and parameter["name"] == "X-CSRF-Token"

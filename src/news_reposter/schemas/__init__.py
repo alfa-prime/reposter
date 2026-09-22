@@ -1,5 +1,13 @@
 """Схемы запросов и ответов API."""
 
+from news_reposter.schemas.admin import (
+    AdminPasswordReset,
+    AdminRoleRead,
+    AdminUserCreate,
+    AdminUserRead,
+    AdminUserUpdate,
+    RevokedSessionsResponse,
+)
 from news_reposter.schemas.auth import (
     CurrentUserResponse,
     CurrentUserRole,
@@ -31,6 +39,11 @@ from news_reposter.schemas.target_source import (
 )
 
 __all__ = [
+    "AdminPasswordReset",
+    "AdminRoleRead",
+    "AdminUserCreate",
+    "AdminUserRead",
+    "AdminUserUpdate",
     "CollectionRunDetail",
     "CollectionRunPage",
     "CollectionRunRead",
@@ -48,6 +61,7 @@ __all__ = [
     "QueueItemRead",
     "QueueItemSchedule",
     "QueueItemUpdate",
+    "RevokedSessionsResponse",
     "SourceCreate",
     "SourceRead",
     "SourceUpdate",
