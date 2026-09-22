@@ -2,16 +2,33 @@
 
 Recommended VPS baseline: Ubuntu 24.04 LTS, 2 vCPU, 4 GB RAM, 40+ GB SSD.
 
-## Fast demo mode without a domain
+## Recommended production mode
 
-For the current customer demo, the simplest setup is plain HTTP by VPS IPv4 address with Caddy Basic Auth.
+Point a domain at the server and set it in `.env`:
 
-Use:
+```dotenv
+SITE_ADDRESS=news.example.ru
+AUTH_COOKIE_SECURE=true
+```
+
+Caddy will obtain and renew the public TLS certificate automatically. The application uses its own user accounts, server-side sessions, roles, CSRF protection and login rate limiting; Caddy Basic Auth is not used.
+
+Allow SSH, HTTP and HTTPS:
+
+```bash
+sudo ufw allow OpenSSH
+sudo ufw allow 80/tcp
+sudo ufw allow 443/tcp
+sudo ufw enable
+```
+
+## Temporary IP-only mode
+
+For a short test without a domain, use plain HTTP:
 
 ```dotenv
 SITE_ADDRESS=:80
-ADMIN_USER=demo
-ADMIN_PASSWORD_HASH='<bcrypt-hash>'
+AUTH_COOKIE_SECURE=false
 ```
 
 Then open:
@@ -20,7 +37,7 @@ Then open:
 http://VPS_IP
 ```
 
-Important: Basic Auth over plain HTTP is suitable only as a temporary demo barrier. HTTP does not encrypt the login/password or traffic. Use a unique temporary password, do not reuse any real password, and do not place sensitive data in this demo instance. When a domain is added, switch `SITE_ADDRESS` to the domain and Caddy will provide HTTPS automatically.
+Important: HTTP does not encrypt credentials or traffic. Use this mode only for a temporary test, do not reuse real passwords and do not place sensitive data in the instance. Switch to a domain and HTTPS before regular use.
 
 For IP-only demo mode the firewall only needs SSH and HTTP:
 
@@ -59,15 +76,14 @@ cp .env.example .env
 chmod 600 .env
 ```
 
-For the current IP-only demo set at least:
+Set at least:
 
 ```dotenv
 VK_ACCESS_TOKEN=<token>
 MAX_ACCESS_TOKEN=<token>
 POSTGRES_PASSWORD=<strong-random-password>
 SITE_ADDRESS=:80
-ADMIN_USER=demo
-ADMIN_PASSWORD_HASH='<bcrypt-hash>'
+AUTH_COOKIE_SECURE=false
 ```
 
 Generate a strong database password, for example:
@@ -75,14 +91,6 @@ Generate a strong database password, for example:
 ```bash
 openssl rand -hex 32
 ```
-
-Generate the Caddy-compatible bcrypt password hash on the server:
-
-```bash
-docker run --rm caddy:2-alpine caddy hash-password --plaintext 'YOUR_TEMP_DEMO_PASSWORD'
-```
-
-Copy the complete output into `ADMIN_PASSWORD_HASH` in `.env`. Keep the value single-quoted because bcrypt hashes contain `$` characters.
 
 ## 4. Start demo/production stack
 
@@ -102,7 +110,14 @@ Watch logs if needed:
 docker compose -f compose.yaml -f compose.prod.yaml logs -f frontend app
 ```
 
-The web UI, API, Swagger and health endpoint are protected by HTTP Basic Authentication at Caddy. FastAPI is not exposed publicly in the production override.
+FastAPI is not exposed directly in the production override. Caddy terminates HTTP/HTTPS and proxies API requests; application access is protected by FastAPI user sessions and permissions.
+
+For a fresh database, create the first administrator interactively:
+
+```bash
+docker compose -f compose.yaml -f compose.prod.yaml exec app \
+  python -m news_reposter.cli create-admin
+```
 
 ## 5. Open the demo
 
@@ -112,7 +127,7 @@ Go to:
 http://VPS_IP
 ```
 
-The browser will ask for `ADMIN_USER` and the temporary password used to create `ADMIN_PASSWORD_HASH`.
+Sign in with the application administrator account.
 
 ## 6. Later: add a domain and HTTPS
 
@@ -126,6 +141,7 @@ Change only:
 
 ```dotenv
 SITE_ADDRESS=news.example.ru
+AUTH_COOKIE_SECURE=true
 ```
 
 Then allow HTTPS and restart:

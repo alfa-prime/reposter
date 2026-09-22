@@ -36,6 +36,14 @@ class PasswordChangeRequest(BaseModel):
     )
 
 
+class AvatarUploadRequest(BaseModel):
+    """Изображение профиля, переданное браузером в Base64."""
+
+    filename: str = Field(min_length=1, max_length=255)
+    content_type: str = Field(min_length=1, max_length=100)
+    data_base64: str = Field(min_length=1, max_length=7_500_000)
+
+
 class CurrentUserRole(BaseModel):
     """Активная роль текущего пользователя."""
 

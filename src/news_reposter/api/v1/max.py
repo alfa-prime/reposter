@@ -94,8 +94,8 @@ def event_datetime(timestamp_ms: object) -> datetime | None:
     "/webhook",
     summary="Webhook MAX",
     description=(
-        "Публичный endpoint для событий MAX. Basic Auth на этом пути отключён, "
-        "поэтому запрос обязательно проверяется по заголовку X-Max-Bot-Api-Secret."
+        "Публичный endpoint для событий MAX. Запрос обязательно проверяется "
+        "по заголовку X-Max-Bot-Api-Secret."
     ),
     response_description="Подтверждение приёма события",
     responses={

@@ -44,11 +44,14 @@
   background: #0c1627;
   box-shadow: 0 20px 54px rgba(0,0,0,.34);
 }
-.user-menu-identity { padding: 5px 7px 10px; border-bottom: 1px solid rgba(255,255,255,.07); }
-.user-menu-identity strong,
-.user-menu-identity span { display: block; }
+.user-menu-identity { display: flex; align-items: center; gap: 10px; padding: 5px 7px 10px; border-bottom: 1px solid rgba(255,255,255,.07); }
+.profile-avatar { width: 42px; height: 42px; flex-basis: 42px; font-size: 13px; }
+.user-menu-identity-copy { min-width: 0; }
+.user-menu-identity-copy strong,
+.user-menu-identity-copy > span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .user-menu-identity strong { color: #e5ebf6; font-size: 12px; }
-.user-menu-identity span { margin-top: 3px; color: #78879e; font-size: 10px; }
+.user-menu-identity-copy > span { margin-top: 3px; color: #78879e; font-size: 10px; }
+.user-avatar-input { display: none; }
 .user-menu-actions { display: grid; gap: 3px; padding-top: 7px; }
 .user-menu-actions button {
   width: 100%;
@@ -64,6 +67,7 @@
   font-size: 11px;
 }
 .user-menu-actions button:hover { color: #eef3fc; background: rgba(255,255,255,.055); }
+.user-menu-actions button.user-menu-remove-avatar:hover { color: #ffc8d1; background: rgba(213,72,96,.10); }
 .user-menu-actions button:last-child:hover { color: #ffc8d1; background: rgba(213,72,96,.10); }
 .user-menu-error { margin: 8px 5px 0; color: #ffc8d1; font-size: 10px; line-height: 1.4; }
 .user-menu-confirm { padding: 9px 5px 3px; }
@@ -90,7 +94,7 @@ html[data-theme="light"] .user-menu-popover {
 }
 html[data-theme="light"] .user-menu-identity { border-color: rgba(42,58,88,.09); }
 html[data-theme="light"] .user-menu-identity strong { color: #29384e; }
-html[data-theme="light"] .user-menu-identity span { color: #718098; }
+html[data-theme="light"] .user-menu-identity-copy > span { color: #718098; }
 html[data-theme="light"] .user-menu-actions button { color: #52627a; }
 html[data-theme="light"] .user-menu-actions button:hover { color: #26364e; background: #f1f4fa; }
 html[data-theme="light"] .user-menu-actions button:last-child:hover { color: #a52f45; background: #fff0f3; }

@@ -44,6 +44,7 @@ export type AdminUser = {
   user_id: number;
   username: string;
   display_name: string;
+  avatar_url?: string | null;
   is_active: boolean;
   must_change_password: boolean;
   last_login_at?: string | null;
@@ -290,6 +291,22 @@ export const api = {
       body: JSON.stringify(passwords),
     },
   ),
+  uploadAvatar: async (file: File) => request<CurrentUser>(
+    "/api/v1/auth/avatar",
+    {
+      method: "POST",
+      headers: csrfHeaders(),
+      body: JSON.stringify({
+        filename: file.name,
+        content_type: file.type,
+        data_base64: await fileToBase64(file),
+      }),
+    },
+  ),
+  deleteAvatar: () => request<CurrentUser>("/api/v1/auth/avatar", {
+    method: "DELETE",
+    headers: csrfHeaders(),
+  }),
   logout: () => request<void>("/api/v1/auth/logout", {
     method: "POST",
     headers: { "X-CSRF-Token": csrfToken() },

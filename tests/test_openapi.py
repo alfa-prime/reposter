@@ -6,6 +6,9 @@ EXPECTED_OPERATIONS = {
     ("/api/v1/auth/logout", "post"): "Выйти из текущей сессии",
     ("/api/v1/auth/logout-all", "post"): "Завершить все свои сессии",
     ("/api/v1/auth/change-password", "post"): "Сменить свой пароль",
+    ("/api/v1/auth/avatar", "post"): "Загрузить свой аватар",
+    ("/api/v1/auth/avatar", "delete"): "Удалить свой аватар",
+    ("/api/v1/auth/avatars/{user_id}", "get"): "Получить аватар пользователя",
     ("/api/v1/admin/users", "get"): "Получить список пользователей",
     ("/api/v1/admin/users", "post"): "Создать пользователя",
     ("/api/v1/admin/roles", "get"): "Получить список ролей",
@@ -268,6 +271,13 @@ def test_openapi_documents_csrf_header_for_auth_mutations() -> None:
         "/api/v1/auth/logout-all",
     ):
         parameters = schema["paths"][path]["post"]["parameters"]
+        assert any(
+            parameter["in"] == "header" and parameter["name"] == "X-CSRF-Token"
+            for parameter in parameters
+        )
+
+    for method in ("post", "delete"):
+        parameters = schema["paths"]["/api/v1/auth/avatar"][method]["parameters"]
         assert any(
             parameter["in"] == "header" and parameter["name"] == "X-CSRF-Token"
             for parameter in parameters

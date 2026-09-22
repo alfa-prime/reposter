@@ -21,6 +21,7 @@ class AdminUserRead(BaseModel):
     user_id: int = Field(description="Идентификатор пользователя.")
     username: str = Field(description="Логин пользователя.")
     display_name: str = Field(description="Отображаемое имя пользователя.")
+    avatar_url: str | None = Field(description="URL загруженного аватара пользователя.")
     is_active: bool = Field(description="Разрешён ли пользователю вход.")
     must_change_password: bool = Field(
         description="Нужно ли сменить временный пароль после входа."

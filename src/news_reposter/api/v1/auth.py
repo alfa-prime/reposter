@@ -1,12 +1,18 @@
-"""Вход, проверка и завершение пользовательских сессий."""
+"""Вход, профиль и завершение пользовательских сессий."""
 
-from fastapi import APIRouter, HTTPException, Request, Response, status
+import base64
+import binascii
+from typing import Annotated
+
+from fastapi import APIRouter, HTTPException, Path, Request, Response, status
+from fastapi.responses import FileResponse
 
 from news_reposter.api.dependencies import (
     CSRF_AUTH_RESPONSES,
     SESSION_AUTH_RESPONSES,
     AuthContextDep,
     AuthenticationServiceDep,
+    AvatarServiceDep,
     CsrfAuthContextDep,
     PasswordChangeServiceDep,
     SameOriginDep,
@@ -17,6 +23,7 @@ from news_reposter.auth.cookies import clear_auth_cookies, set_auth_cookies
 from news_reposter.auth.passwords import PasswordValidationError
 from news_reposter.config import get_settings
 from news_reposter.schemas import (
+    AvatarUploadRequest,
     CurrentUserResponse,
     CurrentUserRole,
     LoginRequest,
@@ -25,6 +32,12 @@ from news_reposter.schemas import (
 from news_reposter.services.authentication import (
     InvalidCredentialsError,
     LoginRateLimitedError,
+)
+from news_reposter.services.avatars import (
+    AvatarTooLargeError,
+    AvatarUserUnavailableError,
+    AvatarValidationError,
+    avatar_url,
 )
 from news_reposter.services.password_change import (
     CurrentPasswordInvalidError,
@@ -46,6 +59,12 @@ PASSWORD_CHANGE_RESPONSES = {
     **CSRF_AUTH_RESPONSES,
     400: {"description": "Текущий пароль неверен или новый совпадает с ним"},
     422: {"description": "Новый пароль не соответствует политике безопасности"},
+}
+
+AVATAR_UPLOAD_RESPONSES = {
+    **CSRF_AUTH_RESPONSES,
+    413: {"description": "Изображение превышает 5 МБ"},
+    415: {"description": "Неподдерживаемое или повреждённое изображение"},
 }
 
 
@@ -114,6 +133,118 @@ async def current_user(
 
     response.headers["Cache-Control"] = CACHE_CONTROL_NO_STORE
     return _current_user_response(auth)
+
+
+@router.get(
+    "/avatars/{user_id}",
+    response_class=FileResponse,
+    responses={
+        **SESSION_AUTH_RESPONSES,
+        404: {"description": "Аватар не найден"},
+    },
+    summary="Получить аватар пользователя",
+)
+async def get_avatar(
+    user_id: Annotated[int, Path(gt=0)],
+    avatars: AvatarServiceDep,
+    _auth: AuthContextDep,
+) -> FileResponse:
+    """Отдаёт аватар только вошедшим пользователям приложения."""
+
+    avatar = await avatars.find(user_id)
+    if avatar is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Аватар не найден")
+    return FileResponse(
+        avatar.path,
+        media_type=avatar.media_type,
+        headers={"Cache-Control": "private, max-age=31536000, immutable"},
+    )
+
+
+@router.post(
+    "/avatar",
+    response_model=CurrentUserResponse,
+    responses=AVATAR_UPLOAD_RESPONSES,
+    summary="Загрузить свой аватар",
+)
+async def upload_avatar(
+    payload: AvatarUploadRequest,
+    auth: CsrfAuthContextDep,
+    avatars: AvatarServiceDep,
+    _same_origin: SameOriginDep,
+) -> CurrentUserResponse:
+    """Проверяет и сохраняет JPEG, PNG или WebP размером до 5 МБ."""
+
+    try:
+        content = base64.b64decode(payload.data_base64, validate=True)
+    except (binascii.Error, ValueError) as exc:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            detail="Некорректные данные изображения",
+        ) from exc
+
+    try:
+        user = await avatars.replace(
+            auth.user.user_id,
+            content=content,
+            content_type=payload.content_type,
+        )
+    except AvatarTooLargeError as exc:
+        raise HTTPException(
+            status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail=str(exc),
+        ) from exc
+    except AvatarValidationError as exc:
+        raise HTTPException(
+            status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            detail=str(exc),
+        ) from exc
+    except AvatarUserUnavailableError as exc:
+        raise HTTPException(
+            status.HTTP_401_UNAUTHORIZED,
+            detail="Требуется вход",
+            headers={"WWW-Authenticate": "Session"},
+        ) from exc
+
+    return _current_user_response(
+        AuthContext(
+            session=auth.session,
+            user=user,
+            role_codes=auth.role_codes,
+            permission_codes=auth.permission_codes,
+        )
+    )
+
+
+@router.delete(
+    "/avatar",
+    response_model=CurrentUserResponse,
+    responses=CSRF_AUTH_RESPONSES,
+    summary="Удалить свой аватар",
+)
+async def delete_avatar(
+    auth: CsrfAuthContextDep,
+    avatars: AvatarServiceDep,
+    _same_origin: SameOriginDep,
+) -> CurrentUserResponse:
+    """Удаляет изображение профиля и возвращает обновлённого пользователя."""
+
+    try:
+        user = await avatars.delete(auth.user.user_id)
+    except AvatarUserUnavailableError as exc:
+        raise HTTPException(
+            status.HTTP_401_UNAUTHORIZED,
+            detail="Требуется вход",
+            headers={"WWW-Authenticate": "Session"},
+        ) from exc
+    return _current_user_response(
+        AuthContext(
+            session=auth.session,
+            user=user,
+            role_codes=auth.role_codes,
+            permission_codes=auth.permission_codes,
+        )
+    )
 
 
 @router.post(
@@ -241,7 +372,7 @@ def _current_user_response(auth: AuthContext) -> CurrentUserResponse:
         user_id=auth.user.user_id,
         username=auth.user.username,
         display_name=auth.user.display_name,
-        avatar_url=None,
+        avatar_url=avatar_url(auth.user),
         must_change_password=auth.user.must_change_password,
         roles=[
             CurrentUserRole(code=role.code, name=role.name) for role in active_roles

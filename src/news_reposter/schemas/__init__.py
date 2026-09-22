@@ -9,6 +9,7 @@ from news_reposter.schemas.admin import (
     RevokedSessionsResponse,
 )
 from news_reposter.schemas.auth import (
+    AvatarUploadRequest,
     CurrentUserResponse,
     CurrentUserRole,
     LoginRequest,
@@ -44,6 +45,7 @@ __all__ = [
     "AdminUserCreate",
     "AdminUserRead",
     "AdminUserUpdate",
+    "AvatarUploadRequest",
     "CollectionRunDetail",
     "CollectionRunPage",
     "CollectionRunRead",
