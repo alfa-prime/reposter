@@ -10,13 +10,29 @@ import httpx
 import pytest
 
 import news_reposter.api.v1.queue as queue_api
-from news_reposter.api.dependencies import get_current_auth, require_api_key
+from news_reposter.api.dependencies import get_current_auth
 from news_reposter.auth.rbac import PermissionCode
+from news_reposter.auth.session_tokens import hash_token
+from news_reposter.config import get_settings
 from news_reposter.db.models import AttachmentType, QueueItemStatus
 from news_reposter.main import app
 from news_reposter.repositories.queue_item import QueueItemAlreadyExistsError
 from news_reposter.schemas.queue_item import QueueItemCreate, QueueItemUpdate
 from news_reposter.services import media_storage
+
+CSRF_TOKEN = "queue-csrf-token"
+CSRF_COOKIE_NAME = get_settings().auth_csrf_cookie_name
+QUEUE_PERMISSIONS = frozenset(
+    {
+        PermissionCode.QUEUE_READ.value,
+        PermissionCode.QUEUE_EDIT.value,
+        PermissionCode.QUEUE_REWRITE.value,
+        PermissionCode.QUEUE_SUBMIT.value,
+        PermissionCode.QUEUE_MODERATE.value,
+        PermissionCode.QUEUE_SCHEDULE.value,
+        PermissionCode.QUEUE_PUBLISH.value,
+    }
+)
 
 
 class MemoryQueueRepository:
@@ -139,23 +155,19 @@ class MemoryQueueRepository:
 
 @pytest.fixture
 def memory_queue_repository(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
-    async def allow_api_key() -> None:
-        pass
-
-    async def allow_queue_read() -> SimpleNamespace:
+    async def allow_queue_access() -> SimpleNamespace:
         return SimpleNamespace(
             user=SimpleNamespace(must_change_password=False),
-            permission_codes=frozenset({PermissionCode.QUEUE_READ.value}),
+            session=SimpleNamespace(csrf_token_hash=hash_token(CSRF_TOKEN)),
+            permission_codes=QUEUE_PERMISSIONS,
         )
 
     MemoryQueueRepository.reset()
     monkeypatch.setattr(queue_api, "QueueItemRepository", MemoryQueueRepository)
-    app.dependency_overrides[require_api_key] = allow_api_key
-    app.dependency_overrides[get_current_auth] = allow_queue_read
+    app.dependency_overrides[get_current_auth] = allow_queue_access
     try:
         yield
     finally:
-        app.dependency_overrides.pop(require_api_key, None)
         app.dependency_overrides.pop(get_current_auth, None)
 
 
@@ -230,7 +242,10 @@ def test_queue_crud_and_moderation(
     async def scenario() -> None:
         transport = httpx.ASGITransport(app=app)
         async with httpx.AsyncClient(
-            transport=transport, base_url="http://test"
+            transport=transport,
+            base_url="http://test",
+            cookies={CSRF_COOKIE_NAME: CSRF_TOKEN},
+            headers={"X-CSRF-Token": CSRF_TOKEN},
         ) as client:
             missing_post = await client.post(
                 "/api/v1/queue",
@@ -461,7 +476,10 @@ def test_submit_requires_prepared_text(memory_queue_repository: None) -> None:
     async def scenario() -> None:
         transport = httpx.ASGITransport(app=app)
         async with httpx.AsyncClient(
-            transport=transport, base_url="http://test"
+            transport=transport,
+            base_url="http://test",
+            cookies={CSRF_COOKIE_NAME: CSRF_TOKEN},
+            headers={"X-CSRF-Token": CSRF_TOKEN},
         ) as client:
             created = await client.post(
                 "/api/v1/queue",
@@ -471,5 +489,104 @@ def test_submit_requires_prepared_text(memory_queue_repository: None) -> None:
 
             submitted = await client.post("/api/v1/queue/1/submit")
             assert submitted.status_code == 409
+
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize(
+    ("method", "path", "payload", "required_permission"),
+    [
+        (
+            "POST",
+            "/api/v1/queue",
+            {"post_id": 10, "target_id": 20},
+            PermissionCode.QUEUE_EDIT,
+        ),
+        (
+            "POST",
+            "/api/v1/queue/1/rewrite",
+            None,
+            PermissionCode.QUEUE_REWRITE,
+        ),
+        (
+            "POST",
+            "/api/v1/queue/1/submit",
+            None,
+            PermissionCode.QUEUE_SUBMIT,
+        ),
+        (
+            "POST",
+            "/api/v1/queue/1/approve",
+            None,
+            PermissionCode.QUEUE_MODERATE,
+        ),
+        (
+            "POST",
+            "/api/v1/queue/1/schedule",
+            {"scheduled_at": (datetime.now(UTC) + timedelta(hours=1)).isoformat()},
+            PermissionCode.QUEUE_SCHEDULE,
+        ),
+        (
+            "POST",
+            "/api/v1/queue/1/publish-now",
+            None,
+            PermissionCode.QUEUE_PUBLISH,
+        ),
+    ],
+)
+def test_queue_mutation_requires_its_permission(
+    memory_queue_repository: None,
+    method: str,
+    path: str,
+    payload: dict[str, object] | None,
+    required_permission: PermissionCode,
+) -> None:
+    async def scenario() -> None:
+        app.dependency_overrides[get_current_auth] = lambda: SimpleNamespace(
+            user=SimpleNamespace(must_change_password=False),
+            session=SimpleNamespace(csrf_token_hash=hash_token(CSRF_TOKEN)),
+            permission_codes=QUEUE_PERMISSIONS - {required_permission.value},
+        )
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(
+            transport=transport,
+            base_url="https://test",
+            cookies={CSRF_COOKIE_NAME: CSRF_TOKEN},
+            headers={"X-CSRF-Token": CSRF_TOKEN},
+        ) as client:
+            response = await client.request(method, path, json=payload)
+
+        assert response.status_code == 403
+        assert response.json() == {"detail": "Недостаточно прав"}
+
+    asyncio.run(scenario())
+
+
+def test_queue_mutation_requires_csrf_and_same_origin(
+    memory_queue_repository: None,
+) -> None:
+    payload = {"post_id": 10, "target_id": 20}
+
+    async def scenario() -> None:
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(
+            transport=transport,
+            base_url="https://test",
+            cookies={CSRF_COOKIE_NAME: CSRF_TOKEN},
+        ) as client:
+            missing_csrf = await client.post("/api/v1/queue", json=payload)
+            foreign_origin = await client.post(
+                "/api/v1/queue",
+                json=payload,
+                headers={
+                    "X-CSRF-Token": CSRF_TOKEN,
+                    "Origin": "https://evil.example",
+                },
+            )
+
+        assert missing_csrf.status_code == 403
+        assert missing_csrf.json() == {"detail": "Недействительный CSRF-токен"}
+        assert foreign_origin.status_code == 403
+        assert foreign_origin.json() == {"detail": "Недопустимый источник запроса"}
 
     asyncio.run(scenario())

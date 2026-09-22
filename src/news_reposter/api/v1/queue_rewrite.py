@@ -3,12 +3,18 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Path, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from news_reposter.api.dependencies import API_KEY_RESPONSES, ApiKeyDep, LLMProviderDep
+from news_reposter.api.dependencies import (
+    PERMISSION_CSRF_AUTH_RESPONSES,
+    CsrfAuthContextDep,
+    LLMProviderDep,
+    SameOriginDep,
+)
 from news_reposter.api.v1.queue import (
     conflict_error,
     not_found_error,
     queue_item_response,
 )
+from news_reposter.api.v1.queue_permissions import QueueRewriteDep
 from news_reposter.db.models import QueueItemStatus
 from news_reposter.db.session import get_db_session
 from news_reposter.llm import LLMProviderError
@@ -19,7 +25,7 @@ from news_reposter.services.rewrite import RewriteService, RewriteServiceError
 router = APIRouter(
     prefix="/queue",
     tags=["Очередь постов"],
-    responses=API_KEY_RESPONSES,
+    responses=PERMISSION_CSRF_AUTH_RESPONSES,
 )
 Session = Annotated[AsyncSession, Depends(get_db_session)]
 
@@ -54,8 +60,10 @@ async def rewrite_queue_item(
         int, Path(gt=0, description="Идентификатор элемента очереди")
     ],
     session: Session,
+    _auth: QueueRewriteDep,
+    _csrf_auth: CsrfAuthContextDep,
+    _same_origin: SameOriginDep,
     provider: LLMProviderDep,
-    _api_key: ApiKeyDep,
 ) -> QueueItemRead:
     repository = QueueItemRepository(session)
     item = await repository.get(queue_item_id)

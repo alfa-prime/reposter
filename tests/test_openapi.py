@@ -66,6 +66,24 @@ QUEUE_READ_OPERATIONS = {
     ("/api/v1/queue/{queue_item_id}/video/{media_id}", "get"),
 }
 
+QUEUE_WRITE_OPERATIONS = {
+    ("/api/v1/queue", "post"),
+    ("/api/v1/queue/{queue_item_id}", "patch"),
+    ("/api/v1/queue/{queue_item_id}", "delete"),
+    ("/api/v1/queue/{queue_item_id}/media", "post"),
+    ("/api/v1/queue/{queue_item_id}/media/{media_id}", "delete"),
+    ("/api/v1/queue/{queue_item_id}/media-state", "put"),
+    ("/api/v1/queue/{queue_item_id}/video", "post"),
+    ("/api/v1/queue/{queue_item_id}/video/{media_id}", "delete"),
+    ("/api/v1/queue/{queue_item_id}/rewrite", "post"),
+    ("/api/v1/queue/{queue_item_id}/submit", "post"),
+    ("/api/v1/queue/{queue_item_id}/approve", "post"),
+    ("/api/v1/queue/{queue_item_id}/reject", "post"),
+    ("/api/v1/queue/{queue_item_id}/reopen", "post"),
+    ("/api/v1/queue/{queue_item_id}/schedule", "post"),
+    ("/api/v1/queue/{queue_item_id}/publish-now", "post"),
+}
+
 DIRECTORY_READ_OPERATIONS = {
     ("/api/v1/sources", "get"),
     ("/api/v1/sources/{source_id}", "get"),
@@ -171,13 +189,16 @@ def test_openapi_describes_api_security_boundaries() -> None:
             elif (path, method) in (
                 SCHEDULER_READ_OPERATIONS
                 | QUEUE_READ_OPERATIONS
+                | QUEUE_WRITE_OPERATIONS
                 | DIRECTORY_READ_OPERATIONS
                 | DIRECTORY_MANAGE_OPERATIONS
             ):
                 assert operation["security"] == [{"SessionCookie": []}]
                 assert "401" in operation["responses"]
                 assert "403" in operation["responses"]
-                assert "503" not in operation["responses"]
+                assert operation["responses"].get("503", {}).get("description") != (
+                    "API-ключ не настроен на сервере"
+                )
             elif path.startswith("/api/v1/"):
                 assert operation["security"] == [{"APIKeyHeader": []}]
                 assert "401" in operation["responses"]
@@ -207,6 +228,18 @@ def test_openapi_documents_csrf_header_for_directory_mutations() -> None:
 
     schema = app.openapi()
     for path, method in DIRECTORY_MANAGE_OPERATIONS:
+        parameters = schema["paths"][path][method]["parameters"]
+        assert any(
+            parameter["in"] == "header" and parameter["name"] == "X-CSRF-Token"
+            for parameter in parameters
+        )
+
+
+def test_openapi_documents_csrf_header_for_queue_mutations() -> None:
+    """Документирует CSRF-заголовок всех изменяющих операций очереди."""
+
+    schema = app.openapi()
+    for path, method in QUEUE_WRITE_OPERATIONS:
         parameters = schema["paths"][path][method]["parameters"]
         assert any(
             parameter["in"] == "header" and parameter["name"] == "X-CSRF-Token"

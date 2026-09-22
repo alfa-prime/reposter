@@ -10,13 +10,12 @@ from pydantic import BaseModel, Field, model_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from news_reposter.api.dependencies import (
-    API_KEY_RESPONSES,
     PERMISSION_AUTH_RESPONSES,
-    ApiKeyDep,
-    require_permission,
+    PERMISSION_CSRF_AUTH_RESPONSES,
+    CsrfAuthContextDep,
+    SameOriginDep,
 )
-from news_reposter.auth.context import AuthContext
-from news_reposter.auth.rbac import PermissionCode
+from news_reposter.api.v1.queue_permissions import QueueEditDep, QueueReadDep
 from news_reposter.db.models import AttachmentType
 from news_reposter.db.session import get_db_session
 from news_reposter.repositories.queue_item import QueueItemRepository
@@ -31,10 +30,6 @@ router = APIRouter(
     tags=["Очередь постов"],
 )
 Session = Annotated[AsyncSession, Depends(get_db_session)]
-QueueReadDep = Annotated[
-    AuthContext,
-    Depends(require_permission(PermissionCode.QUEUE_READ)),
-]
 
 MAX_VIDEO_BYTES = 50 * 1024 * 1024
 ALLOWED_VIDEO_TYPES = {
@@ -202,13 +197,15 @@ async def get_queue_video_info(
         "Сохраняет загруженное редактором MP4, WebM или MOV видео. "
         "Максимальный размер одного файла — 50 МБ. Тип проверяется по содержимому файла."
     ),
-    responses=API_KEY_RESPONSES,
+    responses=PERMISSION_CSRF_AUTH_RESPONSES,
 )
 async def upload_queue_video(
     queue_item_id: Annotated[int, Path(gt=0)],
     data: QueueVideoUpload,
     session: Session,
-    _api_key: ApiKeyDep,
+    _auth: QueueEditDep,
+    _csrf_auth: CsrfAuthContextDep,
+    _same_origin: SameOriginDep,
 ) -> dict[str, Any]:
     await _get_item(queue_item_id, session)
 
@@ -274,13 +271,15 @@ async def get_queue_video(
     "/{queue_item_id}/video/{media_id}",
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Удалить загруженное видео",
-    responses=API_KEY_RESPONSES,
+    responses=PERMISSION_CSRF_AUTH_RESPONSES,
 )
 async def delete_queue_video(
     queue_item_id: Annotated[int, Path(gt=0)],
     media_id: Annotated[str, Path(min_length=1, max_length=120)],
     session: Session,
-    _api_key: ApiKeyDep,
+    _auth: QueueEditDep,
+    _csrf_auth: CsrfAuthContextDep,
+    _same_origin: SameOriginDep,
 ) -> None:
     await _get_item(queue_item_id, session)
     safe_name = FilePath(media_id).name
