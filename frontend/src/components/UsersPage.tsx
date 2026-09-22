@@ -69,6 +69,88 @@ function RolePicker({
   );
 }
 
+type CapabilityColumn = {
+  label: string;
+  read: string[];
+  manage: string[];
+  readLabel: string;
+  manageLabel: string;
+};
+
+const capabilityColumns: CapabilityColumn[] = [
+  {
+    label: "Очередь",
+    read: ["queue.read"],
+    manage: ["queue.edit", "queue.rewrite", "queue.submit"],
+    readLabel: "Просмотр",
+    manageLabel: "Подготовка",
+  },
+  {
+    label: "Публикация",
+    read: ["queue.moderate", "queue.schedule"],
+    manage: ["queue.publish"],
+    readLabel: "Модерация",
+    manageLabel: "Полный цикл",
+  },
+  {
+    label: "Каналы и источники",
+    read: ["sources.read", "targets.read", "scheduler.read"],
+    manage: ["sources.manage", "targets.manage", "scheduler.manage"],
+    readLabel: "Просмотр",
+    manageLabel: "Управление",
+  },
+  {
+    label: "Пользователи",
+    read: ["users.read", "roles.read"],
+    manage: ["users.manage", "roles.manage"],
+    readLabel: "Просмотр",
+    manageLabel: "Управление",
+  },
+];
+
+function capabilityLabel(role: AdminRole, column: CapabilityColumn): string {
+  if (column.manage.some((permission) => role.permissions.includes(permission))) {
+    return column.manageLabel;
+  }
+  if (column.read.some((permission) => role.permissions.includes(permission))) {
+    return column.readLabel;
+  }
+  return "Нет доступа";
+}
+
+function RoleComparison({ roles }: { roles: AdminRole[] }) {
+  return (
+    <div className="role-comparison">
+      <div className="role-comparison-title">
+        <strong>Сравнение ролей</strong>
+        <span>Кратко о том, какие разделы и действия доступны каждой роли.</span>
+      </div>
+      <div className="role-comparison-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>Роль</th>
+              {capabilityColumns.map((column) => <th key={column.label}>{column.label}</th>)}
+            </tr>
+          </thead>
+          <tbody>
+            {roles.map((role) => (
+              <tr key={role.code}>
+                <th scope="row">{role.name}</th>
+                {capabilityColumns.map((column) => {
+                  const label = capabilityLabel(role, column);
+                  return <td key={column.label} className={label === "Нет доступа" ? "muted" : ""}>{label}</td>;
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p>«Администратор» имеет полный доступ. «Выпускающий редактор» модерирует и публикует, «Редактор» готовит материалы, а «Наблюдатель» работает только в режиме просмотра.</p>
+    </div>
+  );
+}
+
 export function UsersPage() {
   const { user: currentUser } = useAuth();
   const canManage = currentUser?.permissions.includes("users.manage") ?? false;
@@ -272,6 +354,7 @@ export function UsersPage() {
             <label>Отображаемое имя<input value={createForm.displayName} onChange={(event) => setCreateForm({ ...createForm, displayName: event.target.value })} placeholder="Иван Петров" required /></label>
             <label className="wide">Временный пароль<span className="temporary-password-row"><input type="text" value={createForm.temporaryPassword} onChange={(event) => setCreateForm({ ...createForm, temporaryPassword: event.target.value })} minLength={15} required /><button type="button" className="icon-button" title="Скопировать" onClick={() => void copyPassword(createForm.temporaryPassword)}><Clipboard size={17} /></button><button type="button" className="secondary" onClick={() => setCreateForm({ ...createForm, temporaryPassword: generateTemporaryPassword() })}><RefreshCw size={15} />Новый</button></span><small>Не менее 15 символов. Пользователь сменит его после первого входа.</small></label>
             <div className="wide"><span className="form-label">Роли</span><RolePicker roles={roles} selected={createForm.roleCodes} disabled={busy} onChange={(codes) => setCreateForm({ ...createForm, roleCodes: codes })} /></div>
+            <div className="wide"><RoleComparison roles={roles} /></div>
             <button className="primary" disabled={busy || createForm.roleCodes.length === 0}><Plus size={16} />Создать пользователя</button>
           </form>
         </div>
