@@ -9,7 +9,14 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field, model_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from news_reposter.api.dependencies import API_KEY_RESPONSES, ApiKeyDep
+from news_reposter.api.dependencies import (
+    API_KEY_RESPONSES,
+    PERMISSION_AUTH_RESPONSES,
+    ApiKeyDep,
+    require_permission,
+)
+from news_reposter.auth.context import AuthContext
+from news_reposter.auth.rbac import PermissionCode
 from news_reposter.db.models import AttachmentType
 from news_reposter.db.session import get_db_session
 from news_reposter.repositories.queue_item import QueueItemRepository
@@ -22,9 +29,12 @@ from news_reposter.services.media_validation import (
 router = APIRouter(
     prefix="/queue",
     tags=["Очередь постов"],
-    responses=API_KEY_RESPONSES,
 )
 Session = Annotated[AsyncSession, Depends(get_db_session)]
+QueueReadDep = Annotated[
+    AuthContext,
+    Depends(require_permission(PermissionCode.QUEUE_READ)),
+]
 
 MAX_VIDEO_BYTES = 50 * 1024 * 1024
 ALLOWED_VIDEO_TYPES = {
@@ -166,11 +176,12 @@ async def _get_item(queue_item_id: int, session: AsyncSession) -> Any:
         "Показывает видео, найденные в исходном посте VK, и видео, которые "
         "редактор загрузил вручную. Импорт исходного видео VK пока не выполняется."
     ),
+    responses=PERMISSION_AUTH_RESPONSES,
 )
 async def get_queue_video_info(
     queue_item_id: Annotated[int, Path(gt=0)],
     session: Session,
-    _api_key: ApiKeyDep,
+    _auth: QueueReadDep,
 ) -> dict[str, Any]:
     item = await _get_item(queue_item_id, session)
     source_videos = _source_videos(item)
@@ -191,6 +202,7 @@ async def get_queue_video_info(
         "Сохраняет загруженное редактором MP4, WebM или MOV видео. "
         "Максимальный размер одного файла — 50 МБ. Тип проверяется по содержимому файла."
     ),
+    responses=API_KEY_RESPONSES,
 )
 async def upload_queue_video(
     queue_item_id: Annotated[int, Path(gt=0)],
@@ -236,12 +248,15 @@ async def upload_queue_video(
 @router.get(
     "/{queue_item_id}/video/{media_id}",
     summary="Получить загруженное видео",
-    responses={404: {"description": "Видео не найдено"}},
+    responses={
+        **PERMISSION_AUTH_RESPONSES,
+        404: {"description": "Видео не найдено"},
+    },
 )
 async def get_queue_video(
     queue_item_id: Annotated[int, Path(gt=0)],
     media_id: Annotated[str, Path(min_length=1, max_length=120)],
-    _api_key: ApiKeyDep,
+    _auth: QueueReadDep,
 ) -> FileResponse:
     safe_name = FilePath(media_id).name
     if (
@@ -259,6 +274,7 @@ async def get_queue_video(
     "/{queue_item_id}/video/{media_id}",
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Удалить загруженное видео",
+    responses=API_KEY_RESPONSES,
 )
 async def delete_queue_video(
     queue_item_id: Annotated[int, Path(gt=0)],

@@ -8,7 +8,14 @@ from fastapi import APIRouter, Depends, HTTPException, Path, Query, Response, st
 from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from news_reposter.api.dependencies import API_KEY_RESPONSES, ApiKeyDep
+from news_reposter.api.dependencies import (
+    API_KEY_RESPONSES,
+    PERMISSION_AUTH_RESPONSES,
+    ApiKeyDep,
+    require_permission,
+)
+from news_reposter.auth.context import AuthContext
+from news_reposter.auth.rbac import PermissionCode
 from news_reposter.db.models import AttachmentType, QueueItemStatus
 from news_reposter.db.session import get_db_session
 from news_reposter.repositories.queue_item import (
@@ -31,9 +38,12 @@ from news_reposter.services.media_storage import (
 router = APIRouter(
     prefix="/queue",
     tags=["Очередь постов"],
-    responses=API_KEY_RESPONSES,
 )
 Session = Annotated[AsyncSession, Depends(get_db_session)]
+QueueReadDep = Annotated[
+    AuthContext,
+    Depends(require_permission(PermissionCode.QUEUE_READ)),
+]
 
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024
 ALLOWED_IMAGE_TYPES = {
@@ -151,6 +161,7 @@ def queue_item_response(item: Any) -> QueueItemRead:
     ),
     response_description="Созданный элемент очереди с исходным текстом и фото",
     responses={
+        **API_KEY_RESPONSES,
         404: {"description": "Исходный пост или целевой канал не найдены"},
         409: {"description": "Пост уже находится в очереди этого канала"},
     },
@@ -182,10 +193,11 @@ async def create_queue_item(
         "исходный текст, ссылку на пост, фотографии и данные целевого канала."
     ),
     response_description="Список элементов очереди с исходными постами и фото",
+    responses=PERMISSION_AUTH_RESPONSES,
 )
 async def list_queue_items(
     session: Session,
-    _api_key: ApiKeyDep,
+    _auth: QueueReadDep,
     offset: Annotated[int, Query(ge=0, description="Сколько записей пропустить")] = 0,
     limit: Annotated[int, Query(ge=1, le=100, description="Максимум записей")] = 50,
     target_id: Annotated[
@@ -220,10 +232,11 @@ async def list_queue_items(
         "подходящих записей и счётчики всех статусов. Параметр status можно "
         "передать несколько раз."
     ),
+    responses=PERMISSION_AUTH_RESPONSES,
 )
 async def get_queue_page(
     session: Session,
-    _api_key: ApiKeyDep,
+    _auth: QueueReadDep,
     queue_statuses: Annotated[
         list[QueueItemStatus],
         Query(alias="status", description="Один или несколько статусов очереди"),
@@ -261,14 +274,17 @@ async def get_queue_page(
         "Возвращает один редакционный элемент очереди вместе с исходным текстом, "
         "ссылкой на VK, фотографиями и данными целевого канала."
     ),
-    responses={404: {"description": "Элемент очереди не найден"}},
+    responses={
+        **PERMISSION_AUTH_RESPONSES,
+        404: {"description": "Элемент очереди не найден"},
+    },
 )
 async def get_queue_item(
     queue_item_id: Annotated[
         int, Path(gt=0, description="Идентификатор элемента очереди")
     ],
     session: Session,
-    _api_key: ApiKeyDep,
+    _auth: QueueReadDep,
 ) -> QueueItemRead:
     item = await QueueItemRepository(session).get(queue_item_id)
     if item is None:
@@ -285,6 +301,7 @@ async def get_queue_item(
         "элемента очереди. Максимальный размер одного файла — 10 МБ."
     ),
     responses={
+        **API_KEY_RESPONSES,
         404: {"description": "Элемент очереди не найден"},
         413: {"description": "Файл слишком большой"},
     },
@@ -331,12 +348,15 @@ async def upload_queue_media(
 @router.get(
     "/{queue_item_id}/media/{media_id}",
     summary="Получить загруженное фото",
-    responses={404: {"description": "Файл не найден"}},
+    responses={
+        **PERMISSION_AUTH_RESPONSES,
+        404: {"description": "Файл не найден"},
+    },
 )
 async def get_queue_media(
     queue_item_id: Annotated[int, Path(gt=0)],
     media_id: Annotated[str, Path(min_length=1, max_length=100)],
-    _api_key: ApiKeyDep,
+    _auth: QueueReadDep,
 ) -> FileResponse:
     safe_name = FilePath(media_id).name
     if safe_name != media_id:
@@ -351,7 +371,10 @@ async def get_queue_media(
     "/{queue_item_id}/media/{media_id}",
     response_model=QueueItemRead,
     summary="Удалить загруженное фото",
-    responses={404: {"description": "Элемент очереди или файл не найден"}},
+    responses={
+        **API_KEY_RESPONSES,
+        404: {"description": "Элемент очереди или файл не найден"},
+    },
 )
 async def delete_queue_media(
     queue_item_id: Annotated[int, Path(gt=0)],
@@ -382,7 +405,10 @@ async def delete_queue_media(
         "Редактирует подготовленный текст. Статус через PATCH не меняется: "
         "для модерации используются отдельные операции."
     ),
-    responses={404: {"description": "Элемент очереди не найден"}},
+    responses={
+        **API_KEY_RESPONSES,
+        404: {"description": "Элемент очереди не найден"},
+    },
 )
 async def update_queue_item(
     queue_item_id: Annotated[
@@ -406,6 +432,7 @@ async def update_queue_item(
     summary="Отправить пост на модерацию",
     description="Переводит подготовленный пост в статус awaiting_moderation.",
     responses={
+        **API_KEY_RESPONSES,
         404: {"description": "Элемент очереди не найден"},
         409: {"description": "Недопустимый переход статуса"},
     },
@@ -437,6 +464,7 @@ async def submit_queue_item(
     summary="Одобрить пост",
     description="Одобряет пост, находящийся на модерации.",
     responses={
+        **API_KEY_RESPONSES,
         404: {"description": "Элемент очереди не найден"},
         409: {"description": "Недопустимый переход статуса"},
     },
@@ -463,6 +491,7 @@ async def approve_queue_item(
     summary="Отклонить пост",
     description="Отклоняет пост, находящийся на модерации.",
     responses={
+        **API_KEY_RESPONSES,
         404: {"description": "Элемент очереди не найден"},
         409: {"description": "Недопустимый переход статуса"},
     },
@@ -492,6 +521,7 @@ async def reject_queue_item(
         "Можно использовать после модерации, одобрения или планирования."
     ),
     responses={
+        **API_KEY_RESPONSES,
         404: {"description": "Элемент очереди не найден"},
         409: {"description": "Недопустимый переход статуса"},
     },
@@ -526,6 +556,7 @@ async def reopen_queue_item(
     summary="Запланировать публикацию",
     description="Назначает время публикации для одобренного поста.",
     responses={
+        **API_KEY_RESPONSES,
         404: {"description": "Элемент очереди не найден"},
         409: {"description": "Недопустимый переход статуса"},
     },
@@ -556,7 +587,10 @@ async def schedule_queue_item(
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Удалить элемент очереди",
     description="Удаляет редакционный элемент очереди до технической публикации.",
-    responses={404: {"description": "Элемент очереди не найден"}},
+    responses={
+        **API_KEY_RESPONSES,
+        404: {"description": "Элемент очереди не найден"},
+    },
 )
 async def delete_queue_item(
     queue_item_id: Annotated[

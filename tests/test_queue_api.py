@@ -10,7 +10,8 @@ import httpx
 import pytest
 
 import news_reposter.api.v1.queue as queue_api
-from news_reposter.api.dependencies import require_api_key
+from news_reposter.api.dependencies import get_current_auth, require_api_key
+from news_reposter.auth.rbac import PermissionCode
 from news_reposter.db.models import AttachmentType, QueueItemStatus
 from news_reposter.main import app
 from news_reposter.repositories.queue_item import QueueItemAlreadyExistsError
@@ -141,13 +142,21 @@ def memory_queue_repository(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     async def allow_api_key() -> None:
         pass
 
+    async def allow_queue_read() -> SimpleNamespace:
+        return SimpleNamespace(
+            user=SimpleNamespace(must_change_password=False),
+            permission_codes=frozenset({PermissionCode.QUEUE_READ.value}),
+        )
+
     MemoryQueueRepository.reset()
     monkeypatch.setattr(queue_api, "QueueItemRepository", MemoryQueueRepository)
     app.dependency_overrides[require_api_key] = allow_api_key
+    app.dependency_overrides[get_current_auth] = allow_queue_read
     try:
         yield
     finally:
         app.dependency_overrides.pop(require_api_key, None)
+        app.dependency_overrides.pop(get_current_auth, None)
 
 
 def test_queue_response_includes_source_post_photos_and_target() -> None:
@@ -406,6 +415,44 @@ def test_queue_page_returns_selected_statuses_and_counts(
             "rewriting": 1,
             "awaiting_moderation": 1,
         }
+
+    asyncio.run(scenario())
+
+
+def test_queue_read_route_enforces_user_permission(
+    memory_queue_repository: None,
+) -> None:
+    async def scenario() -> None:
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(
+            transport=transport,
+            base_url="https://test",
+        ) as client:
+            allowed = await client.get(
+                "/api/v1/queue/page",
+                params={"status": "pending"},
+            )
+
+            app.dependency_overrides[get_current_auth] = lambda: SimpleNamespace(
+                user=SimpleNamespace(must_change_password=False),
+                permission_codes=frozenset({PermissionCode.SOURCES_READ.value}),
+            )
+            forbidden = await client.get(
+                "/api/v1/queue/page",
+                params={"status": "pending"},
+            )
+
+            app.dependency_overrides.pop(get_current_auth, None)
+            unauthorized = await client.get(
+                "/api/v1/queue/page",
+                params={"status": "pending"},
+            )
+
+        assert allowed.status_code == 200
+        assert forbidden.status_code == 403
+        assert forbidden.json() == {"detail": "Недостаточно прав"}
+        assert unauthorized.status_code == 401
+        assert unauthorized.json() == {"detail": "Требуется вход"}
 
     asyncio.run(scenario())
 

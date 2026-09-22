@@ -7,7 +7,14 @@ from fastapi import Path as ApiPath
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from news_reposter.api.dependencies import API_KEY_RESPONSES, ApiKeyDep
+from news_reposter.api.dependencies import (
+    API_KEY_RESPONSES,
+    PERMISSION_AUTH_RESPONSES,
+    ApiKeyDep,
+    require_permission,
+)
+from news_reposter.auth.context import AuthContext
+from news_reposter.auth.rbac import PermissionCode
 from news_reposter.db.models import AttachmentType
 from news_reposter.db.session import get_db_session
 from news_reposter.repositories.queue_item import QueueItemRepository
@@ -19,9 +26,12 @@ from news_reposter.services.media_storage import (
 router = APIRouter(
     prefix="/queue",
     tags=["Очередь постов"],
-    responses=API_KEY_RESPONSES,
 )
 Session = Annotated[AsyncSession, Depends(get_db_session)]
+QueueReadDep = Annotated[
+    AuthContext,
+    Depends(require_permission(PermissionCode.QUEUE_READ)),
+]
 
 
 class QueueMediaState(BaseModel):
@@ -93,11 +103,12 @@ def save_state(queue_item_id: int, media_order: list[str]) -> None:
     "/{queue_item_id}/media-state",
     response_model=QueueMediaState,
     summary="Получить выбранные фото публикации",
+    responses=PERMISSION_AUTH_RESPONSES,
 )
 async def get_media_state(
     queue_item_id: Annotated[int, ApiPath(gt=0)],
     session: Session,
-    _api_key: ApiKeyDep,
+    _auth: QueueReadDep,
 ) -> QueueMediaState:
     item = await QueueItemRepository(session).get(queue_item_id)
     if item is None:
@@ -113,6 +124,7 @@ async def get_media_state(
         "Сохраняет фотографии, которые войдут в публикацию, и их порядок. "
         "Фото, которых нет в media_order, считаются исключёнными из публикации."
     ),
+    responses=API_KEY_RESPONSES,
 )
 async def update_media_state(
     queue_item_id: Annotated[int, ApiPath(gt=0)],
