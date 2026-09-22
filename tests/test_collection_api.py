@@ -2,17 +2,22 @@ import asyncio
 from datetime import UTC, datetime, time
 from types import SimpleNamespace
 
+import httpx
 import pytest
 from fastapi import HTTPException, status
 from pydantic import ValidationError
 
 import news_reposter.api.v1.collection as collection_api
+from news_reposter.api.dependencies import get_current_auth
+from news_reposter.auth.rbac import PermissionCode
 from news_reposter.db.models import (
     CollectionRun,
     CollectionRunStatus,
     CollectionRunTrigger,
     CollectionSettings,
 )
+from news_reposter.db.session import get_db_session
+from news_reposter.main import app
 from news_reposter.schemas.collection import CollectionSettingsUpdate
 from news_reposter.services.collection_history import safe_error_message
 
@@ -167,6 +172,56 @@ def test_missing_collection_run_returns_404(
         asyncio.run(collection_api.get_collection_run(999, None, None))
 
     assert error.value.status_code == status.HTTP_404_NOT_FOUND
+
+
+def test_scheduler_read_route_enforces_user_permission(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    settings = make_settings()
+
+    class FakeRepository:
+        def __init__(self, _session: object) -> None:
+            pass
+
+        async def get_settings(self) -> CollectionSettings:
+            return settings
+
+    monkeypatch.setattr(collection_api, "CollectionRepository", FakeRepository)
+    app.dependency_overrides[get_db_session] = lambda: None
+
+    async def scenario() -> None:
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(
+            transport=transport,
+            base_url="https://test",
+        ) as client:
+            app.dependency_overrides[get_current_auth] = lambda: SimpleNamespace(
+                user=SimpleNamespace(must_change_password=False),
+                permission_codes=frozenset({PermissionCode.SCHEDULER_READ.value}),
+            )
+            allowed = await client.get("/api/v1/system/collection/settings")
+
+            app.dependency_overrides[get_current_auth] = lambda: SimpleNamespace(
+                user=SimpleNamespace(must_change_password=False),
+                permission_codes=frozenset({PermissionCode.QUEUE_READ.value}),
+            )
+            forbidden = await client.get("/api/v1/system/collection/settings")
+
+            app.dependency_overrides.pop(get_current_auth, None)
+            unauthorized = await client.get("/api/v1/system/collection/settings")
+
+        assert allowed.status_code == 200
+        assert allowed.json()["timezone"] == "Europe/Moscow"
+        assert forbidden.status_code == 403
+        assert forbidden.json() == {"detail": "Недостаточно прав"}
+        assert unauthorized.status_code == 401
+        assert unauthorized.json() == {"detail": "Требуется вход"}
+
+    try:
+        asyncio.run(scenario())
+    finally:
+        app.dependency_overrides.pop(get_current_auth, None)
+        app.dependency_overrides.pop(get_db_session, None)
 
 
 def test_history_error_message_masks_tokens() -> None:
