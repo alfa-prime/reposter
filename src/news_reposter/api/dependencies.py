@@ -16,6 +16,7 @@ from news_reposter.db.session import get_db_session
 from news_reposter.llm import LLMProvider
 from news_reposter.llm.factory import build_llm_provider
 from news_reposter.services.authentication import AuthenticationService
+from news_reposter.services.avatars import AvatarService
 from news_reposter.services.password_change import PasswordChangeService
 from news_reposter.services.user_sessions import (
     InvalidSessionError,
@@ -94,6 +95,15 @@ def get_user_service(session: DbSessionDep) -> UserService:
 
 
 UserServiceDep = Annotated[UserService, Depends(get_user_service)]
+
+
+def get_avatar_service(session: DbSessionDep) -> AvatarService:
+    """Создаёт сервис пользовательских аватаров для текущего запроса."""
+
+    return AvatarService(session)
+
+
+AvatarServiceDep = Annotated[AvatarService, Depends(get_avatar_service)]
 
 settings = get_settings()
 session_cookie = APIKeyCookie(

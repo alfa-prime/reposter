@@ -17,8 +17,6 @@ services:
   frontend:
     environment:
       SITE_ADDRESS: ${SITE_ADDRESS}
-      ADMIN_USER: ${ADMIN_USER}
-      ADMIN_PASSWORD_HASH: ${ADMIN_PASSWORD_HASH}
     volumes:
       - ./frontend/Caddyfile.prod:/etc/caddy/Caddyfile:ro
       - caddy_data:/data

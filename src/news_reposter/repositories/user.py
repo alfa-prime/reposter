@@ -32,6 +32,11 @@ class UserRepository:
             select(User).where(User.username_normalized == username)
         )
 
+    async def get_by_id(self, user_id: int) -> User | None:
+        """Возвращает пользователя по идентификатору без блокировки строки."""
+
+        return await self.session.get(User, user_id)
+
     async def get_by_normalized_username_for_update(
         self,
         username: str,

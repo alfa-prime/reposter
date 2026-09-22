@@ -25,6 +25,7 @@ from news_reposter.schemas import (
     AdminUserUpdate,
     RevokedSessionsResponse,
 )
+from news_reposter.services.avatars import avatar_url
 from news_reposter.services.users import (
     RoleCombinationError,
     RolesNotFoundError,
@@ -262,6 +263,7 @@ def _user_response(user: User) -> AdminUserRead:
         user_id=user.user_id,
         username=user.username,
         display_name=user.display_name,
+        avatar_url=avatar_url(user),
         is_active=user.is_active,
         must_change_password=user.must_change_password,
         last_login_at=user.last_login_at,

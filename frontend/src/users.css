@@ -16,8 +16,9 @@
 .users-list > button:last-of-type { border-bottom: 0; }
 .users-list > button:hover, .users-list > button.active { background: rgba(112,136,255,.09); }
 .users-list > button.active { box-shadow: inset 3px 0 0 #7d92ff; }
-.user-avatar { width: 38px; height: 38px; display: grid; place-items: center; border-radius: 12px; color: #d9e1ff; background: linear-gradient(145deg, rgba(95,122,241,.28), rgba(137,89,237,.24)); font-size: 14px; font-weight: 800; }
-.user-avatar.large { width: 48px; height: 48px; border-radius: 15px; font-size: 17px; }
+.users-page .user-avatar { width: 38px; height: 38px; display: grid; place-items: center; overflow: hidden; border-radius: 50%; color: #d9e1ff; background: linear-gradient(145deg, rgba(95,122,241,.28), rgba(137,89,237,.24)); font-size: 14px; font-weight: 800; }
+.users-page .user-avatar.large { width: 48px; height: 48px; border-radius: 50%; font-size: 17px; }
+.users-page .user-avatar img { width: 100%; height: 100%; display: block; object-fit: cover; }
 .user-list-copy { min-width: 0; }
 .user-list-copy strong, .user-list-copy small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .user-list-copy strong { font-size: 13px; }

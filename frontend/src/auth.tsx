@@ -24,6 +24,8 @@ type AuthContextValue = {
   error: string;
   login: (credentials: LoginCredentials) => Promise<void>;
   changePassword: (passwords: PasswordChange) => Promise<void>;
+  uploadAvatar: (file: File) => Promise<void>;
+  deleteAvatar: () => Promise<void>;
   logout: (allSessions?: boolean) => Promise<void>;
   restore: () => Promise<void>;
 };
@@ -81,6 +83,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setStatus("authenticated");
   }, []);
 
+  const uploadAvatar = useCallback(async (file: File) => {
+    const currentUser = await api.uploadAvatar(file);
+    setUser(currentUser);
+  }, []);
+
+  const deleteAvatar = useCallback(async () => {
+    const currentUser = await api.deleteAvatar();
+    setUser(currentUser);
+  }, []);
+
   const logout = useCallback(async (allSessions = false) => {
     if (allSessions) {
       await api.logoutAll();
@@ -93,8 +105,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo<AuthContextValue>(
-    () => ({ status, user, error, login, changePassword, logout, restore }),
-    [status, user, error, login, changePassword, logout, restore],
+    () => ({ status, user, error, login, changePassword, uploadAvatar, deleteAvatar, logout, restore }),
+    [status, user, error, login, changePassword, uploadAvatar, deleteAvatar, logout, restore],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

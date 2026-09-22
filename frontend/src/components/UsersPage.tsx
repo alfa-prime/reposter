@@ -329,6 +329,12 @@ export function UsersPage() {
     setResetOpen(true);
   }
 
+  function visibleAvatarUrl(item: AdminUser): string | null | undefined {
+    return item.user_id === currentUser?.user_id
+      ? currentUser.avatar_url
+      : item.avatar_url;
+  }
+
   return (
     <section className="settings-page users-page">
       <header className="settings-page-head users-head">
@@ -347,7 +353,7 @@ export function UsersPage() {
           <div className="users-list">
             {users.map((item) => (
               <button key={item.user_id} className={item.user_id === selectedId ? "active" : ""} onClick={() => setSelectedId(item.user_id)}>
-                <span className="user-avatar">{item.display_name.trim().slice(0, 1).toUpperCase()}</span>
+                <span className="user-avatar">{visibleAvatarUrl(item) ? <img src={visibleAvatarUrl(item) ?? ""} alt="" /> : item.display_name.trim().slice(0, 1).toUpperCase()}</span>
                 <span className="user-list-copy"><strong>{item.display_name}</strong><small>@{item.username}</small></span>
                 <span className={`user-dot ${item.is_active ? "active" : "blocked"}`} title={item.is_active ? "Активен" : "Заблокирован"} />
               </button>
@@ -359,7 +365,7 @@ export function UsersPage() {
         <div className="user-detail-card">
           {!selected ? <div className="users-empty large">Выберите пользователя</div> : <>
             <div className="user-detail-head">
-              <div><span className="user-avatar large">{selected.display_name.trim().slice(0, 1).toUpperCase()}</span><div><h2>{selected.display_name}</h2><p>@{selected.username}</p></div></div>
+              <div><span className="user-avatar large">{visibleAvatarUrl(selected) ? <img src={visibleAvatarUrl(selected) ?? ""} alt="" /> : selected.display_name.trim().slice(0, 1).toUpperCase()}</span><div><h2>{selected.display_name}</h2><p>@{selected.username}</p></div></div>
               <div className="user-badges">
                 <span className={selected.is_active ? "positive" : "negative"}>{selected.is_active ? <CheckCircle2 size={14} /> : <Ban size={14} />}{selected.is_active ? "Активен" : "Заблокирован"}</span>
                 {selected.must_change_password && <span className="warning"><KeyRound size={14} />Ожидает смены пароля</span>}

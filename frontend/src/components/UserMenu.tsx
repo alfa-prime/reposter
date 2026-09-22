@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { KeyRound, LogOut, ShieldOff } from "lucide-react";
+import { ImagePlus, KeyRound, LogOut, ShieldOff, Trash2 } from "lucide-react";
 import { useAuth } from "../auth";
 
 type Props = {
@@ -15,8 +15,9 @@ function initials(displayName: string, username: string): string {
 }
 
 export function UserMenu({ onChangePassword }: Props) {
-  const { user, logout } = useAuth();
+  const { user, uploadAvatar, deleteAvatar, logout } = useAuth();
   const detailsRef = useRef<HTMLDetailsElement>(null);
+  const avatarInputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [confirmAll, setConfirmAll] = useState(false);
   const [error, setError] = useState("");
@@ -58,6 +59,41 @@ export function UserMenu({ onChangePassword }: Props) {
     }
   }
 
+  async function selectAvatar(file: File | undefined) {
+    if (!file || busy) return;
+    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
+      setError("Поддерживаются изображения JPEG, PNG и WebP.");
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setError("Размер аватара не должен превышать 5 МБ.");
+      return;
+    }
+    setBusy(true);
+    setError("");
+    try {
+      await uploadAvatar(file);
+    } catch (exc) {
+      setError(exc instanceof Error ? exc.message : "Не удалось загрузить аватар");
+    } finally {
+      setBusy(false);
+      if (avatarInputRef.current) avatarInputRef.current.value = "";
+    }
+  }
+
+  async function removeAvatar() {
+    if (busy) return;
+    setBusy(true);
+    setError("");
+    try {
+      await deleteAvatar();
+    } catch (exc) {
+      setError(exc instanceof Error ? exc.message : "Не удалось удалить аватар");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <details className="user-menu" ref={detailsRef} onToggle={() => setConfirmAll(false)}>
       <summary title={`${user.display_name} · ${roleLabel}`}>
@@ -74,9 +110,21 @@ export function UserMenu({ onChangePassword }: Props) {
 
       <div className="user-menu-popover">
         <div className="user-menu-identity">
-          <strong>{user.display_name}</strong>
-          <span>@{user.username}</span>
+          <span className="user-avatar profile-avatar" aria-hidden="true">
+            {user.avatar_url
+              ? <img src={user.avatar_url} alt="" decoding="async" />
+              : initials(user.display_name, user.username)}
+          </span>
+          <span className="user-menu-identity-copy"><strong>{user.display_name}</strong><span>@{user.username}</span></span>
         </div>
+
+        <input
+          ref={avatarInputRef}
+          className="user-avatar-input"
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          onChange={(event) => void selectAvatar(event.target.files?.[0])}
+        />
 
         {error && <p className="user-menu-error" role="alert">{error}</p>}
 
@@ -90,6 +138,12 @@ export function UserMenu({ onChangePassword }: Props) {
           </div>
         ) : (
           <div className="user-menu-actions">
+            <button type="button" onClick={() => avatarInputRef.current?.click()} disabled={busy}>
+              <ImagePlus size={16} />{user.avatar_url ? "Изменить аватар" : "Добавить аватар"}
+            </button>
+            {user.avatar_url && <button type="button" className="user-menu-remove-avatar" onClick={() => void removeAvatar()} disabled={busy}>
+              <Trash2 size={16} />Удалить аватар
+            </button>}
             <button type="button" onClick={() => { detailsRef.current?.removeAttribute("open"); onChangePassword(); }} disabled={busy}>
               <KeyRound size={16} />Сменить пароль
             </button>
