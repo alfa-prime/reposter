@@ -8,14 +8,27 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from news_reposter.api.dependencies import API_KEY_RESPONSES, ApiKeyDep, HttpClientDep
+from news_reposter.api.dependencies import (
+    PERMISSION_AUTH_RESPONSES,
+    PERMISSION_CSRF_AUTH_RESPONSES,
+    CsrfAuthContextDep,
+    HttpClientDep,
+    SameOriginDep,
+    require_permission,
+)
+from news_reposter.auth.context import AuthContext
+from news_reposter.auth.rbac import PermissionCode
 from news_reposter.config import get_settings
 from news_reposter.db.models import MAXChannel
 from news_reposter.db.session import get_db_session
 from news_reposter.integrations.max import MAXAPIError, MAXClient
 
-router = APIRouter(prefix="/max", tags=["MAX"], responses=API_KEY_RESPONSES)
+router = APIRouter(prefix="/max", tags=["MAX"])
 Session = Annotated[AsyncSession, Depends(get_db_session)]
+MaxManageDep = Annotated[
+    AuthContext,
+    Depends(require_permission(PermissionCode.TARGETS_MANAGE)),
+]
 
 
 def max_client_from_settings(http_client: httpx.AsyncClient) -> MAXClient:
@@ -170,10 +183,13 @@ async def max_webhook(
         "bot_added, bot_removed и chat_title_changed. URL и secret берутся из .env."
     ),
     response_description="Результат создания подписки MAX",
+    responses=PERMISSION_CSRF_AUTH_RESPONSES,
 )
 async def create_channel_discovery_subscription(
+    _auth: MaxManageDep,
+    _csrf_auth: CsrfAuthContextDep,
+    _same_origin: SameOriginDep,
     http_client: HttpClientDep,
-    _api_key: ApiKeyDep,
 ) -> dict[str, Any]:
     """Создаёт webhook-подписку, через которую приложение получает chat_id."""
 
@@ -222,10 +238,13 @@ async def create_channel_discovery_subscription(
         "публичную ссылку, а приложение возвращает сохранённый chat_id."
     ),
     response_description="Найденный MAX chat_id и данные канала",
-    responses={404: {"description": "Канал ещё не обнаружен webhook-ом"}},
+    responses={
+        **PERMISSION_AUTH_RESPONSES,
+        404: {"description": "Канал ещё не обнаружен webhook-ом"},
+    },
 )
 async def get_max_channel_id(
-    _api_key: ApiKeyDep,
+    _auth: MaxManageDep,
     session: Session,
     link: str = Query(
         description="Публичная ссылка MAX",
@@ -273,10 +292,11 @@ async def get_max_channel_id(
     summary="Посмотреть Webhook-подписки MAX",
     description="Вызывает официальный GET /subscriptions и показывает активные подписки бота.",
     response_description="Текущие Webhook-подписки бота MAX",
+    responses=PERMISSION_AUTH_RESPONSES,
 )
 async def get_max_subscriptions(
+    _auth: MaxManageDep,
     http_client: HttpClientDep,
-    _api_key: ApiKeyDep,
 ) -> dict[str, Any]:
     """Возвращает Webhook-подписки текущего MAX-бота."""
 

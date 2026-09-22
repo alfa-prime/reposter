@@ -9,6 +9,8 @@ EXPECTED_OPERATIONS = {
     ("/health", "get"): "Проверить работу приложения",
     ("/health/database", "get"): "Проверить подключение к PostgreSQL",
     ("/api/v1/system/collect-now", "post"): "Запустить сбор источников сейчас",
+    ("/api/v1/system/llm-test", "post"): "Проверить подключение к ИИ",
+    ("/api/v1/vk/source-info", "get"): "Определить источник VK",
     ("/api/v1/vk/posts/latest", "get"): "Получить последний пост VK",
     ("/api/v1/sources", "post"): "Добавить источник",
     ("/api/v1/sources", "get"): "Получить список источников",
@@ -17,6 +19,7 @@ EXPECTED_OPERATIONS = {
     ("/api/v1/sources/{source_id}", "delete"): "Удалить источник",
     ("/api/v1/targets", "post"): "Добавить цель публикации",
     ("/api/v1/targets", "get"): "Получить список целей",
+    ("/api/v1/targets/resolve-max", "get"): "Определить канал MAX по ссылке",
     ("/api/v1/targets/{target_id}", "get"): "Получить цель публикации",
     ("/api/v1/targets/{target_id}", "patch"): "Изменить цель публикации",
     ("/api/v1/targets/{target_id}", "delete"): "Удалить цель публикации",
@@ -47,6 +50,12 @@ EXPECTED_OPERATIONS = {
     ("/api/v1/queue/{queue_item_id}/reopen", "post"): "Вернуть пост в работу",
     ("/api/v1/queue/{queue_item_id}/schedule", "post"): "Запланировать публикацию",
     ("/api/v1/queue/{queue_item_id}/publish-now", "post"): "Опубликовать пост сейчас",
+    (
+        "/api/v1/max/subscriptions/channel-discovery",
+        "post",
+    ): "Подписать бота MAX на обнаружение каналов",
+    ("/api/v1/max/channel-id", "get"): "Получить MAX chat_id по публичной ссылке",
+    ("/api/v1/max/subscriptions", "get"): "Посмотреть Webhook-подписки MAX",
 }
 
 SCHEDULER_READ_OPERATIONS = {
@@ -109,6 +118,19 @@ DIRECTORY_MANAGE_OPERATIONS = {
     ("/api/v1/targets/{target_id}/sources/{target_source_id}", "delete"),
 }
 
+INTEGRATION_READ_OPERATIONS = {
+    ("/api/v1/vk/source-info", "get"),
+    ("/api/v1/vk/posts/latest", "get"),
+    ("/api/v1/targets/resolve-max", "get"),
+    ("/api/v1/max/channel-id", "get"),
+    ("/api/v1/max/subscriptions", "get"),
+}
+
+INTEGRATION_WRITE_OPERATIONS = {
+    ("/api/v1/max/subscriptions/channel-discovery", "post"),
+    ("/api/v1/system/llm-test", "post"),
+}
+
 
 def test_openapi_has_russian_operation_descriptions() -> None:
     """Проверяет русские заголовки и описания всех прикладных эндпоинтов."""
@@ -166,15 +188,12 @@ def test_openapi_models_have_field_descriptions() -> None:
 
 
 def test_openapi_describes_api_security_boundaries() -> None:
-    """Разделяет API-key, публичный вход и пользовательскую сессию."""
+    """Разделяет публичные маршруты и пользовательскую сессию."""
 
     schema = app.openapi()
-    security_scheme = schema["components"]["securitySchemes"]["APIKeyHeader"]
     session_scheme = schema["components"]["securitySchemes"]["SessionCookie"]
 
-    assert security_scheme["type"] == "apiKey"
-    assert security_scheme["in"] == "header"
-    assert security_scheme["name"] == "X-API-Key"
+    assert "APIKeyHeader" not in schema["components"]["securitySchemes"]
     assert session_scheme == {
         "type": "apiKey",
         "description": "Непрозрачный токен серверной пользовательской сессии.",
@@ -198,17 +217,16 @@ def test_openapi_describes_api_security_boundaries() -> None:
                 | QUEUE_WRITE_OPERATIONS
                 | DIRECTORY_READ_OPERATIONS
                 | DIRECTORY_MANAGE_OPERATIONS
+                | INTEGRATION_READ_OPERATIONS
+                | INTEGRATION_WRITE_OPERATIONS
             ):
                 assert operation["security"] == [{"SessionCookie": []}]
                 assert "401" in operation["responses"]
                 assert "403" in operation["responses"]
-                assert operation["responses"].get("503", {}).get("description") != (
-                    "API-ключ не настроен на сервере"
-                )
             elif path.startswith("/api/v1/"):
-                assert operation["security"] == [{"APIKeyHeader": []}]
-                assert "401" in operation["responses"]
-                assert "503" in operation["responses"]
+                raise AssertionError(
+                    f"Маршрут {method.upper()} {path} не отнесён к границе доступа"
+                )
             elif path.startswith("/health"):
                 assert "security" not in operation
 
@@ -258,6 +276,18 @@ def test_openapi_documents_csrf_header_for_collection_mutations() -> None:
 
     schema = app.openapi()
     for path, method in COLLECTION_WRITE_OPERATIONS:
+        parameters = schema["paths"][path][method]["parameters"]
+        assert any(
+            parameter["in"] == "header" and parameter["name"] == "X-CSRF-Token"
+            for parameter in parameters
+        )
+
+
+def test_openapi_documents_csrf_header_for_integration_mutations() -> None:
+    """Документирует CSRF для настройки MAX и проверки LLM."""
+
+    schema = app.openapi()
+    for path, method in INTEGRATION_WRITE_OPERATIONS:
         parameters = schema["paths"][path][method]["parameters"]
         assert any(
             parameter["in"] == "header" and parameter["name"] == "X-CSRF-Token"

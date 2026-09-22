@@ -6,9 +6,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from news_reposter.api.dependencies import (
-    API_KEY_RESPONSES,
     PERMISSION_CSRF_AUTH_RESPONSES,
-    ApiKeyDep,
     CsrfAuthContextDep,
     HttpClientDep,
     LLMProviderDep,
@@ -31,6 +29,10 @@ router = APIRouter(tags=["Система"])
 CollectionRunDep = Annotated[
     AuthContext,
     Depends(require_permission(PermissionCode.COLLECTION_RUN)),
+]
+QueueRewriteDep = Annotated[
+    AuthContext,
+    Depends(require_permission(PermissionCode.QUEUE_REWRITE)),
 ]
 
 
@@ -132,14 +134,16 @@ async def collect_now(
     ),
     response_description="Результат тестового запроса к LLM-провайдеру",
     responses={
-        **API_KEY_RESPONSES,
+        **PERMISSION_CSRF_AUTH_RESPONSES,
         502: {"description": "LLM-провайдер доступен, но запрос завершился ошибкой"},
         503: {"description": "LLM-провайдер не настроен"},
     },
 )
 async def llm_test(
+    _auth: QueueRewriteDep,
+    _csrf_auth: CsrfAuthContextDep,
+    _same_origin: SameOriginDep,
     provider: LLMProviderDep,
-    _api_key: ApiKeyDep,
 ) -> dict[str, object]:
     """Проверяет реальную авторизацию и генерацию ответа у настроенного LLM."""
 

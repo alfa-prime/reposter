@@ -9,7 +9,11 @@ from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 import news_reposter.api.v1.system as system_api
-from news_reposter.api.dependencies import get_current_auth, get_http_client
+from news_reposter.api.dependencies import (
+    get_current_auth,
+    get_http_client,
+    get_llm_provider,
+)
 from news_reposter.api.v1.system import collect_now, database_health, health, llm_test
 from news_reposter.auth.rbac import PermissionCode
 from news_reposter.auth.session_tokens import hash_token
@@ -194,7 +198,7 @@ def test_llm_test_returns_provider_response(monkeypatch: pytest.MonkeyPatch) -> 
             )
         )
     )
-    response = asyncio.run(llm_test(provider, None))
+    response = asyncio.run(llm_test(None, None, None, provider))
 
     assert response == {
         "status": "ok",
@@ -219,7 +223,74 @@ def test_llm_test_returns_502_when_provider_request_fails(
         )
     )
     with pytest.raises(HTTPException) as error:
-        asyncio.run(llm_test(provider, None))
+        asyncio.run(llm_test(None, None, None, provider))
 
     assert error.value.status_code == status.HTTP_502_BAD_GATEWAY
     assert error.value.detail == "GigaChat не выполнил запрос (401)"
+
+
+def test_llm_test_requires_rewrite_permission_csrf_and_same_origin() -> None:
+    provider = SimpleNamespace(
+        rewrite=AsyncMock(
+            return_value=RewriteResult(
+                text="Тест выполнен.",
+                provider="gigachat",
+                model="GigaChat-2-Pro",
+                usage={"total_tokens": 5},
+            )
+        )
+    )
+    app.dependency_overrides[get_llm_provider] = lambda: provider
+
+    def auth_context(*permissions: PermissionCode) -> SimpleNamespace:
+        return SimpleNamespace(
+            user=SimpleNamespace(must_change_password=False),
+            session=SimpleNamespace(csrf_token_hash=hash_token(CSRF_TOKEN)),
+            permission_codes=frozenset(permission.value for permission in permissions),
+        )
+
+    async def scenario() -> None:
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(
+            transport=transport,
+            base_url="https://test",
+            cookies={CSRF_COOKIE_NAME: CSRF_TOKEN},
+        ) as client:
+            app.dependency_overrides[get_current_auth] = lambda: auth_context(
+                PermissionCode.QUEUE_REWRITE
+            )
+            allowed = await client.post(
+                "/api/v1/system/llm-test",
+                headers={"X-CSRF-Token": CSRF_TOKEN},
+            )
+            missing_csrf = await client.post("/api/v1/system/llm-test")
+            foreign_origin = await client.post(
+                "/api/v1/system/llm-test",
+                headers={
+                    "X-CSRF-Token": CSRF_TOKEN,
+                    "Origin": "https://evil.example",
+                },
+            )
+
+            app.dependency_overrides[get_current_auth] = lambda: auth_context(
+                PermissionCode.QUEUE_READ
+            )
+            forbidden = await client.post(
+                "/api/v1/system/llm-test",
+                headers={"X-CSRF-Token": CSRF_TOKEN},
+            )
+
+        assert allowed.status_code == 200
+        assert allowed.json()["provider"] == "gigachat"
+        assert missing_csrf.status_code == 403
+        assert missing_csrf.json() == {"detail": "Недействительный CSRF-токен"}
+        assert foreign_origin.status_code == 403
+        assert foreign_origin.json() == {"detail": "Недопустимый источник запроса"}
+        assert forbidden.status_code == 403
+        assert forbidden.json() == {"detail": "Недостаточно прав"}
+
+    try:
+        asyncio.run(scenario())
+    finally:
+        app.dependency_overrides.pop(get_current_auth, None)
+        app.dependency_overrides.pop(get_llm_provider, None)

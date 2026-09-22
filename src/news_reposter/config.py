@@ -16,7 +16,6 @@ class Settings(BaseSettings):
     )
 
     app_name: str = "Сервис публикации новостей"
-    api_key: str | None = None
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
 
     http_timeout_seconds: float = Field(default=30.0, gt=0, le=600)
