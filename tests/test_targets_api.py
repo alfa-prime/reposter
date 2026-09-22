@@ -10,7 +10,8 @@ import httpx
 import pytest
 
 import news_reposter.api.v1.targets as targets_api
-from news_reposter.api.dependencies import require_api_key
+from news_reposter.api.dependencies import get_current_auth, require_api_key
+from news_reposter.auth.rbac import PermissionCode
 from news_reposter.main import app
 from news_reposter.repositories import TargetAlreadyExistsError
 from news_reposter.schemas import TargetCreate, TargetUpdate
@@ -113,13 +114,21 @@ def memory_target_repository(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     async def allow_api_key() -> None:
         """Разрешает тестовые запросы без настоящего ключа."""
 
+    async def allow_targets_read() -> SimpleNamespace:
+        return SimpleNamespace(
+            user=SimpleNamespace(must_change_password=False),
+            permission_codes=frozenset({PermissionCode.TARGETS_READ.value}),
+        )
+
     MemoryTargetRepository.reset()
     monkeypatch.setattr(targets_api, "TargetRepository", MemoryTargetRepository)
     app.dependency_overrides[require_api_key] = allow_api_key
+    app.dependency_overrides[get_current_auth] = allow_targets_read
     try:
         yield
     finally:
         app.dependency_overrides.pop(require_api_key, None)
+        app.dependency_overrides.pop(get_current_auth, None)
 
 
 def test_targets_crud(memory_target_repository: None) -> None:
@@ -213,5 +222,32 @@ def test_target_validation(memory_target_repository: None) -> None:
                 json={"name": None},
             )
             assert null_name.status_code == 422
+
+    asyncio.run(scenario())
+
+
+def test_targets_read_requires_permission(memory_target_repository: None) -> None:
+    async def scenario() -> None:
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(
+            transport=transport,
+            base_url="https://test",
+        ) as client:
+            allowed = await client.get("/api/v1/targets")
+
+            app.dependency_overrides[get_current_auth] = lambda: SimpleNamespace(
+                user=SimpleNamespace(must_change_password=False),
+                permission_codes=frozenset({PermissionCode.SOURCES_READ.value}),
+            )
+            forbidden = await client.get("/api/v1/targets")
+
+            app.dependency_overrides.pop(get_current_auth, None)
+            unauthorized = await client.get("/api/v1/targets")
+
+        assert allowed.status_code == 200
+        assert forbidden.status_code == 403
+        assert forbidden.json() == {"detail": "Недостаточно прав"}
+        assert unauthorized.status_code == 401
+        assert unauthorized.json() == {"detail": "Требуется вход"}
 
     asyncio.run(scenario())

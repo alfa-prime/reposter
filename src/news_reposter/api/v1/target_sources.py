@@ -3,7 +3,14 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from news_reposter.api.dependencies import API_KEY_RESPONSES, ApiKeyDep
+from news_reposter.api.dependencies import (
+    API_KEY_RESPONSES,
+    PERMISSION_AUTH_RESPONSES,
+    ApiKeyDep,
+    require_permission,
+)
+from news_reposter.auth.context import AuthContext
+from news_reposter.auth.rbac import PermissionCode
 from news_reposter.db.session import get_db_session
 from news_reposter.repositories import (
     TargetSourceAlreadyExistsError,
@@ -18,9 +25,16 @@ from news_reposter.schemas import (
 router = APIRouter(
     prefix="/targets/{target_id}/sources",
     tags=["Источники целевого канала"],
-    responses=API_KEY_RESPONSES,
 )
 Session = Annotated[AsyncSession, Depends(get_db_session)]
+SourcesReadDep = Annotated[
+    AuthContext,
+    Depends(require_permission(PermissionCode.SOURCES_READ)),
+]
+TargetsReadDep = Annotated[
+    AuthContext,
+    Depends(require_permission(PermissionCode.TARGETS_READ)),
+]
 
 
 def target_not_found_error() -> HTTPException:
@@ -62,6 +76,7 @@ def duplicate_error() -> HTTPException:
     ),
     response_description="Подключённый источник",
     responses={
+        **API_KEY_RESPONSES,
         404: {"description": "Цель публикации или источник не найдены"},
         409: {"description": "Источник уже подключён к этой цели публикации"},
         422: {"description": "Переданы некорректные данные"},
@@ -94,12 +109,16 @@ async def create_target_source(
         "с возможностью фильтрации по активности."
     ),
     response_description="Список подключённых источников",
-    responses={404: {"description": "Цель публикации не найдена"}},
+    responses={
+        **PERMISSION_AUTH_RESPONSES,
+        404: {"description": "Цель публикации не найдена"},
+    },
 )
 async def list_target_sources(
     target_id: Annotated[int, Path(gt=0, description="Идентификатор целевого канала")],
     session: Session,
-    _api_key: ApiKeyDep,
+    _sources_auth: SourcesReadDep,
+    _targets_auth: TargetsReadDep,
     offset: Annotated[int, Query(ge=0, description="Сколько записей пропустить")] = 0,
     limit: Annotated[int, Query(ge=1, le=100, description="Максимум записей")] = 50,
     is_active: Annotated[
@@ -129,6 +148,7 @@ async def list_target_sources(
     ),
     response_description="Изменённые настройки источника",
     responses={
+        **API_KEY_RESPONSES,
         404: {"description": "Связь цели и источника не найдена"},
         422: {"description": "Нет изменений или переданы некорректные данные"},
     },
@@ -157,7 +177,10 @@ async def update_target_source(
     summary="Отключить источник от целевого канала",
     description="Удаляет связь источника с конкретной целью публикации.",
     response_description="Источник отключён от целевого канала",
-    responses={404: {"description": "Связь цели и источника не найдена"}},
+    responses={
+        **API_KEY_RESPONSES,
+        404: {"description": "Связь цели и источника не найдена"},
+    },
 )
 async def delete_target_source(
     target_id: Annotated[int, Path(gt=0, description="Идентификатор целевого канала")],

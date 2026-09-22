@@ -4,12 +4,20 @@ from fastapi import APIRouter, Depends, HTTPException, Path, Query, Response, st
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from news_reposter.api.dependencies import API_KEY_RESPONSES, ApiKeyDep, HttpClientDep
+from news_reposter.api.dependencies import (
+    API_KEY_RESPONSES,
+    PERMISSION_AUTH_RESPONSES,
+    ApiKeyDep,
+    HttpClientDep,
+    require_permission,
+)
 from news_reposter.api.v1.max import (
     max_bad_gateway,
     max_client_from_settings,
     normalize_max_link,
 )
+from news_reposter.auth.context import AuthContext
+from news_reposter.auth.rbac import PermissionCode
 from news_reposter.db.models import MAXChannel
 from news_reposter.db.session import get_db_session
 from news_reposter.integrations.max import MAXAPIError
@@ -20,9 +28,12 @@ from news_reposter.services.media_storage import cleanup_queue_items_media
 router = APIRouter(
     prefix="/targets",
     tags=["Цели публикаций"],
-    responses=API_KEY_RESPONSES,
 )
 Session = Annotated[AsyncSession, Depends(get_db_session)]
+TargetsReadDep = Annotated[
+    AuthContext,
+    Depends(require_permission(PermissionCode.TARGETS_READ)),
+]
 
 
 def not_found_error() -> HTTPException:
@@ -79,6 +90,7 @@ def _max_icon_url(chat: dict[str, Any]) -> str | None:
     ),
     response_description="Созданная цель публикации",
     responses={
+        **API_KEY_RESPONSES,
         409: {"description": "Такая цель публикации уже существует"},
         422: {"description": "Переданы некорректные данные"},
     },
@@ -107,10 +119,11 @@ async def create_target(
         "отфильтровать по платформе и активности."
     ),
     response_description="Список найденных целей публикаций",
+    responses=PERMISSION_AUTH_RESPONSES,
 )
 async def list_targets(
     session: Session,
-    _api_key: ApiKeyDep,
+    _auth: TargetsReadDep,
     offset: Annotated[
         int,
         Query(ge=0, description="Сколько записей пропустить от начала списка"),
@@ -148,7 +161,10 @@ async def list_targets(
     "/resolve-max",
     summary="Определить канал MAX по ссылке",
     description="Возвращает chat_id, название и аватар канала MAX по публичной ссылке.",
-    responses={404: {"description": "Канал ещё не обнаружен webhook-ом"}},
+    responses={
+        **API_KEY_RESPONSES,
+        404: {"description": "Канал ещё не обнаружен webhook-ом"},
+    },
 )
 async def resolve_max_target(
     session: Session,
@@ -198,7 +214,10 @@ async def resolve_max_target(
     summary="Получить цель публикации",
     description="Возвращает один канал или чат по его ID в нашей базе.",
     response_description="Найденная цель публикации",
-    responses={404: {"description": "Цель публикации не найдена"}},
+    responses={
+        **PERMISSION_AUTH_RESPONSES,
+        404: {"description": "Цель публикации не найдена"},
+    },
 )
 async def get_target(
     target_id: Annotated[
@@ -206,7 +225,7 @@ async def get_target(
         Path(gt=0, description="Идентификатор цели в нашей базе"),
     ],
     session: Session,
-    _api_key: ApiKeyDep,
+    _auth: TargetsReadDep,
 ) -> TargetRead:
     """Возвращает одну цель публикации по идентификатору."""
 
@@ -226,6 +245,7 @@ async def get_target(
     ),
     response_description="Изменённая цель публикации",
     responses={
+        **API_KEY_RESPONSES,
         404: {"description": "Цель публикации не найдена"},
         409: {"description": "Такая цель публикации уже существует"},
         422: {"description": "Нет изменений или переданы некорректные данные"},
@@ -262,7 +282,10 @@ async def update_target(
         "приостановить её через `is_active=false`."
     ),
     response_description="Цель публикации удалена",
-    responses={404: {"description": "Цель публикации не найдена"}},
+    responses={
+        **API_KEY_RESPONSES,
+        404: {"description": "Цель публикации не найдена"},
+    },
 )
 async def delete_target(
     target_id: Annotated[

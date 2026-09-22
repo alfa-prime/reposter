@@ -3,12 +3,14 @@ from __future__ import annotations
 import asyncio
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
+from types import SimpleNamespace
 from typing import Any
 
 import httpx
 import pytest
 
-from news_reposter.api.dependencies import require_api_key
+from news_reposter.api.dependencies import get_current_auth, require_api_key
+from news_reposter.auth.rbac import PermissionCode
 from news_reposter.db.session import get_db_session
 from news_reposter.main import app
 from news_reposter.repositories.source import SourceAlreadyExistsError
@@ -93,8 +95,15 @@ def memory_repository(monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[None]:
     async def allow_api_key() -> None:
         return None
 
+    async def allow_sources_read() -> SimpleNamespace:
+        return SimpleNamespace(
+            user=SimpleNamespace(must_change_password=False),
+            permission_codes=frozenset({PermissionCode.SOURCES_READ.value}),
+        )
+
     app.dependency_overrides[get_db_session] = fake_session
     app.dependency_overrides[require_api_key] = allow_api_key
+    app.dependency_overrides[get_current_auth] = allow_sources_read
     monkeypatch.setattr(
         "news_reposter.api.v1.sources.SourceRepository",
         lambda _session: repository,
@@ -103,6 +112,7 @@ def memory_repository(monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[None]:
     yield
     app.dependency_overrides.pop(get_db_session, None)
     app.dependency_overrides.pop(require_api_key, None)
+    app.dependency_overrides.pop(get_current_auth, None)
 
 
 def test_sources_crud(memory_repository: None) -> None:
@@ -201,5 +211,32 @@ def test_source_validation(memory_repository: None) -> None:
                 json={"name": None},
             )
             assert null_update.status_code == 422
+
+    asyncio.run(scenario())
+
+
+def test_sources_read_requires_permission(memory_repository: None) -> None:
+    async def scenario() -> None:
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(
+            transport=transport,
+            base_url="https://test",
+        ) as client:
+            allowed = await client.get("/api/v1/sources")
+
+            app.dependency_overrides[get_current_auth] = lambda: SimpleNamespace(
+                user=SimpleNamespace(must_change_password=False),
+                permission_codes=frozenset({PermissionCode.TARGETS_READ.value}),
+            )
+            forbidden = await client.get("/api/v1/sources")
+
+            app.dependency_overrides.pop(get_current_auth, None)
+            unauthorized = await client.get("/api/v1/sources")
+
+        assert allowed.status_code == 200
+        assert forbidden.status_code == 403
+        assert forbidden.json() == {"detail": "Недостаточно прав"}
+        assert unauthorized.status_code == 401
+        assert unauthorized.json() == {"detail": "Требуется вход"}
 
     asyncio.run(scenario())
