@@ -5,8 +5,10 @@ import {
   Moon,
   Radio,
   Sun,
+  Users,
 } from "lucide-react";
 import type { Target } from "../api";
+import { useAuth } from "../auth";
 import { projectLogo } from "../logoData";
 import type { Section } from "../navigation";
 import { applyTheme, getInitialTheme, Theme } from "../theme";
@@ -24,6 +26,7 @@ type SidebarProps = {
 };
 
 export function Sidebar({ section, targets, selectedQueueTargetId, onSectionChange, onQueueTargetChange }: SidebarProps) {
+  const { user } = useAuth();
   const [theme, setTheme] = useState<Theme>(getInitialTheme);
   const isLight = theme === "light";
 
@@ -55,6 +58,9 @@ export function Sidebar({ section, targets, selectedQueueTargetId, onSectionChan
 
         <button onClick={() => onSectionChange("targets")} className={section === "targets" ? "active" : ""}><Radio size={18} />Каналы</button>
         <button onClick={() => onSectionChange("sources")} className={section === "sources" ? "active" : ""}><Database size={18} />Источники</button>
+        {user?.permissions.includes("users.read") && (
+          <button onClick={() => onSectionChange("users")} className={section === "users" ? "active" : ""}><Users size={18} />Пользователи</button>
+        )}
         <button onClick={() => onSectionChange("about")} className={section === "about" ? "active about-nav-button" : "about-nav-button"}><Info size={18} /><span>О проекте</span></button>
         <SettingsSidebarNav section={section} onSectionChange={onSectionChange} />
       </nav>

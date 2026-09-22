@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
+from news_reposter.api.v1.admin_users import router as admin_users_router
 from news_reposter.api.v1.auth import router as auth_router
 from news_reposter.api.v1.collection import router as collection_router
 from news_reposter.api.v1.max import router as max_router
@@ -38,6 +39,10 @@ OPENAPI_TAGS = [
     {
         "name": "Планировщик сбора",
         "description": "Настройки автоматического сбора и журнал запусков.",
+    },
+    {
+        "name": "Администрирование",
+        "description": "Управление пользователями и назначенными им ролями.",
     },
     {
         "name": "Система",
@@ -111,6 +116,7 @@ app.middleware("http")(request_id_middleware)
 app.add_exception_handler(Exception, unexpected_exception_handler)
 
 app.include_router(auth_router, prefix="/api/v1")
+app.include_router(admin_users_router, prefix="/api/v1")
 app.include_router(vk_router, prefix="/api/v1")
 app.include_router(max_router, prefix="/api/v1")
 app.include_router(sources_router, prefix="/api/v1")

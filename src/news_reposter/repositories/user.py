@@ -13,6 +13,18 @@ class UserRepository:
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
+    async def list(self, *, offset: int = 0, limit: int = 100) -> list[User]:
+        """Возвращает пользователей вместе с назначенными ролями."""
+
+        users = await self.session.scalars(
+            select(User)
+            .options(selectinload(User.roles).selectinload(Role.permissions))
+            .order_by(User.display_name, User.user_id)
+            .offset(offset)
+            .limit(limit)
+        )
+        return list(users)
+
     async def get_by_normalized_username(self, username: str) -> User | None:
         """Возвращает пользователя по каноническому логину."""
 

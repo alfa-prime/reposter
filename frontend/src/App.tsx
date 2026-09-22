@@ -15,6 +15,7 @@ import { SchedulerLogsPage } from "./components/SchedulerLogsPage";
 import { Sidebar } from "./components/Sidebar";
 import { SourcesPage } from "./components/SourcesPage";
 import { TargetsPage } from "./components/TargetsPage";
+import { UsersPage } from "./components/UsersPage";
 import type { Section } from "./navigation";
 
 type ConfirmDialog = {
@@ -44,6 +45,7 @@ function ApplicationGate() {
 }
 
 function AuthenticatedApp() {
+  const { user } = useAuth();
   const [section, setSection] = useState<Section>("queue");
   const [targets, setTargets] = useState<Target[]>([]);
   const [sources, setSources] = useState<Source[]>([]);
@@ -96,6 +98,12 @@ function AuthenticatedApp() {
   }
 
   useEffect(() => { void loadAll(); }, []);
+
+  useEffect(() => {
+    if (section === "users" && !user?.permissions.includes("users.read")) {
+      setSection("queue");
+    }
+  }, [section, user]);
 
   useEffect(() => {
     if (!notice) return;
@@ -215,7 +223,7 @@ function AuthenticatedApp() {
     ? `Канал: ${selectedQueueTarget.name}`
     : "Общая очередь · посты из всех каналов";
 
-  const standalonePage = section === "about" || section === "scheduler" || section === "scheduler_logs";
+  const standalonePage = section === "about" || section === "scheduler" || section === "scheduler_logs" || section === "users";
 
   return (
     <div className="shell">
@@ -251,6 +259,7 @@ function AuthenticatedApp() {
         {section === "about" && <AboutPage />}
         {section === "scheduler" && <SettingsPage />}
         {section === "scheduler_logs" && <SchedulerLogsPage />}
+        {section === "users" && user?.permissions.includes("users.read") && <UsersPage />}
 
         {section === "queue" && (
           <QueuePage
