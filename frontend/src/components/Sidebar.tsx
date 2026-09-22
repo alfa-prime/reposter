@@ -23,9 +23,10 @@ type SidebarProps = {
   selectedQueueTargetId: number | null;
   onSectionChange: (section: Section) => void;
   onQueueTargetChange: (targetId: number | null) => void;
+  onChangePassword: () => void;
 };
 
-export function Sidebar({ section, targets, selectedQueueTargetId, onSectionChange, onQueueTargetChange }: SidebarProps) {
+export function Sidebar({ section, targets, selectedQueueTargetId, onSectionChange, onQueueTargetChange, onChangePassword }: SidebarProps) {
   const { user } = useAuth();
   const [theme, setTheme] = useState<Theme>(getInitialTheme);
   const isLight = theme === "light";
@@ -61,12 +62,12 @@ export function Sidebar({ section, targets, selectedQueueTargetId, onSectionChan
         {user?.permissions.includes("users.read") && (
           <button onClick={() => onSectionChange("users")} className={section === "users" ? "active" : ""}><Users size={18} />Пользователи</button>
         )}
-        <button onClick={() => onSectionChange("about")} className={section === "about" ? "active about-nav-button" : "about-nav-button"}><Info size={18} /><span>О проекте</span></button>
         <SettingsSidebarNav section={section} onSectionChange={onSectionChange} />
+        <button onClick={() => onSectionChange("about")} className={section === "about" ? "active about-nav-button" : "about-nav-button"}><Info size={18} /><span>О проекте</span></button>
       </nav>
 
       <div className="sidebar-foot">
-        <UserMenu />
+        <UserMenu onChangePassword={onChangePassword} />
         <div className="sidebar-theme-row">
           <span className="sidebar-theme-label">
             {isLight ? <Sun size={15} /> : <Moon size={15} />}
