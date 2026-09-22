@@ -9,12 +9,17 @@ from typing import Any
 import httpx
 import pytest
 
-from news_reposter.api.dependencies import get_current_auth, require_api_key
+from news_reposter.api.dependencies import get_current_auth
 from news_reposter.auth.rbac import PermissionCode
+from news_reposter.auth.session_tokens import hash_token
+from news_reposter.config import get_settings
 from news_reposter.db.session import get_db_session
 from news_reposter.main import app
 from news_reposter.repositories.source import SourceAlreadyExistsError
 from news_reposter.schemas.source import SourceCreate, SourceUpdate
+
+CSRF_TOKEN = "sources-csrf-token"
+CSRF_COOKIE_NAME = get_settings().auth_csrf_cookie_name
 
 
 class MemorySourceRepository:
@@ -92,17 +97,19 @@ def memory_repository(monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[None]:
     async def fake_session() -> AsyncIterator[object]:
         yield object()
 
-    async def allow_api_key() -> None:
-        return None
-
     async def allow_sources_read() -> SimpleNamespace:
         return SimpleNamespace(
             user=SimpleNamespace(must_change_password=False),
-            permission_codes=frozenset({PermissionCode.SOURCES_READ.value}),
+            session=SimpleNamespace(csrf_token_hash=hash_token(CSRF_TOKEN)),
+            permission_codes=frozenset(
+                {
+                    PermissionCode.SOURCES_READ.value,
+                    PermissionCode.SOURCES_MANAGE.value,
+                }
+            ),
         )
 
     app.dependency_overrides[get_db_session] = fake_session
-    app.dependency_overrides[require_api_key] = allow_api_key
     app.dependency_overrides[get_current_auth] = allow_sources_read
     monkeypatch.setattr(
         "news_reposter.api.v1.sources.SourceRepository",
@@ -111,7 +118,6 @@ def memory_repository(monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[None]:
 
     yield
     app.dependency_overrides.pop(get_db_session, None)
-    app.dependency_overrides.pop(require_api_key, None)
     app.dependency_overrides.pop(get_current_auth, None)
 
 
@@ -123,6 +129,8 @@ def test_sources_crud(memory_repository: None) -> None:
         async with httpx.AsyncClient(
             transport=transport,
             base_url="http://test",
+            cookies={CSRF_COOKIE_NAME: CSRF_TOKEN},
+            headers={"X-CSRF-Token": CSRF_TOKEN},
         ) as client:
             created = await client.post(
                 "/api/v1/sources",
@@ -199,6 +207,8 @@ def test_source_validation(memory_repository: None) -> None:
         async with httpx.AsyncClient(
             transport=transport,
             base_url="http://test",
+            cookies={CSRF_COOKIE_NAME: CSRF_TOKEN},
+            headers={"X-CSRF-Token": CSRF_TOKEN},
         ) as client:
             invalid_url = await client.post(
                 "/api/v1/sources",
@@ -238,5 +248,40 @@ def test_sources_read_requires_permission(memory_repository: None) -> None:
         assert forbidden.json() == {"detail": "Недостаточно прав"}
         assert unauthorized.status_code == 401
         assert unauthorized.json() == {"detail": "Требуется вход"}
+
+    asyncio.run(scenario())
+
+
+def test_sources_manage_requires_permission_and_csrf(memory_repository: None) -> None:
+    payload = {
+        "name": "Полуостров 51",
+        "platform": "vk",
+        "url": "https://vk.com/peninsula51",
+    }
+
+    async def scenario() -> None:
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(
+            transport=transport,
+            base_url="https://test",
+            cookies={CSRF_COOKIE_NAME: CSRF_TOKEN},
+        ) as client:
+            missing_csrf = await client.post("/api/v1/sources", json=payload)
+
+            app.dependency_overrides[get_current_auth] = lambda: SimpleNamespace(
+                user=SimpleNamespace(must_change_password=False),
+                session=SimpleNamespace(csrf_token_hash=hash_token(CSRF_TOKEN)),
+                permission_codes=frozenset({PermissionCode.SOURCES_READ.value}),
+            )
+            forbidden = await client.post(
+                "/api/v1/sources",
+                json=payload,
+                headers={"X-CSRF-Token": CSRF_TOKEN},
+            )
+
+        assert missing_csrf.status_code == 403
+        assert missing_csrf.json() == {"detail": "Недействительный CSRF-токен"}
+        assert forbidden.status_code == 403
+        assert forbidden.json() == {"detail": "Недостаточно прав"}
 
     asyncio.run(scenario())

@@ -7,8 +7,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from news_reposter.api.dependencies import (
     API_KEY_RESPONSES,
     PERMISSION_AUTH_RESPONSES,
+    PERMISSION_CSRF_AUTH_RESPONSES,
     ApiKeyDep,
+    CsrfAuthContextDep,
     HttpClientDep,
+    SameOriginDep,
     require_permission,
 )
 from news_reposter.api.v1.max import (
@@ -33,6 +36,10 @@ Session = Annotated[AsyncSession, Depends(get_db_session)]
 TargetsReadDep = Annotated[
     AuthContext,
     Depends(require_permission(PermissionCode.TARGETS_READ)),
+]
+TargetsManageDep = Annotated[
+    AuthContext,
+    Depends(require_permission(PermissionCode.TARGETS_MANAGE)),
 ]
 
 
@@ -90,7 +97,7 @@ def _max_icon_url(chat: dict[str, Any]) -> str | None:
     ),
     response_description="Созданная цель публикации",
     responses={
-        **API_KEY_RESPONSES,
+        **PERMISSION_CSRF_AUTH_RESPONSES,
         409: {"description": "Такая цель публикации уже существует"},
         422: {"description": "Переданы некорректные данные"},
     },
@@ -98,7 +105,9 @@ def _max_icon_url(chat: dict[str, Any]) -> str | None:
 async def create_target(
     data: TargetCreate,
     session: Session,
-    _api_key: ApiKeyDep,
+    _auth: TargetsManageDep,
+    _csrf_auth: CsrfAuthContextDep,
+    _same_origin: SameOriginDep,
 ) -> TargetRead:
     """Добавляет новую цель публикации."""
 
@@ -245,7 +254,7 @@ async def get_target(
     ),
     response_description="Изменённая цель публикации",
     responses={
-        **API_KEY_RESPONSES,
+        **PERMISSION_CSRF_AUTH_RESPONSES,
         404: {"description": "Цель публикации не найдена"},
         409: {"description": "Такая цель публикации уже существует"},
         422: {"description": "Нет изменений или переданы некорректные данные"},
@@ -258,7 +267,9 @@ async def update_target(
     ],
     data: TargetUpdate,
     session: Session,
-    _api_key: ApiKeyDep,
+    _auth: TargetsManageDep,
+    _csrf_auth: CsrfAuthContextDep,
+    _same_origin: SameOriginDep,
 ) -> TargetRead:
     """Частично изменяет цель публикации."""
 
@@ -283,7 +294,7 @@ async def update_target(
     ),
     response_description="Цель публикации удалена",
     responses={
-        **API_KEY_RESPONSES,
+        **PERMISSION_CSRF_AUTH_RESPONSES,
         404: {"description": "Цель публикации не найдена"},
     },
 )
@@ -293,7 +304,9 @@ async def delete_target(
         Path(gt=0, description="Идентификатор цели в нашей базе"),
     ],
     session: Session,
-    _api_key: ApiKeyDep,
+    _auth: TargetsManageDep,
+    _csrf_auth: CsrfAuthContextDep,
+    _same_origin: SameOriginDep,
 ) -> Response:
     """Удаляет цель публикации."""
 

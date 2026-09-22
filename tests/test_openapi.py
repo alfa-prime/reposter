@@ -74,6 +74,18 @@ DIRECTORY_READ_OPERATIONS = {
     ("/api/v1/targets/{target_id}/sources", "get"),
 }
 
+DIRECTORY_MANAGE_OPERATIONS = {
+    ("/api/v1/sources", "post"),
+    ("/api/v1/sources/{source_id}", "patch"),
+    ("/api/v1/sources/{source_id}", "delete"),
+    ("/api/v1/targets", "post"),
+    ("/api/v1/targets/{target_id}", "patch"),
+    ("/api/v1/targets/{target_id}", "delete"),
+    ("/api/v1/targets/{target_id}/sources", "post"),
+    ("/api/v1/targets/{target_id}/sources/{target_source_id}", "patch"),
+    ("/api/v1/targets/{target_id}/sources/{target_source_id}", "delete"),
+}
+
 
 def test_openapi_has_russian_operation_descriptions() -> None:
     """Проверяет русские заголовки и описания всех прикладных эндпоинтов."""
@@ -160,6 +172,7 @@ def test_openapi_describes_api_security_boundaries() -> None:
                 SCHEDULER_READ_OPERATIONS
                 | QUEUE_READ_OPERATIONS
                 | DIRECTORY_READ_OPERATIONS
+                | DIRECTORY_MANAGE_OPERATIONS
             ):
                 assert operation["security"] == [{"SessionCookie": []}]
                 assert "401" in operation["responses"]
@@ -183,6 +196,18 @@ def test_openapi_documents_csrf_header_for_auth_mutations() -> None:
         "/api/v1/auth/logout-all",
     ):
         parameters = schema["paths"][path]["post"]["parameters"]
+        assert any(
+            parameter["in"] == "header" and parameter["name"] == "X-CSRF-Token"
+            for parameter in parameters
+        )
+
+
+def test_openapi_documents_csrf_header_for_directory_mutations() -> None:
+    """Документирует CSRF-заголовок операций управления справочниками."""
+
+    schema = app.openapi()
+    for path, method in DIRECTORY_MANAGE_OPERATIONS:
+        parameters = schema["paths"][path][method]["parameters"]
         assert any(
             parameter["in"] == "header" and parameter["name"] == "X-CSRF-Token"
             for parameter in parameters

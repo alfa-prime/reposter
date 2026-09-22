@@ -4,9 +4,10 @@ from fastapi import APIRouter, Depends, HTTPException, Path, Query, Response, st
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from news_reposter.api.dependencies import (
-    API_KEY_RESPONSES,
     PERMISSION_AUTH_RESPONSES,
-    ApiKeyDep,
+    PERMISSION_CSRF_AUTH_RESPONSES,
+    CsrfAuthContextDep,
+    SameOriginDep,
     require_permission,
 )
 from news_reposter.auth.context import AuthContext
@@ -34,6 +35,10 @@ SourcesReadDep = Annotated[
 TargetsReadDep = Annotated[
     AuthContext,
     Depends(require_permission(PermissionCode.TARGETS_READ)),
+]
+TargetsManageDep = Annotated[
+    AuthContext,
+    Depends(require_permission(PermissionCode.TARGETS_MANAGE)),
 ]
 
 
@@ -76,7 +81,7 @@ def duplicate_error() -> HTTPException:
     ),
     response_description="Подключённый источник",
     responses={
-        **API_KEY_RESPONSES,
+        **PERMISSION_CSRF_AUTH_RESPONSES,
         404: {"description": "Цель публикации или источник не найдены"},
         409: {"description": "Источник уже подключён к этой цели публикации"},
         422: {"description": "Переданы некорректные данные"},
@@ -86,7 +91,9 @@ async def create_target_source(
     target_id: Annotated[int, Path(gt=0, description="Идентификатор целевого канала")],
     data: TargetSourceCreate,
     session: Session,
-    _api_key: ApiKeyDep,
+    _auth: TargetsManageDep,
+    _csrf_auth: CsrfAuthContextDep,
+    _same_origin: SameOriginDep,
 ) -> TargetSourceRead:
     repository = TargetSourceRepository(session)
     if not await repository.target_exists(target_id):
@@ -148,7 +155,7 @@ async def list_target_sources(
     ),
     response_description="Изменённые настройки источника",
     responses={
-        **API_KEY_RESPONSES,
+        **PERMISSION_CSRF_AUTH_RESPONSES,
         404: {"description": "Связь цели и источника не найдена"},
         422: {"description": "Нет изменений или переданы некорректные данные"},
     },
@@ -161,7 +168,9 @@ async def update_target_source(
     ],
     data: TargetSourceUpdate,
     session: Session,
-    _api_key: ApiKeyDep,
+    _auth: TargetsManageDep,
+    _csrf_auth: CsrfAuthContextDep,
+    _same_origin: SameOriginDep,
 ) -> TargetSourceRead:
     repository = TargetSourceRepository(session)
     item = await repository.get(target_id, target_source_id)
@@ -178,7 +187,7 @@ async def update_target_source(
     description="Удаляет связь источника с конкретной целью публикации.",
     response_description="Источник отключён от целевого канала",
     responses={
-        **API_KEY_RESPONSES,
+        **PERMISSION_CSRF_AUTH_RESPONSES,
         404: {"description": "Связь цели и источника не найдена"},
     },
 )
@@ -189,7 +198,9 @@ async def delete_target_source(
         Path(gt=0, description="Идентификатор связи цели и источника"),
     ],
     session: Session,
-    _api_key: ApiKeyDep,
+    _auth: TargetsManageDep,
+    _csrf_auth: CsrfAuthContextDep,
+    _same_origin: SameOriginDep,
 ) -> Response:
     repository = TargetSourceRepository(session)
     item = await repository.get(target_id, target_source_id)

@@ -4,9 +4,10 @@ from fastapi import APIRouter, Depends, HTTPException, Path, Query, Response, st
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from news_reposter.api.dependencies import (
-    API_KEY_RESPONSES,
     PERMISSION_AUTH_RESPONSES,
-    ApiKeyDep,
+    PERMISSION_CSRF_AUTH_RESPONSES,
+    CsrfAuthContextDep,
+    SameOriginDep,
     require_permission,
 )
 from news_reposter.auth.context import AuthContext
@@ -24,6 +25,10 @@ Session = Annotated[AsyncSession, Depends(get_db_session)]
 SourcesReadDep = Annotated[
     AuthContext,
     Depends(require_permission(PermissionCode.SOURCES_READ)),
+]
+SourcesManageDep = Annotated[
+    AuthContext,
+    Depends(require_permission(PermissionCode.SOURCES_MANAGE)),
 ]
 
 
@@ -56,7 +61,7 @@ def duplicate_error() -> HTTPException:
     ),
     response_description="Созданный источник",
     responses={
-        **API_KEY_RESPONSES,
+        **PERMISSION_CSRF_AUTH_RESPONSES,
         409: {"description": "Источник с такой ссылкой уже существует"},
         422: {"description": "Переданы некорректные данные"},
     },
@@ -64,7 +69,9 @@ def duplicate_error() -> HTTPException:
 async def create_source(
     data: SourceCreate,
     session: Session,
-    _api_key: ApiKeyDep,
+    _auth: SourcesManageDep,
+    _csrf_auth: CsrfAuthContextDep,
+    _same_origin: SameOriginDep,
 ) -> SourceRead:
     """Добавляет новый источник публикаций."""
 
@@ -160,7 +167,7 @@ async def get_source(
     ),
     response_description="Изменённый источник",
     responses={
-        **API_KEY_RESPONSES,
+        **PERMISSION_CSRF_AUTH_RESPONSES,
         404: {"description": "Источник не найден"},
         409: {"description": "Источник с такой ссылкой уже существует"},
         422: {"description": "Нет изменений или переданы некорректные данные"},
@@ -173,7 +180,9 @@ async def update_source(
     ],
     data: SourceUpdate,
     session: Session,
-    _api_key: ApiKeyDep,
+    _auth: SourcesManageDep,
+    _csrf_auth: CsrfAuthContextDep,
+    _same_origin: SameOriginDep,
 ) -> SourceRead:
     """Частично изменяет источник."""
 
@@ -198,7 +207,7 @@ async def update_source(
     ),
     response_description="Источник удалён",
     responses={
-        **API_KEY_RESPONSES,
+        **PERMISSION_CSRF_AUTH_RESPONSES,
         404: {"description": "Источник не найден"},
     },
 )
@@ -208,7 +217,9 @@ async def delete_source(
         Path(gt=0, description="Идентификатор источника в нашей базе"),
     ],
     session: Session,
-    _api_key: ApiKeyDep,
+    _auth: SourcesManageDep,
+    _csrf_auth: CsrfAuthContextDep,
+    _same_origin: SameOriginDep,
 ) -> Response:
     """Удаляет источник."""
 
