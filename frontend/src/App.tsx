@@ -47,6 +47,7 @@ function ApplicationGate() {
 
 function AuthenticatedApp() {
   const { user } = useAuth();
+  const isAdministrator = user?.roles.some((role) => role.code === "administrator") ?? false;
   const [section, setSection] = useState<Section>("queue");
   const [targets, setTargets] = useState<Target[]>([]);
   const [sources, setSources] = useState<Source[]>([]);
@@ -105,7 +106,10 @@ function AuthenticatedApp() {
     if (section === "users" && !user?.permissions.includes("users.read")) {
       setSection("queue");
     }
-  }, [section, user]);
+    if ((section === "scheduler" || section === "logs") && !isAdministrator) {
+      setSection("queue");
+    }
+  }, [isAdministrator, section, user]);
 
   useEffect(() => {
     if (!notice) return;
@@ -225,7 +229,7 @@ function AuthenticatedApp() {
     ? `Канал: ${selectedQueueTarget.name}`
     : "Общая очередь · посты из всех каналов";
 
-  const standalonePage = section === "about" || section === "scheduler" || section === "scheduler_logs" || section === "users";
+  const standalonePage = section === "about" || section === "scheduler" || section === "logs" || section === "users";
 
   return (
     <div className="shell">
@@ -267,8 +271,8 @@ function AuthenticatedApp() {
         )}
 
         {section === "about" && <AboutPage />}
-        {section === "scheduler" && <SettingsPage />}
-        {section === "scheduler_logs" && <SchedulerLogsPage />}
+        {section === "scheduler" && isAdministrator && <SettingsPage />}
+        {section === "logs" && isAdministrator && <SchedulerLogsPage />}
         {section === "users" && user?.permissions.includes("users.read") && <UsersPage />}
 
         {section === "queue" && (

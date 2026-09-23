@@ -53,10 +53,15 @@ export function SchedulerLogsPage() {
   return (
     <section className="settings-page scheduler-page">
       <header className="settings-page-head scheduler-head">
-        <div><p className="eyebrow">НАСТРОЙКИ · РЕДАКЦИОННАЯ ОЧЕРЕДЬ</p><h1>Журнал планировщика</h1></div>
+        <div><p className="eyebrow">АДМИНИСТРИРОВАНИЕ · ЖУРНАЛЫ</p><h1>Журналы</h1></div>
         <button className="secondary" disabled={busy} onClick={() => void load()}><RefreshCw size={16} className={busy ? "spin" : ""} />Обновить</button>
       </header>
       {error && <div className="toast error">{error}<button onClick={() => setError("")}>×</button></div>}
+
+      <div className="logs-section-title">
+        <strong>Журнал планировщика</strong>
+        <span>История ручных и автоматических запусков сбора.</span>
+      </div>
 
       <div className="log-toolbar">
         <label>Результат<select value={status} onChange={(event) => setStatus(event.target.value)}><option value="">Все</option><option value="success">Успешно</option><option value="partial">Частично</option><option value="failed">Ошибка</option><option value="skipped">Пропущен</option><option value="interrupted">Прерван</option></select></label>

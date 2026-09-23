@@ -100,7 +100,7 @@ export function SettingsPage() {
   return (
     <section className="settings-page scheduler-page">
       <header className="settings-page-head scheduler-head">
-        <div><p className="eyebrow">НАСТРОЙКИ · РЕДАКЦИОННАЯ ОЧЕРЕДЬ</p><h1>Расписание планировщика</h1></div>
+        <div><p className="eyebrow">АДМИНИСТРИРОВАНИЕ · ПЛАНИРОВЩИК</p><h1>Планировщик</h1></div>
         <button className="secondary" disabled={busy} onClick={() => void runNow()}><Play size={16} />Собрать сейчас</button>
       </header>
 

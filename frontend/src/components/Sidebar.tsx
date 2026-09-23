@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
 import {
+  CalendarClock,
   Database,
   Info,
   Moon,
   Radio,
+  ScrollText,
   Sun,
   Users,
 } from "lucide-react";
@@ -14,7 +16,6 @@ import type { Section } from "../navigation";
 import { applyTheme, getInitialTheme, Theme } from "../theme";
 import "../sidebarQueue.css";
 import { QueueSidebarNav } from "./QueueSidebarNav";
-import { SettingsSidebarNav } from "./SettingsSidebarNav";
 import { UserMenu } from "./UserMenu";
 
 type SidebarProps = {
@@ -30,6 +31,7 @@ export function Sidebar({ section, targets, selectedQueueTargetId, onSectionChan
   const { user } = useAuth();
   const [theme, setTheme] = useState<Theme>(getInitialTheme);
   const isLight = theme === "light";
+  const isAdministrator = user?.roles.some((role) => role.code === "administrator") ?? false;
 
   useEffect(() => {
     applyTheme(theme);
@@ -62,7 +64,10 @@ export function Sidebar({ section, targets, selectedQueueTargetId, onSectionChan
         {user?.permissions.includes("users.read") && (
           <button onClick={() => onSectionChange("users")} className={section === "users" ? "active" : ""}><Users size={18} />Пользователи</button>
         )}
-        <SettingsSidebarNav section={section} onSectionChange={onSectionChange} />
+        {isAdministrator && <>
+          <button onClick={() => onSectionChange("scheduler")} className={section === "scheduler" ? "active" : ""}><CalendarClock size={18} />Планировщик</button>
+          <button onClick={() => onSectionChange("logs")} className={section === "logs" ? "active" : ""}><ScrollText size={18} />Журналы</button>
+        </>}
         <button onClick={() => onSectionChange("about")} className={section === "about" ? "active about-nav-button" : "about-nav-button"}><Info size={18} /><span>О проекте</span></button>
       </nav>
 
