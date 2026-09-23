@@ -82,9 +82,10 @@ function mediaKey(photo: QueuePhoto) {
 type QueueExperienceProps = {
   collectSignal?: number;
   targetId: number | null;
+  openItemId?: number | null;
 };
 
-export function QueueExperience({ collectSignal = 0, targetId }: QueueExperienceProps) {
+export function QueueExperience({ collectSignal = 0, targetId, openItemId = null }: QueueExperienceProps) {
   const [items, setItems] = useState<QueueItem[]>([]);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [tab, setTab] = useState<QueueTab>("storage");
@@ -171,6 +172,10 @@ export function QueueExperience({ collectSignal = 0, targetId }: QueueExperience
   }, [targetId]);
 
   useEffect(() => {
+    if (openItemId) setSelectedId(openItemId);
+  }, [openItemId]);
+
+  useEffect(() => {
     if (!selectedId) return;
     let active = true;
     void (async () => {
@@ -178,7 +183,9 @@ export function QueueExperience({ collectSignal = 0, targetId }: QueueExperience
         const item = await api.queueItem(selectedId);
         const state = await api.queueMediaState(selectedId);
         if (!active) return;
-        setItems((current) => current.map((row) => row.queue_item_id === item.queue_item_id ? item : row));
+        setItems((current) => current.some((row) => row.queue_item_id === item.queue_item_id)
+          ? current.map((row) => row.queue_item_id === item.queue_item_id ? item : row)
+          : [item, ...current]);
         setText(item.rewritten_text ?? item.original_text ?? "");
         setMediaOrder(state.media_order);
         setScheduleAt(scheduleInputValue(item.scheduled_at));

@@ -9,7 +9,7 @@ from sqlalchemy.orm import aliased
 from news_reposter.api.dependencies import PERMISSION_AUTH_RESPONSES, require_permission
 from news_reposter.auth.context import AuthContext
 from news_reposter.auth.rbac import PermissionCode
-from news_reposter.db.models import AuditEvent, User
+from news_reposter.db.models import AuditEvent, QueueItem, User
 from news_reposter.db.session import get_db_session
 from news_reposter.schemas.audit import (
     AuditEventPage,
@@ -107,6 +107,7 @@ async def list_editorial_audit_events(
     limit: Annotated[int, Query(ge=1, le=100)] = 20,
     actor_user_id: Annotated[int | None, Query(gt=0)] = None,
     target_id: Annotated[int | None, Query(gt=0)] = None,
+    queue_item_id: Annotated[int | None, Query(gt=0)] = None,
     action: str | None = None,
     date_from: datetime | None = None,
     date_to: datetime | None = None,
@@ -117,6 +118,8 @@ async def list_editorial_audit_events(
         filters.append(AuditEvent.actor_user_id == actor_user_id)
     if target_id is not None:
         filters.append(AuditEvent.details["target_id"].as_integer() == target_id)
+    if queue_item_id is not None:
+        filters.append(AuditEvent.subject_id == queue_item_id)
     if action:
         filters.append(AuditEvent.action == action)
     if date_from is not None:
@@ -129,8 +132,13 @@ async def list_editorial_audit_events(
     )
     rows = (
         await session.execute(
-            select(AuditEvent, actor)
+            select(AuditEvent, actor, QueueItem.queue_item_id)
             .outerjoin(actor, actor.user_id == AuditEvent.actor_user_id)
+            .outerjoin(
+                QueueItem,
+                (AuditEvent.subject_type == "queue_item")
+                & (QueueItem.queue_item_id == AuditEvent.subject_id),
+            )
             .where(*filters)
             .order_by(AuditEvent.created_at.desc(), AuditEvent.audit_event_id.desc())
             .offset(offset)
@@ -149,10 +157,11 @@ async def list_editorial_audit_events(
                 post_id=event.details.get("post_id"),
                 target_id=event.details.get("target_id"),
                 target_name=event.details.get("target_name"),
+                material_exists=existing_queue_item_id is not None,
                 details=event.details,
                 created_at=event.created_at,
             )
-            for event, actor_user in rows
+            for event, actor_user, existing_queue_item_id in rows
         ],
         total=total or 0,
         offset=offset,

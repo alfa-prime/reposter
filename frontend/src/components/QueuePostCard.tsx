@@ -25,7 +25,7 @@ export function QueuePostCard({ item, statusLabel, dateLabel, detailText, onOpen
       )}
       <div className="editorial-card-body">
         <div className="editorial-card-meta">
-          <span>{item.target_name ?? `Канал #${item.target_id}`}</span>
+          <span>{item.target_name ?? `Канал #${item.target_id}`} · Материал #{item.queue_item_id}</span>
           <time>{dateLabel}</time>
         </div>
         <strong>{(item.rewritten_text ?? item.original_text ?? "Пост без текста").slice(0, 120)}</strong>

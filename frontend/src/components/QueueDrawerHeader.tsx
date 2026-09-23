@@ -29,6 +29,7 @@ export function QueueDrawerHeader({
         <button className="drawer-close" onClick={onClose}><X size={22}/></button>
         <div>
           <h2>{drawerTitle(item.status)}</h2>
+          <span className="drawer-material-id">Материал #{item.queue_item_id}</span>
           <div className={`editorial-status status-${item.status}`}>{statusLabel}</div>
         </div>
       </header>

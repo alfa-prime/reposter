@@ -93,7 +93,7 @@ export type AuditEventPage = {
 export type EditorialAuditEvent = {
   audit_event_id: number; actor_user_id: number | null; actor_name: string | null; actor_username: string | null;
   action: string; queue_item_id: number; post_id: number | null; target_id: number | null; target_name: string | null;
-  details: Record<string, unknown>; created_at: string;
+  material_exists: boolean; details: Record<string, unknown>; created_at: string;
 };
 export type EditorialAuditEventPage = { items: EditorialAuditEvent[]; total: number; offset: number; limit: number };
 
@@ -354,10 +354,11 @@ export const api = {
     if (options.action) params.set("action", options.action);
     return request<AuditEventPage>(`/api/v1/admin/audit?${params.toString()}`);
   },
-  editorialAuditEvents: (options: { offset: number; limit: number; actorUserId?: number; targetId?: number; action?: string; dateFrom?: string; dateTo?: string }) => {
+  editorialAuditEvents: (options: { offset: number; limit: number; actorUserId?: number; targetId?: number; queueItemId?: number; action?: string; dateFrom?: string; dateTo?: string }) => {
     const params = new URLSearchParams({ offset: String(options.offset), limit: String(options.limit) });
     if (options.actorUserId) params.set("actor_user_id", String(options.actorUserId));
     if (options.targetId) params.set("target_id", String(options.targetId));
+    if (options.queueItemId) params.set("queue_item_id", String(options.queueItemId));
     if (options.action) params.set("action", options.action);
     if (options.dateFrom) params.set("date_from", options.dateFrom);
     if (options.dateTo) params.set("date_to", options.dateTo);

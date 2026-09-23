@@ -35,6 +35,7 @@ class EditorialAuditEventRead(BaseModel):
     post_id: int | None
     target_id: int | None
     target_name: str | None
+    material_exists: bool
     details: dict[str, Any]
     created_at: datetime
 

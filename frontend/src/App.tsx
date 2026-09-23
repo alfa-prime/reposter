@@ -54,6 +54,7 @@ function AuthenticatedApp() {
   const [targets, setTargets] = useState<Target[]>([]);
   const [sources, setSources] = useState<Source[]>([]);
   const [queueReloadSignal, setQueueReloadSignal] = useState(0);
+  const [queueItemToOpen, setQueueItemToOpen] = useState<number | null>(null);
   const [selectedTarget, setSelectedTarget] = useState<Target | null>(null);
   const [selectedQueueTargetId, setSelectedQueueTargetId] = useState<number | null>(null);
   const [targetSources, setTargetSources] = useState<TargetSource[]>([]);
@@ -122,13 +123,21 @@ function AuthenticatedApp() {
   function changeSection(nextSection: Section) {
     setError("");
     setNotice("");
+    if (nextSection === "queue") setQueueItemToOpen(null);
     setSection(nextSection);
   }
 
   function changeQueueTarget(targetId: number | null) {
     setError("");
     setNotice("");
+    setQueueItemToOpen(null);
     setSelectedQueueTargetId(targetId);
+  }
+
+  function openQueueItem(queueItemId: number) {
+    setSelectedQueueTargetId(null);
+    setQueueItemToOpen(queueItemId);
+    setSection("queue");
   }
 
   async function openTarget(item: Target) {
@@ -276,13 +285,14 @@ function AuthenticatedApp() {
         {section === "scheduler" && isAdministrator && <SettingsPage />}
         {section === "logs" && isAdministrator && <SchedulerLogsPage />}
         {section === "user_logs" && isAdministrator && <UserActivityLogsPage />}
-        {section === "editorial_logs" && isAdministrator && <EditorialLogsPage />}
+        {section === "editorial_logs" && isAdministrator && <EditorialLogsPage onOpenMaterial={openQueueItem} />}
         {section === "users" && user?.permissions.includes("users.read") && <UsersPage />}
 
         {section === "queue" && (
           <QueuePage
             targetId={selectedQueueTargetId}
             reloadSignal={queueReloadSignal}
+            openItemId={queueItemToOpen}
           />
         )}
 
