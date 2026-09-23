@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, Mock
 import pytest
 from sqlalchemy.exc import IntegrityError
 
-from news_reposter.db.models import Role, User
+from news_reposter.db.models import AuditEvent, Role, Target, User
 from news_reposter.services.users import (
     RoleCombinationError,
     RolesNotFoundError,
@@ -250,6 +250,91 @@ def test_create_user_assigns_roles_and_requires_password_change() -> None:
         assert user.roles == [editor]
         roles.get_active_by_codes.assert_awaited_once_with({"editor"})
         session.commit.assert_awaited_once()
+
+    asyncio.run(scenario())
+
+
+def test_create_administrator_ignores_channel_assignments() -> None:
+    async def scenario() -> None:
+        session = AsyncMock()
+        users = MemoryUserRepository()
+        administrator = Role(
+            role_id=1,
+            code="administrator",
+            name="Администратор",
+            is_active=True,
+        )
+        roles = MemoryRoleRepository(administrator)
+        roles.get_active_by_codes = AsyncMock(return_value=[administrator])
+        passwords = Mock()
+        passwords.hash.return_value = "$argon2id$temporary"
+        service = UserService(
+            session,
+            password_manager=passwords,
+            user_repository=users,
+            role_repository=roles,
+        )
+
+        user = await service.create_user(
+            username="admin.two",
+            display_name="Второй администратор",
+            temporary_password="temporary password 123",
+            role_codes=["administrator"],
+            target_ids=[999],
+        )
+
+        assert user.targets == []
+        session.scalars.assert_not_awaited()
+
+    asyncio.run(scenario())
+
+
+def test_promoting_user_to_administrator_clears_targets_and_audits() -> None:
+    async def scenario() -> None:
+        session = AsyncMock()
+        session.add = Mock()
+        assigned_target = Target(
+            target_id=7,
+            name="Канал",
+            platform="max",
+            external_id="7",
+        )
+        managed = User(user_id=8, is_active=True, roles=[], targets=[assigned_target])
+        users = MemoryUserRepository()
+        users.get_by_id_for_update = AsyncMock(return_value=managed)
+        administrator = Role(
+            role_id=1,
+            code="administrator",
+            name="Администратор",
+            is_active=True,
+        )
+        roles = MemoryRoleRepository(administrator)
+        roles.get_active_by_codes = AsyncMock(return_value=[administrator])
+        service = UserService(
+            session,
+            user_repository=users,
+            role_repository=roles,
+        )
+
+        result = await service.update_user(
+            8,
+            actor_user_id=1,
+            role_codes=["administrator"],
+        )
+
+        assert result.roles == [administrator]
+        assert result.targets == []
+        audit_event = next(
+            call.args[0]
+            for call in session.add.call_args_list
+            if isinstance(call.args[0], AuditEvent)
+        )
+        assert audit_event.details == {
+            "previous_target_ids": [7],
+            "target_ids": [],
+            "added_target_ids": [],
+            "removed_target_ids": [7],
+        }
 
     asyncio.run(scenario())
 

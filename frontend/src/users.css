@@ -74,6 +74,10 @@
 .user-target-picker small { margin-top: 3px; color: #708097; font-size: 9px; }
 .user-target-access-actions { display: flex; gap: 7px; margin-top: 10px; }
 .user-target-access-actions button { padding: 7px 9px; font-size: 10px; }
+.administrator-target-access { display: flex; align-items: flex-start; gap: 11px; color: #91a3ec; }
+.administrator-target-access > div { display: grid; gap: 4px; }
+.administrator-target-access strong { color: #dce4f1; font-size: 12px; }
+.administrator-target-access span { color: #78879f; font-size: 10px; line-height: 1.5; }
 .user-actions { margin-top: 17px; }
 .danger.subtle { box-shadow: none; }
 .temporary-password-row { display: grid; grid-template-columns: minmax(0, 1fr) 36px auto; gap: 8px; align-items: center; }
@@ -136,6 +140,7 @@ html[data-theme="light"] .user-target-access-head strong,
 html[data-theme="light"] .user-target-picker strong { color: #26354c; }
 html[data-theme="light"] .user-target-picker label { border-color: rgba(42,58,88,.10); background: #fff; }
 html[data-theme="light"] .user-target-picker label.selected { border-color: rgba(87,109,227,.30); background: #f1f4ff; }
+html[data-theme="light"] .administrator-target-access strong { color: #26354c; }
 html[data-theme="light"] .security-action { border-color: rgba(42,58,88,.10); background: #f8f9fc; }
 html[data-theme="light"] .security-action strong,
 html[data-theme="light"] .password-reset-message strong { color: #26354c; }

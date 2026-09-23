@@ -105,7 +105,11 @@ class UserService:
             )
 
         assigned_roles = await self._resolve_roles(set(role_codes))
-        assigned_targets = await self._resolve_targets(set(target_ids or []))
+        assigned_targets = (
+            []
+            if self._has_administrator_role(assigned_roles)
+            else await self._resolve_targets(set(target_ids or []))
+        )
         user = User(
             username=prepared_username.value,
             username_normalized=prepared_username.normalized,
@@ -148,18 +152,22 @@ class UserService:
                 "Нельзя отключить собственную учётную запись или изменить свои роли"
             )
 
+        previous_target_ids = {target.target_id for target in user.targets}
         if display_name is not None:
             user.display_name = prepare_display_name(display_name)
         if role_codes is not None:
             user.roles = await self._resolve_roles(set(role_codes))
-        if target_ids is not None:
-            previous_ids = {target.target_id for target in user.targets}
+        if self._has_administrator_role(user.roles):
+            user.targets = []
+        elif target_ids is not None:
             user.targets = await self._resolve_targets(set(target_ids))
+        current_target_ids = {target.target_id for target in user.targets}
+        if previous_target_ids != current_target_ids:
             self._record_target_assignment(
                 actor_user_id=actor_user_id,
                 user_id=user.user_id,
-                previous_ids=previous_ids,
-                current_ids=set(target_ids),
+                previous_ids=previous_target_ids,
+                current_ids=current_target_ids,
             )
         if is_active is not None:
             user.is_active = is_active
@@ -310,6 +318,10 @@ class UserService:
         if missing_ids:
             raise TargetsNotFoundError(missing_ids)
         return targets
+
+    @staticmethod
+    def _has_administrator_role(roles: list[Role]) -> bool:
+        return any(role.code == SystemRoleCode.ADMINISTRATOR.value for role in roles)
 
     def _record_target_assignment(
         self,

@@ -78,6 +78,18 @@ function TargetPicker({
   );
 }
 
+function AdministratorTargetAccess() {
+  return (
+    <div className="user-target-access administrator-target-access">
+      <ShieldCheck size={19} />
+      <div>
+        <strong>Все каналы доступны автоматически</strong>
+        <span>Администратор видит все текущие и будущие каналы. Отдельные назначения для него не нужны.</span>
+      </div>
+    </div>
+  );
+}
+
 function formatDate(value?: string | null): string {
   if (!value) return "Ещё не входил";
   return new Intl.DateTimeFormat("ru-RU", {
@@ -239,6 +251,8 @@ export function UsersPage() {
     [users, selectedId],
   );
   const isSelf = selected?.user_id === currentUser?.user_id;
+  const administratorSelected = roleCodes.includes("administrator");
+  const administratorCreateSelected = createForm.roleCodes.includes("administrator");
 
   const load = useCallback(async () => {
     setBusy(true);
@@ -426,9 +440,11 @@ export function UsersPage() {
             <div className="user-section">
               <div className="user-section-title"><div><strong>Профиль и роли</strong><span>Последний вход: {formatDate(selected.last_login_at)}</span></div><ShieldCheck size={19} /></div>
               <label className="user-field"><span>Отображаемое имя</span><input value={displayName} disabled={!canManage || busy} onChange={(event) => setDisplayName(event.target.value)} /></label>
-              {canReadRoles ? <RolePicker roles={roles} selected={roleCodes} disabled={!canManage || busy || Boolean(isSelf)} onChange={setRoleCodes} /> : <p className="user-hint">Для просмотра ролей требуется разрешение roles.read.</p>}
+              {canReadRoles ? <RolePicker roles={roles} selected={roleCodes} disabled={!canManage || busy || Boolean(isSelf)} onChange={(codes) => { setRoleCodes(codes); if (codes.includes("administrator")) setTargetIds([]); }} /> : <p className="user-hint">Для просмотра ролей требуется разрешение roles.read.</p>}
               {isSelf && <p className="user-hint">Свои роли и состояние нельзя изменить из этой карточки — так администратор не потеряет доступ случайно.</p>}
-              <TargetPicker targets={targets} selected={targetIds} disabled={!canManage || busy} onChange={setTargetIds} />
+              {administratorSelected
+                ? <AdministratorTargetAccess />
+                : <TargetPicker targets={targets} selected={targetIds} disabled={!canManage || busy} onChange={setTargetIds} />}
               {canManage && <div className="user-actions"><button className="primary" disabled={busy || !displayName.trim() || roleCodes.length === 0} onClick={() => void saveUser()}><Save size={16} />Сохранить</button><button className={selected.is_active ? "danger subtle" : "secondary"} disabled={busy || Boolean(isSelf)} onClick={() => void toggleActive()}>{selected.is_active ? <Ban size={16} /> : <UserRoundCheck size={16} />}{selected.is_active ? "Заблокировать" : "Разблокировать"}</button></div>}
             </div>
 
@@ -499,8 +515,10 @@ export function UsersPage() {
             <label>Логин<input autoFocus value={createForm.username} onChange={(event) => setCreateForm({ ...createForm, username: event.target.value })} placeholder="ivan.petrov" required /></label>
             <label>Отображаемое имя<input value={createForm.displayName} onChange={(event) => setCreateForm({ ...createForm, displayName: event.target.value })} placeholder="Иван Петров" required /></label>
             <label className="wide">Временный пароль<span className="temporary-password-row"><input type="text" value={createForm.temporaryPassword} onChange={(event) => setCreateForm({ ...createForm, temporaryPassword: event.target.value })} minLength={15} required /><button type="button" className="icon-button" title="Скопировать" onClick={() => void copyPassword(createForm.temporaryPassword)}><Clipboard size={17} /></button><button type="button" className="secondary" onClick={() => setCreateForm({ ...createForm, temporaryPassword: generateTemporaryPassword() })}><RefreshCw size={15} />Новый</button></span><small>Не менее 15 символов. Пользователь сменит его после первого входа.</small></label>
-            <div className="wide"><span className="form-label">Роли</span><RolePicker roles={roles} selected={createForm.roleCodes} disabled={busy} onChange={(codes) => setCreateForm({ ...createForm, roleCodes: codes })} /></div>
-            <div className="wide"><TargetPicker targets={targets} selected={createForm.targetIds} disabled={busy} onChange={(ids) => setCreateForm({ ...createForm, targetIds: ids })} /></div>
+            <div className="wide"><span className="form-label">Роли</span><RolePicker roles={roles} selected={createForm.roleCodes} disabled={busy} onChange={(codes) => setCreateForm({ ...createForm, roleCodes: codes, targetIds: codes.includes("administrator") ? [] : createForm.targetIds })} /></div>
+            <div className="wide">{administratorCreateSelected
+              ? <AdministratorTargetAccess />
+              : <TargetPicker targets={targets} selected={createForm.targetIds} disabled={busy} onChange={(ids) => setCreateForm({ ...createForm, targetIds: ids })} />}</div>
             <div className="wide"><RoleComparison roles={roles} /></div>
             <button className="primary" disabled={busy || createForm.roleCodes.length === 0}><Plus size={16} />Создать пользователя</button>
           </form>
