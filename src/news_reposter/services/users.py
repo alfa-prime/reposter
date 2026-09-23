@@ -2,13 +2,14 @@
 
 from datetime import UTC, datetime
 
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from news_reposter.auth.identity import prepare_display_name, prepare_username
 from news_reposter.auth.passwords import PasswordManager
 from news_reposter.auth.rbac import SystemRoleCode
-from news_reposter.db.models import Role, User
+from news_reposter.db.models import AuditEvent, Role, Target, User
 from news_reposter.repositories.role import RoleRepository
 from news_reposter.repositories.user import UserRepository
 from news_reposter.repositories.user_session import UserSessionRepository
@@ -41,6 +42,16 @@ class RoleCombinationError(RuntimeError):
 
 class SelfManagementError(RuntimeError):
     """Администратор попытался лишить доступа собственную сессию."""
+
+
+class TargetsNotFoundError(RuntimeError):
+    """Один или несколько назначаемых каналов не существуют."""
+
+    def __init__(self, target_ids: set[int]) -> None:
+        self.target_ids = target_ids
+        super().__init__(
+            f"Каналы не найдены: {', '.join(map(str, sorted(target_ids)))}"
+        )
 
 
 class UserService:
@@ -78,6 +89,8 @@ class UserService:
         display_name: str,
         temporary_password: str,
         role_codes: list[str],
+        target_ids: list[int] | None = None,
+        actor_user_id: int | None = None,
     ) -> User:
         """Создаёт активного пользователя, обязанного заменить временный пароль."""
 
@@ -92,6 +105,7 @@ class UserService:
             )
 
         assigned_roles = await self._resolve_roles(set(role_codes))
+        assigned_targets = await self._resolve_targets(set(target_ids or []))
         user = User(
             username=prepared_username.value,
             username_normalized=prepared_username.normalized,
@@ -100,8 +114,17 @@ class UserService:
             is_active=True,
             must_change_password=True,
             roles=assigned_roles,
+            targets=assigned_targets,
         )
         self.users.add(user)
+        await self.session.flush()
+        if actor_user_id is not None:
+            self._record_target_assignment(
+                actor_user_id=actor_user_id,
+                user_id=user.user_id,
+                previous_ids=set(),
+                current_ids={target.target_id for target in assigned_targets},
+            )
         await self._commit_new_user(user, prepared_username.normalized)
         return user
 
@@ -113,6 +136,7 @@ class UserService:
         display_name: str | None = None,
         is_active: bool | None = None,
         role_codes: list[str] | None = None,
+        target_ids: list[int] | None = None,
     ) -> User:
         """Изменяет имя, активность и полный набор ролей пользователя."""
 
@@ -128,6 +152,15 @@ class UserService:
             user.display_name = prepare_display_name(display_name)
         if role_codes is not None:
             user.roles = await self._resolve_roles(set(role_codes))
+        if target_ids is not None:
+            previous_ids = {target.target_id for target in user.targets}
+            user.targets = await self._resolve_targets(set(target_ids))
+            self._record_target_assignment(
+                actor_user_id=actor_user_id,
+                user_id=user.user_id,
+                previous_ids=previous_ids,
+                current_ids=set(target_ids),
+            )
         if is_active is not None:
             user.is_active = is_active
             if not is_active:
@@ -262,6 +295,46 @@ class UserService:
         if missing_codes:
             raise RolesNotFoundError(missing_codes)
         return roles
+
+    async def _resolve_targets(self, target_ids: set[int]) -> list[Target]:
+        if not target_ids:
+            return []
+        targets = list(
+            (
+                await self.session.scalars(
+                    select(Target).where(Target.target_id.in_(target_ids))
+                )
+            ).all()
+        )
+        missing_ids = target_ids - {target.target_id for target in targets}
+        if missing_ids:
+            raise TargetsNotFoundError(missing_ids)
+        return targets
+
+    def _record_target_assignment(
+        self,
+        *,
+        actor_user_id: int,
+        user_id: int,
+        previous_ids: set[int],
+        current_ids: set[int],
+    ) -> None:
+        if previous_ids == current_ids:
+            return
+        self.session.add(
+            AuditEvent(
+                actor_user_id=actor_user_id,
+                action="user.targets.changed",
+                subject_type="user",
+                subject_id=user_id,
+                details={
+                    "previous_target_ids": sorted(previous_ids),
+                    "target_ids": sorted(current_ids),
+                    "added_target_ids": sorted(current_ids - previous_ids),
+                    "removed_target_ids": sorted(previous_ids - current_ids),
+                },
+            )
+        )
 
     async def _commit_new_user(self, user: User, normalized_username: str) -> None:
         try:

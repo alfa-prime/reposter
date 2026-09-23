@@ -212,6 +212,7 @@ async def upload_avatar(
             user=user,
             role_codes=auth.role_codes,
             permission_codes=auth.permission_codes,
+            target_ids=getattr(auth, "target_ids", None),
         )
     )
 
@@ -243,6 +244,7 @@ async def delete_avatar(
             user=user,
             role_codes=auth.role_codes,
             permission_codes=auth.permission_codes,
+            target_ids=getattr(auth, "target_ids", None),
         )
     )
 
@@ -307,6 +309,7 @@ async def change_password(
             user=result.user,
             role_codes=auth.role_codes,
             permission_codes=auth.permission_codes,
+            target_ids=getattr(auth, "target_ids", None),
         )
     )
 

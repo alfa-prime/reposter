@@ -34,7 +34,8 @@ class UserSessionRepository:
             .options(
                 selectinload(UserSession.user)
                 .selectinload(User.roles)
-                .selectinload(Role.permissions)
+                .selectinload(Role.permissions),
+                selectinload(UserSession.user).selectinload(User.targets),
             )
             .execution_options(populate_existing=True)
         )

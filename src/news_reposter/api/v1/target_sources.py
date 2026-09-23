@@ -125,7 +125,7 @@ async def list_target_sources(
     target_id: Annotated[int, Path(gt=0, description="Идентификатор целевого канала")],
     session: Session,
     _sources_auth: SourcesReadDep,
-    _targets_auth: TargetsReadDep,
+    targets_auth: TargetsReadDep,
     offset: Annotated[int, Query(ge=0, description="Сколько записей пропустить")] = 0,
     limit: Annotated[int, Query(ge=1, le=100, description="Максимум записей")] = 50,
     is_active: Annotated[
@@ -133,6 +133,9 @@ async def list_target_sources(
         Query(description="Фильтр по активным или отключённым источникам"),
     ] = None,
 ) -> list[TargetSourceRead]:
+    target_ids = getattr(targets_auth, "target_ids", None)
+    if target_ids is not None and target_id not in target_ids:
+        raise HTTPException(status_code=404, detail="Цель публикации не найдена")
     repository = TargetSourceRepository(session)
     if not await repository.target_exists(target_id):
         raise target_not_found_error()

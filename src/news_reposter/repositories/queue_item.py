@@ -46,6 +46,7 @@ class QueueItemRepository:
         post_id: int | None,
         source_id: int | None,
         status: QueueItemStatus | None,
+        allowed_target_ids: frozenset[int] | None = None,
     ) -> list[QueueItem]:
         statement = (
             select(QueueItem)
@@ -63,6 +64,8 @@ class QueueItemRepository:
             statement = statement.where(QueueItem.post_id == post_id)
         if status is not None:
             statement = statement.where(QueueItem.status == status)
+        if allowed_target_ids is not None:
+            statement = statement.where(QueueItem.target_id.in_(allowed_target_ids))
         statement = statement.offset(offset).limit(limit)
         result = await self.session.scalars(statement)
         return list(result.all())
@@ -74,6 +77,7 @@ class QueueItemRepository:
         limit: int,
         target_id: int | None,
         statuses: list[QueueItemStatus],
+        allowed_target_ids: frozenset[int] | None = None,
     ) -> list[QueueItem]:
         """Возвращает одну страницу очереди для выбранной группы статусов."""
 
@@ -88,6 +92,8 @@ class QueueItemRepository:
         )
         if target_id is not None:
             statement = statement.where(QueueItem.target_id == target_id)
+        if allowed_target_ids is not None:
+            statement = statement.where(QueueItem.target_id.in_(allowed_target_ids))
         statement = statement.offset(offset).limit(limit)
         result = await self.session.scalars(statement)
         return list(result.all())
@@ -96,6 +102,7 @@ class QueueItemRepository:
         self,
         *,
         target_id: int | None,
+        allowed_target_ids: frozenset[int] | None = None,
     ) -> dict[QueueItemStatus, int]:
         """Считает элементы каждого статуса для выбранного канала."""
 
@@ -105,10 +112,17 @@ class QueueItemRepository:
         ).group_by(QueueItem.status)
         if target_id is not None:
             statement = statement.where(QueueItem.target_id == target_id)
+        if allowed_target_ids is not None:
+            statement = statement.where(QueueItem.target_id.in_(allowed_target_ids))
         rows = (await self.session.execute(statement)).all()
         return {queue_status: count for queue_status, count in rows}
 
-    async def get(self, queue_item_id: int) -> QueueItem | None:
+    async def get(
+        self,
+        queue_item_id: int,
+        *,
+        allowed_target_ids: frozenset[int] | None = None,
+    ) -> QueueItem | None:
         statement = (
             select(QueueItem)
             .options(
@@ -117,6 +131,8 @@ class QueueItemRepository:
             )
             .where(QueueItem.queue_item_id == queue_item_id)
         )
+        if allowed_target_ids is not None:
+            statement = statement.where(QueueItem.target_id.in_(allowed_target_ids))
         return await self.session.scalar(statement)
 
     async def update(self, item: QueueItem, data: QueueItemUpdate) -> QueueItem:

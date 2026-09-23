@@ -20,6 +20,9 @@ from news_reposter.api.v1.queue_permissions import (
     QueueReadDep,
     QueueScheduleDep,
     QueueSubmitDep,
+    can_access_target,
+    get_accessible_queue_item,
+    target_scope,
 )
 from news_reposter.db.models import AttachmentType, QueueItemStatus
 from news_reposter.db.session import get_db_session
@@ -170,7 +173,7 @@ def queue_item_response(item: Any) -> QueueItemRead:
 async def create_queue_item(
     data: QueueItemCreate,
     session: Session,
-    _auth: QueueEditDep,
+    auth: QueueEditDep,
     _csrf_auth: CsrfAuthContextDep,
     _same_origin: SameOriginDep,
 ) -> QueueItemRead:
@@ -179,6 +182,8 @@ async def create_queue_item(
         raise HTTPException(status_code=404, detail="Исходный пост не найден")
     if not await repository.target_exists(data.target_id):
         raise HTTPException(status_code=404, detail="Целевой канал не найден")
+    if not can_access_target(auth, data.target_id):
+        raise not_found_error()
     try:
         item = await repository.create(data)
     except QueueItemAlreadyExistsError as exc:
@@ -200,7 +205,7 @@ async def create_queue_item(
 )
 async def list_queue_items(
     session: Session,
-    _auth: QueueReadDep,
+    auth: QueueReadDep,
     offset: Annotated[int, Query(ge=0, description="Сколько записей пропустить")] = 0,
     limit: Annotated[int, Query(ge=1, le=100, description="Максимум записей")] = 50,
     target_id: Annotated[
@@ -222,6 +227,7 @@ async def list_queue_items(
         post_id=post_id,
         source_id=source_id,
         status=queue_status,
+        **target_scope(auth),
     )
     return [queue_item_response(item) for item in items]
 
@@ -239,7 +245,7 @@ async def list_queue_items(
 )
 async def get_queue_page(
     session: Session,
-    _auth: QueueReadDep,
+    auth: QueueReadDep,
     queue_statuses: Annotated[
         list[QueueItemStatus],
         Query(alias="status", description="Один или несколько статусов очереди"),
@@ -256,8 +262,9 @@ async def get_queue_page(
         limit=limit,
         target_id=target_id,
         statuses=queue_statuses,
+        **target_scope(auth),
     )
-    counts = await repository.count_by_status(target_id=target_id)
+    counts = await repository.count_by_status(target_id=target_id, **target_scope(auth))
     return QueuePageRead(
         items=[queue_item_response(item) for item in items],
         total=sum(counts.get(queue_status, 0) for queue_status in queue_statuses),
@@ -287,9 +294,11 @@ async def get_queue_item(
         int, Path(gt=0, description="Идентификатор элемента очереди")
     ],
     session: Session,
-    _auth: QueueReadDep,
+    auth: QueueReadDep,
 ) -> QueueItemRead:
-    item = await QueueItemRepository(session).get(queue_item_id)
+    item = await get_accessible_queue_item(
+        QueueItemRepository(session), queue_item_id, auth
+    )
     if item is None:
         raise not_found_error()
     return queue_item_response(item)
@@ -315,12 +324,12 @@ async def upload_queue_media(
     ],
     data: QueueMediaUpload,
     session: Session,
-    _auth: QueueEditDep,
+    auth: QueueEditDep,
     _csrf_auth: CsrfAuthContextDep,
     _same_origin: SameOriginDep,
 ) -> QueueItemRead:
     repository = QueueItemRepository(session)
-    item = await repository.get(queue_item_id)
+    item = await get_accessible_queue_item(repository, queue_item_id, auth)
     if item is None:
         raise not_found_error()
 
@@ -361,8 +370,14 @@ async def upload_queue_media(
 async def get_queue_media(
     queue_item_id: Annotated[int, Path(gt=0)],
     media_id: Annotated[str, Path(min_length=1, max_length=100)],
-    _auth: QueueReadDep,
+    session: Session,
+    auth: QueueReadDep,
 ) -> FileResponse:
+    item = await get_accessible_queue_item(
+        QueueItemRepository(session), queue_item_id, auth
+    )
+    if item is None:
+        raise not_found_error()
     safe_name = FilePath(media_id).name
     if safe_name != media_id:
         raise HTTPException(status_code=400, detail="Некорректное имя файла")
@@ -385,12 +400,12 @@ async def delete_queue_media(
     queue_item_id: Annotated[int, Path(gt=0)],
     media_id: Annotated[str, Path(min_length=1, max_length=100)],
     session: Session,
-    _auth: QueueEditDep,
+    auth: QueueEditDep,
     _csrf_auth: CsrfAuthContextDep,
     _same_origin: SameOriginDep,
 ) -> QueueItemRead:
     repository = QueueItemRepository(session)
-    item = await repository.get(queue_item_id)
+    item = await get_accessible_queue_item(repository, queue_item_id, auth)
     if item is None:
         raise not_found_error()
 
@@ -423,12 +438,12 @@ async def update_queue_item(
     ],
     data: QueueItemUpdate,
     session: Session,
-    _auth: QueueEditDep,
+    auth: QueueEditDep,
     _csrf_auth: CsrfAuthContextDep,
     _same_origin: SameOriginDep,
 ) -> QueueItemRead:
     repository = QueueItemRepository(session)
-    item = await repository.get(queue_item_id)
+    item = await get_accessible_queue_item(repository, queue_item_id, auth)
     if item is None:
         raise not_found_error()
     item = await repository.update(item, data)
@@ -451,12 +466,12 @@ async def submit_queue_item(
         int, Path(gt=0, description="Идентификатор элемента очереди")
     ],
     session: Session,
-    _auth: QueueSubmitDep,
+    auth: QueueSubmitDep,
     _csrf_auth: CsrfAuthContextDep,
     _same_origin: SameOriginDep,
 ) -> QueueItemRead:
     repository = QueueItemRepository(session)
-    item = await repository.get(queue_item_id)
+    item = await get_accessible_queue_item(repository, queue_item_id, auth)
     if item is None:
         raise not_found_error()
     ensure_status(
@@ -485,12 +500,12 @@ async def approve_queue_item(
         int, Path(gt=0, description="Идентификатор элемента очереди")
     ],
     session: Session,
-    _auth: QueueModerateDep,
+    auth: QueueModerateDep,
     _csrf_auth: CsrfAuthContextDep,
     _same_origin: SameOriginDep,
 ) -> QueueItemRead:
     repository = QueueItemRepository(session)
-    item = await repository.get(queue_item_id)
+    item = await get_accessible_queue_item(repository, queue_item_id, auth)
     if item is None:
         raise not_found_error()
     ensure_status(item.status, {QueueItemStatus.AWAITING_MODERATION})
@@ -514,12 +529,12 @@ async def reject_queue_item(
         int, Path(gt=0, description="Идентификатор элемента очереди")
     ],
     session: Session,
-    _auth: QueueModerateDep,
+    auth: QueueModerateDep,
     _csrf_auth: CsrfAuthContextDep,
     _same_origin: SameOriginDep,
 ) -> QueueItemRead:
     repository = QueueItemRepository(session)
-    item = await repository.get(queue_item_id)
+    item = await get_accessible_queue_item(repository, queue_item_id, auth)
     if item is None:
         raise not_found_error()
     ensure_status(item.status, {QueueItemStatus.AWAITING_MODERATION})
@@ -546,12 +561,12 @@ async def reopen_queue_item(
         int, Path(gt=0, description="Идентификатор элемента очереди")
     ],
     session: Session,
-    _auth: QueueModerateDep,
+    auth: QueueModerateDep,
     _csrf_auth: CsrfAuthContextDep,
     _same_origin: SameOriginDep,
 ) -> QueueItemRead:
     repository = QueueItemRepository(session)
-    item = await repository.get(queue_item_id)
+    item = await get_accessible_queue_item(repository, queue_item_id, auth)
     if item is None:
         raise not_found_error()
     ensure_status(
@@ -584,12 +599,12 @@ async def schedule_queue_item(
     ],
     data: QueueItemSchedule,
     session: Session,
-    _auth: QueueScheduleDep,
+    auth: QueueScheduleDep,
     _csrf_auth: CsrfAuthContextDep,
     _same_origin: SameOriginDep,
 ) -> QueueItemRead:
     repository = QueueItemRepository(session)
-    item = await repository.get(queue_item_id)
+    item = await get_accessible_queue_item(repository, queue_item_id, auth)
     if item is None:
         raise not_found_error()
     ensure_status(item.status, {QueueItemStatus.APPROVED})
@@ -616,12 +631,12 @@ async def delete_queue_item(
         int, Path(gt=0, description="Идентификатор элемента очереди")
     ],
     session: Session,
-    _auth: QueueEditDep,
+    auth: QueueEditDep,
     _csrf_auth: CsrfAuthContextDep,
     _same_origin: SameOriginDep,
 ) -> Response:
     repository = QueueItemRepository(session)
-    item = await repository.get(queue_item_id)
+    item = await get_accessible_queue_item(repository, queue_item_id, auth)
     if item is None:
         raise not_found_error()
     await repository.delete(item)

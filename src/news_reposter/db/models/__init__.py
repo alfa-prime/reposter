@@ -1,6 +1,7 @@
 """ORM-модели приложения."""
 
 from news_reposter.db.models.attachment import PostAttachment
+from news_reposter.db.models.audit_event import AuditEvent
 from news_reposter.db.models.collection_run import CollectionRun
 from news_reposter.db.models.collection_settings import CollectionSettings
 from news_reposter.db.models.collection_source_run import CollectionSourceRun
@@ -27,9 +28,11 @@ from news_reposter.db.models.target_source import TargetSource
 from news_reposter.db.models.user import User
 from news_reposter.db.models.user_role import UserRole
 from news_reposter.db.models.user_session import UserSession
+from news_reposter.db.models.user_target import UserTarget
 
 __all__ = [
     "AttachmentType",
+    "AuditEvent",
     "CollectionRun",
     "CollectionRunStatus",
     "CollectionRunTrigger",
@@ -54,4 +57,5 @@ __all__ = [
     "User",
     "UserRole",
     "UserSession",
+    "UserTarget",
 ]

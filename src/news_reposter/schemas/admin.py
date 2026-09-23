@@ -30,6 +30,7 @@ class AdminUserRead(BaseModel):
     created_at: datetime = Field(description="Время создания учётной записи.")
     updated_at: datetime = Field(description="Время последнего изменения.")
     roles: list[AdminRoleRead] = Field(description="Назначенные активные роли.")
+    target_ids: list[int] = Field(description="Назначенные каналы публикации.")
 
 
 class AdminUserCreate(BaseModel):
@@ -51,6 +52,10 @@ class AdminUserCreate(BaseModel):
         min_length=1,
         description="Коды ролей, назначаемых пользователю.",
     )
+    target_ids: list[int] = Field(
+        default_factory=list,
+        description="Каналы публикации, доступные пользователю.",
+    )
 
     @field_validator("role_codes")
     @classmethod
@@ -63,6 +68,15 @@ class AdminUserCreate(BaseModel):
         if len(prepared) != len(set(prepared)):
             raise ValueError("Коды ролей не должны повторяться")
         return prepared
+
+    @field_validator("target_ids")
+    @classmethod
+    def target_ids_are_unique(cls, value: list[int]) -> list[int]:
+        if any(target_id <= 0 for target_id in value):
+            raise ValueError("Идентификатор канала должен быть положительным")
+        if len(value) != len(set(value)):
+            raise ValueError("Каналы не должны повторяться")
+        return value
 
 
 class AdminUserUpdate(BaseModel):
@@ -83,6 +97,21 @@ class AdminUserUpdate(BaseModel):
         min_length=1,
         description="Полный новый набор кодов ролей.",
     )
+    target_ids: list[int] | None = Field(
+        default=None,
+        description="Полный новый набор доступных каналов публикации.",
+    )
+
+    @field_validator("target_ids")
+    @classmethod
+    def target_ids_are_unique(cls, value: list[int] | None) -> list[int] | None:
+        if value is None:
+            return None
+        if any(target_id <= 0 for target_id in value):
+            raise ValueError("Идентификатор канала должен быть положительным")
+        if len(value) != len(set(value)):
+            raise ValueError("Каналы не должны повторяться")
+        return value
 
     @field_validator("role_codes")
     @classmethod

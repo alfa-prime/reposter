@@ -51,6 +51,7 @@ export type AdminUser = {
   created_at: string;
   updated_at: string;
   roles: AdminRole[];
+  target_ids: number[];
 };
 
 export type AdminUserCreate = {
@@ -58,12 +59,14 @@ export type AdminUserCreate = {
   display_name: string;
   temporary_password: string;
   role_codes: string[];
+  target_ids: number[];
 };
 
 export type AdminUserUpdate = {
   display_name?: string;
   is_active?: boolean;
   role_codes?: string[];
+  target_ids?: number[];
 };
 
 export const AUTH_SESSION_EXPIRED_EVENT = "reposter:auth-session-expired";

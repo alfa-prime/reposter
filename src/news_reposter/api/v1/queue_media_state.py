@@ -13,7 +13,11 @@ from news_reposter.api.dependencies import (
     CsrfAuthContextDep,
     SameOriginDep,
 )
-from news_reposter.api.v1.queue_permissions import QueueEditDep, QueueReadDep
+from news_reposter.api.v1.queue_permissions import (
+    QueueEditDep,
+    QueueReadDep,
+    get_accessible_queue_item,
+)
 from news_reposter.db.models import AttachmentType
 from news_reposter.db.session import get_db_session
 from news_reposter.repositories.queue_item import QueueItemRepository
@@ -103,9 +107,11 @@ def save_state(queue_item_id: int, media_order: list[str]) -> None:
 async def get_media_state(
     queue_item_id: Annotated[int, ApiPath(gt=0)],
     session: Session,
-    _auth: QueueReadDep,
+    auth: QueueReadDep,
 ) -> QueueMediaState:
-    item = await QueueItemRepository(session).get(queue_item_id)
+    item = await get_accessible_queue_item(
+        QueueItemRepository(session), queue_item_id, auth
+    )
     if item is None:
         raise HTTPException(status_code=404, detail="Элемент очереди не найден")
     return QueueMediaState(media_order=load_state(item))
@@ -125,11 +131,13 @@ async def update_media_state(
     queue_item_id: Annotated[int, ApiPath(gt=0)],
     data: QueueMediaState,
     session: Session,
-    _auth: QueueEditDep,
+    auth: QueueEditDep,
     _csrf_auth: CsrfAuthContextDep,
     _same_origin: SameOriginDep,
 ) -> QueueMediaState:
-    item = await QueueItemRepository(session).get(queue_item_id)
+    item = await get_accessible_queue_item(
+        QueueItemRepository(session), queue_item_id, auth
+    )
     if item is None:
         raise HTTPException(status_code=404, detail="Элемент очереди не найден")
 

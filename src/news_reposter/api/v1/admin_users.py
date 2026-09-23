@@ -30,6 +30,7 @@ from news_reposter.services.users import (
     RoleCombinationError,
     RolesNotFoundError,
     SelfManagementError,
+    TargetsNotFoundError,
     UserAlreadyExistsError,
     UserNotFoundError,
 )
@@ -105,7 +106,7 @@ async def list_roles(
 async def create_user(
     payload: AdminUserCreate,
     service: UserServiceDep,
-    _auth: UsersManageDep,
+    auth: UsersManageDep,
     _csrf_auth: CsrfAuthContextDep,
     _same_origin: SameOriginDep,
 ) -> AdminUserRead:
@@ -115,6 +116,8 @@ async def create_user(
             display_name=payload.display_name,
             temporary_password=payload.temporary_password,
             role_codes=payload.role_codes,
+            target_ids=payload.target_ids,
+            actor_user_id=auth.user.user_id,
         )
     except UserAlreadyExistsError as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, detail=str(exc)) from exc
@@ -123,6 +126,7 @@ async def create_user(
         PasswordValidationError,
         RolesNotFoundError,
         RoleCombinationError,
+        TargetsNotFoundError,
     ) as exc:
         raise HTTPException(
             status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -169,7 +173,12 @@ async def update_user(
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except SelfManagementError as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
-    except (IdentityValidationError, RolesNotFoundError, RoleCombinationError) as exc:
+    except (
+        IdentityValidationError,
+        RolesNotFoundError,
+        RoleCombinationError,
+        TargetsNotFoundError,
+    ) as exc:
         raise HTTPException(
             status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=str(exc),
@@ -273,4 +282,5 @@ def _user_response(user: User) -> AdminUserRead:
             (_role_response(role) for role in user.roles),
             key=lambda role: (role.name, role.code),
         ),
+        target_ids=sorted(target.target_id for target in user.targets),
     )

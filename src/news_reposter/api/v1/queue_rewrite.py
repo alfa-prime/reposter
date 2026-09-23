@@ -14,7 +14,10 @@ from news_reposter.api.v1.queue import (
     not_found_error,
     queue_item_response,
 )
-from news_reposter.api.v1.queue_permissions import QueueRewriteDep
+from news_reposter.api.v1.queue_permissions import (
+    QueueRewriteDep,
+    get_accessible_queue_item,
+)
 from news_reposter.db.models import QueueItemStatus
 from news_reposter.db.session import get_db_session
 from news_reposter.llm import LLMProviderError
@@ -60,13 +63,13 @@ async def rewrite_queue_item(
         int, Path(gt=0, description="Идентификатор элемента очереди")
     ],
     session: Session,
-    _auth: QueueRewriteDep,
+    auth: QueueRewriteDep,
     _csrf_auth: CsrfAuthContextDep,
     _same_origin: SameOriginDep,
     provider: LLMProviderDep,
 ) -> QueueItemRead:
     repository = QueueItemRepository(session)
-    item = await repository.get(queue_item_id)
+    item = await get_accessible_queue_item(repository, queue_item_id, auth)
     if item is None:
         raise not_found_error()
     if item.status not in REWRITE_ALLOWED_STATUSES:

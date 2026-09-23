@@ -9,6 +9,7 @@ from news_reposter.db.base import Base
 if TYPE_CHECKING:
     from news_reposter.db.models.login_attempt import LoginAttempt
     from news_reposter.db.models.role import Role
+    from news_reposter.db.models.target import Target
     from news_reposter.db.models.user_session import UserSession
 
 
@@ -71,6 +72,11 @@ class User(Base):
 
     roles: Mapped[list["Role"]] = relationship(
         secondary="user_roles",
+        back_populates="users",
+        passive_deletes=True,
+    )
+    targets: Mapped[list["Target"]] = relationship(
+        secondary="user_targets",
         back_populates="users",
         passive_deletes=True,
     )

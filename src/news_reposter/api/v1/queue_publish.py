@@ -10,8 +10,12 @@ from news_reposter.api.dependencies import (
     SameOriginDep,
 )
 from news_reposter.api.v1.queue import queue_item_response
-from news_reposter.api.v1.queue_permissions import QueuePublishDep
+from news_reposter.api.v1.queue_permissions import (
+    QueuePublishDep,
+    get_accessible_queue_item,
+)
 from news_reposter.db.session import get_db_session
+from news_reposter.repositories.queue_item import QueueItemRepository
 from news_reposter.schemas.queue_item import QueueItemRead
 from news_reposter.services.publisher import PublicationError, publish_queue_item
 
@@ -39,11 +43,16 @@ Session = Annotated[AsyncSession, Depends(get_db_session)]
 async def publish_now(
     queue_item_id: Annotated[int, Path(gt=0)],
     session: Session,
-    _auth: QueuePublishDep,
+    auth: QueuePublishDep,
     _csrf_auth: CsrfAuthContextDep,
     _same_origin: SameOriginDep,
     http_client: HttpClientDep,
 ) -> QueueItemRead:
+    accessible_item = await get_accessible_queue_item(
+        QueueItemRepository(session), queue_item_id, auth
+    )
+    if accessible_item is None:
+        raise HTTPException(status_code=404, detail="Элемент очереди не найден")
     try:
         item = await publish_queue_item(session, queue_item_id, http_client)
     except PublicationError as exc:

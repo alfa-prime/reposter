@@ -15,7 +15,11 @@ from news_reposter.api.dependencies import (
     CsrfAuthContextDep,
     SameOriginDep,
 )
-from news_reposter.api.v1.queue_permissions import QueueEditDep, QueueReadDep
+from news_reposter.api.v1.queue_permissions import (
+    QueueEditDep,
+    QueueReadDep,
+    get_accessible_queue_item,
+)
 from news_reposter.db.models import AttachmentType
 from news_reposter.db.session import get_db_session
 from news_reposter.repositories.queue_item import QueueItemRepository
@@ -157,8 +161,14 @@ def _source_videos(item: Any) -> list[dict[str, Any]]:
     return result
 
 
-async def _get_item(queue_item_id: int, session: AsyncSession) -> Any:
-    item = await QueueItemRepository(session).get(queue_item_id)
+async def _get_item(
+    queue_item_id: int,
+    session: AsyncSession,
+    auth: Any,
+) -> Any:
+    item = await get_accessible_queue_item(
+        QueueItemRepository(session), queue_item_id, auth
+    )
     if item is None:
         raise HTTPException(status_code=404, detail="Элемент очереди не найден")
     return item
@@ -176,9 +186,9 @@ async def _get_item(queue_item_id: int, session: AsyncSession) -> Any:
 async def get_queue_video_info(
     queue_item_id: Annotated[int, Path(gt=0)],
     session: Session,
-    _auth: QueueReadDep,
+    auth: QueueReadDep,
 ) -> dict[str, Any]:
-    item = await _get_item(queue_item_id, session)
+    item = await _get_item(queue_item_id, session, auth)
     source_videos = _source_videos(item)
     uploaded_videos = _uploaded_videos(queue_item_id)
     return {
@@ -203,11 +213,11 @@ async def upload_queue_video(
     queue_item_id: Annotated[int, Path(gt=0)],
     data: QueueVideoUpload,
     session: Session,
-    _auth: QueueEditDep,
+    auth: QueueEditDep,
     _csrf_auth: CsrfAuthContextDep,
     _same_origin: SameOriginDep,
 ) -> dict[str, Any]:
-    await _get_item(queue_item_id, session)
+    await _get_item(queue_item_id, session, auth)
 
     extension = ALLOWED_VIDEO_TYPES.get(data.content_type.lower())
     if extension is None:
@@ -253,8 +263,10 @@ async def upload_queue_video(
 async def get_queue_video(
     queue_item_id: Annotated[int, Path(gt=0)],
     media_id: Annotated[str, Path(min_length=1, max_length=120)],
-    _auth: QueueReadDep,
+    session: Session,
+    auth: QueueReadDep,
 ) -> FileResponse:
+    await _get_item(queue_item_id, session, auth)
     safe_name = FilePath(media_id).name
     if (
         safe_name != media_id
@@ -277,11 +289,11 @@ async def delete_queue_video(
     queue_item_id: Annotated[int, Path(gt=0)],
     media_id: Annotated[str, Path(min_length=1, max_length=120)],
     session: Session,
-    _auth: QueueEditDep,
+    auth: QueueEditDep,
     _csrf_auth: CsrfAuthContextDep,
     _same_origin: SameOriginDep,
 ) -> None:
-    await _get_item(queue_item_id, session)
+    await _get_item(queue_item_id, session, auth)
     safe_name = FilePath(media_id).name
     if (
         safe_name != media_id

@@ -18,7 +18,10 @@ class UserRepository:
 
         users = await self.session.scalars(
             select(User)
-            .options(selectinload(User.roles).selectinload(Role.permissions))
+            .options(
+                selectinload(User.roles).selectinload(Role.permissions),
+                selectinload(User.targets),
+            )
             .order_by(User.display_name, User.user_id)
             .offset(offset)
             .limit(limit)
@@ -57,6 +60,7 @@ class UserRepository:
             select(User)
             .where(User.user_id == user_id)
             .options(selectinload(User.roles).selectinload(Role.permissions))
+            .options(selectinload(User.targets))
             .with_for_update()
             .execution_options(populate_existing=True)
         )

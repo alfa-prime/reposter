@@ -130,7 +130,7 @@ async def create_target(
 )
 async def list_targets(
     session: Session,
-    _auth: TargetsReadDep,
+    auth: TargetsReadDep,
     offset: Annotated[
         int,
         Query(ge=0, description="Сколько записей пропустить от начала списка"),
@@ -155,11 +155,14 @@ async def list_targets(
 ) -> list[TargetRead]:
     """Возвращает список целей публикаций с необязательными фильтрами."""
 
+    target_ids = getattr(auth, "target_ids", None)
+    access_filter = {} if target_ids is None else {"allowed_target_ids": target_ids}
     targets = await TargetRepository(session).list(
         offset=offset,
         limit=limit,
         platform=platform.lower() if platform else None,
         is_active=is_active,
+        **access_filter,
     )
     return [TargetRead.model_validate(target) for target in targets]
 
@@ -232,12 +235,13 @@ async def get_target(
         Path(gt=0, description="Идентификатор цели в нашей базе"),
     ],
     session: Session,
-    _auth: TargetsReadDep,
+    auth: TargetsReadDep,
 ) -> TargetRead:
     """Возвращает одну цель публикации по идентификатору."""
 
     target = await TargetRepository(session).get(target_id)
-    if target is None:
+    target_ids = getattr(auth, "target_ids", None)
+    if target is None or (target_ids is not None and target_id not in target_ids):
         raise not_found_error()
     return TargetRead.model_validate(target)
 

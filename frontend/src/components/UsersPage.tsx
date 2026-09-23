@@ -8,10 +8,11 @@ import {
   RefreshCw,
   Save,
   ShieldCheck,
+  Radio,
   UserRoundCheck,
   X,
 } from "lucide-react";
-import { AdminRole, AdminUser, api } from "../api";
+import { AdminRole, AdminUser, Target, api } from "../api";
 import { useAuth } from "../auth";
 import {
   generateTemporaryPassword,
@@ -25,6 +26,7 @@ type CreateForm = {
   displayName: string;
   temporaryPassword: string;
   roleCodes: string[];
+  targetIds: number[];
 };
 
 const emptyCreateForm = (): CreateForm => ({
@@ -32,7 +34,49 @@ const emptyCreateForm = (): CreateForm => ({
   displayName: "",
   temporaryPassword: generateTemporaryPassword(),
   roleCodes: [],
+  targetIds: [],
 });
+
+function TargetPicker({
+  targets,
+  selected,
+  disabled,
+  onChange,
+}: {
+  targets: Target[];
+  selected: number[];
+  disabled: boolean;
+  onChange: (targetIds: number[]) => void;
+}) {
+  const toggle = (targetId: number) => onChange(
+    selected.includes(targetId)
+      ? selected.filter((id) => id !== targetId)
+      : [...selected, targetId],
+  );
+  return (
+    <div className="user-target-access">
+      <div className="user-target-access-head">
+        <div><strong>Доступные каналы</strong><span>Пользователь увидит очередь только этих каналов.</span></div>
+        <span>{selected.length} из {targets.length}</span>
+      </div>
+      <div className="user-target-picker">
+        {targets.map((target) => (
+          <label key={target.target_id} className={selected.includes(target.target_id) ? "selected" : ""}>
+            <input type="checkbox" checked={selected.includes(target.target_id)} disabled={disabled} onChange={() => toggle(target.target_id)} />
+            <span className="target-picker-icon">{target.icon_url ? <img src={target.icon_url} alt="" /> : <Radio size={16} />}</span>
+            <span><strong>{target.name}</strong><small>{target.platform.toUpperCase()}</small></span>
+          </label>
+        ))}
+        {targets.length === 0 && <p className="user-hint">Каналы публикации ещё не созданы.</p>}
+      </div>
+      <div className="user-target-access-actions">
+        <button type="button" className="secondary" disabled={disabled || selected.length === targets.length} onClick={() => onChange(targets.map((target) => target.target_id))}>Выбрать все</button>
+        <button type="button" className="secondary" disabled={disabled || selected.length === 0} onClick={() => onChange([])}>Очистить</button>
+      </div>
+      {selected.length === 0 && <p className="user-hint">Без назначенных каналов очередь пользователя будет пустой.</p>}
+    </div>
+  );
+}
 
 function formatDate(value?: string | null): string {
   if (!value) return "Ещё не входил";
@@ -175,9 +219,11 @@ export function UsersPage() {
   const canReadRoles = currentUser?.permissions.includes("roles.read") ?? false;
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [roles, setRoles] = useState<AdminRole[]>([]);
+  const [targets, setTargets] = useState<Target[]>([]);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [displayName, setDisplayName] = useState("");
   const [roleCodes, setRoleCodes] = useState<string[]>([]);
+  const [targetIds, setTargetIds] = useState<number[]>([]);
   const [resetPassword, setResetPassword] = useState(generateTemporaryPassword);
   const [resetOpen, setResetOpen] = useState(false);
   const [resetCompleted, setResetCompleted] = useState(false);
@@ -198,12 +244,14 @@ export function UsersPage() {
     setBusy(true);
     setError("");
     try {
-      const [userData, roleData] = await Promise.all([
+      const [userData, roleData, targetData] = await Promise.all([
         api.adminUsers(),
         canReadRoles ? api.adminRoles() : Promise.resolve([]),
+        api.targets(),
       ]);
       setUsers(userData);
       setRoles(roleData);
+      setTargets(targetData);
       setSelectedId((current) => (
         current !== null && userData.some((item) => item.user_id === current)
           ? current
@@ -222,6 +270,7 @@ export function UsersPage() {
     if (!selected) return;
     setDisplayName(selected.display_name);
     setRoleCodes(normalizeRoleCodes(selected.roles.map((role) => role.code)));
+    setTargetIds(selected.target_ids);
     setResetPassword(generateTemporaryPassword());
     setResetOpen(false);
     setResetCompleted(false);
@@ -247,6 +296,7 @@ export function UsersPage() {
       const data = await api.updateAdminUser(selected.user_id, {
         display_name: displayName,
         ...(!isSelf && canReadRoles ? { role_codes: roleCodes } : {}),
+        target_ids: targetIds,
       });
       replaceUser(data);
       setNotice("Изменения пользователя сохранены.");
@@ -300,6 +350,7 @@ export function UsersPage() {
         display_name: createForm.displayName,
         temporary_password: createForm.temporaryPassword,
         role_codes: createForm.roleCodes,
+        target_ids: createForm.targetIds,
       });
       setUsers((items) => [...items, created].sort((a, b) => a.display_name.localeCompare(b.display_name, "ru")));
       setSelectedId(created.user_id);
@@ -377,6 +428,7 @@ export function UsersPage() {
               <label className="user-field"><span>Отображаемое имя</span><input value={displayName} disabled={!canManage || busy} onChange={(event) => setDisplayName(event.target.value)} /></label>
               {canReadRoles ? <RolePicker roles={roles} selected={roleCodes} disabled={!canManage || busy || Boolean(isSelf)} onChange={setRoleCodes} /> : <p className="user-hint">Для просмотра ролей требуется разрешение roles.read.</p>}
               {isSelf && <p className="user-hint">Свои роли и состояние нельзя изменить из этой карточки — так администратор не потеряет доступ случайно.</p>}
+              <TargetPicker targets={targets} selected={targetIds} disabled={!canManage || busy} onChange={setTargetIds} />
               {canManage && <div className="user-actions"><button className="primary" disabled={busy || !displayName.trim() || roleCodes.length === 0} onClick={() => void saveUser()}><Save size={16} />Сохранить</button><button className={selected.is_active ? "danger subtle" : "secondary"} disabled={busy || Boolean(isSelf)} onClick={() => void toggleActive()}>{selected.is_active ? <Ban size={16} /> : <UserRoundCheck size={16} />}{selected.is_active ? "Заблокировать" : "Разблокировать"}</button></div>}
             </div>
 
@@ -448,6 +500,7 @@ export function UsersPage() {
             <label>Отображаемое имя<input value={createForm.displayName} onChange={(event) => setCreateForm({ ...createForm, displayName: event.target.value })} placeholder="Иван Петров" required /></label>
             <label className="wide">Временный пароль<span className="temporary-password-row"><input type="text" value={createForm.temporaryPassword} onChange={(event) => setCreateForm({ ...createForm, temporaryPassword: event.target.value })} minLength={15} required /><button type="button" className="icon-button" title="Скопировать" onClick={() => void copyPassword(createForm.temporaryPassword)}><Clipboard size={17} /></button><button type="button" className="secondary" onClick={() => setCreateForm({ ...createForm, temporaryPassword: generateTemporaryPassword() })}><RefreshCw size={15} />Новый</button></span><small>Не менее 15 символов. Пользователь сменит его после первого входа.</small></label>
             <div className="wide"><span className="form-label">Роли</span><RolePicker roles={roles} selected={createForm.roleCodes} disabled={busy} onChange={(codes) => setCreateForm({ ...createForm, roleCodes: codes })} /></div>
+            <div className="wide"><TargetPicker targets={targets} selected={createForm.targetIds} disabled={busy} onChange={(ids) => setCreateForm({ ...createForm, targetIds: ids })} /></div>
             <div className="wide"><RoleComparison roles={roles} /></div>
             <button className="primary" disabled={busy || createForm.roleCodes.length === 0}><Plus size={16} />Создать пользователя</button>
           </form>

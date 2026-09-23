@@ -18,6 +18,7 @@ from news_reposter.db.base import Base
 if TYPE_CHECKING:
     from news_reposter.db.models.queue_item import QueueItem
     from news_reposter.db.models.target_source import TargetSource
+    from news_reposter.db.models.user import User
 
 
 class Target(Base):
@@ -67,5 +68,10 @@ class Target(Base):
     queue_items: Mapped[list["QueueItem"]] = relationship(
         back_populates="target",
         cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+    users: Mapped[list["User"]] = relationship(
+        secondary="user_targets",
+        back_populates="targets",
         passive_deletes=True,
     )

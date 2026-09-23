@@ -40,6 +40,7 @@ class TargetRepository:
         limit: int,
         platform: str | None,
         is_active: bool | None,
+        allowed_target_ids: frozenset[int] | None = None,
     ) -> list[Target]:
         """Возвращает цели с фильтрацией и пагинацией."""
 
@@ -50,6 +51,8 @@ class TargetRepository:
             statement = statement.where(Target.platform == platform)
         if is_active is not None:
             statement = statement.where(Target.is_active == is_active)
+        if allowed_target_ids is not None:
+            statement = statement.where(Target.target_id.in_(allowed_target_ids))
         result = await self.session.scalars(statement)
         return list(result.all())
 
