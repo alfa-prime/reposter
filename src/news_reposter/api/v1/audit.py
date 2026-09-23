@@ -46,7 +46,7 @@ async def list_audit_events(
 ) -> AuditEventPage:
     actor = aliased(User)
     subject = aliased(User)
-    filters = []
+    filters = [AuditEvent.subject_type == "user"]
     if actor_user_id is not None:
         filters.append(AuditEvent.actor_user_id == actor_user_id)
     if action:
