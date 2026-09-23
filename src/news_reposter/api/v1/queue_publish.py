@@ -17,6 +17,7 @@ from news_reposter.api.v1.queue_permissions import (
 from news_reposter.db.session import get_db_session
 from news_reposter.repositories.queue_item import QueueItemRepository
 from news_reposter.schemas.queue_item import QueueItemRead
+from news_reposter.services.audit import record_editorial_event
 from news_reposter.services.publisher import PublicationError, publish_queue_item
 
 router = APIRouter(
@@ -53,6 +54,7 @@ async def publish_now(
     )
     if accessible_item is None:
         raise HTTPException(status_code=404, detail="Элемент очереди не найден")
+    previous_status = accessible_item.status.value
     try:
         item = await publish_queue_item(session, queue_item_id, http_client)
     except PublicationError as exc:
@@ -70,4 +72,11 @@ async def publish_now(
         )
         raise HTTPException(status_code=code, detail=detail) from exc
 
+    await record_editorial_event(
+        session,
+        actor_user_id=auth.user.user_id,
+        item=item,
+        action="editorial.published",
+        details={"previous_status": previous_status, "status": item.status.value},
+    )
     return queue_item_response(item)

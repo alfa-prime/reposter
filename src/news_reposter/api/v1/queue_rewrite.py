@@ -23,6 +23,7 @@ from news_reposter.db.session import get_db_session
 from news_reposter.llm import LLMProviderError
 from news_reposter.repositories.queue_item import QueueItemRepository
 from news_reposter.schemas.queue_item import QueueItemRead, QueueItemUpdate
+from news_reposter.services.audit import record_editorial_event
 from news_reposter.services.rewrite import RewriteService, RewriteServiceError
 
 router = APIRouter(
@@ -99,5 +100,12 @@ async def rewrite_queue_item(
     item = await repository.update(
         item,
         QueueItemUpdate(rewritten_text=result.text),
+    )
+    await record_editorial_event(
+        session,
+        actor_user_id=auth.user.user_id,
+        item=item,
+        action="editorial.rewritten",
+        details={"previous_status": previous_status.value, "status": item.status.value},
     )
     return queue_item_response(item)

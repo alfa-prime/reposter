@@ -5,6 +5,7 @@ from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from typing import ClassVar
+from unittest.mock import AsyncMock
 
 import httpx
 import pytest
@@ -157,13 +158,14 @@ class MemoryQueueRepository:
 def memory_queue_repository(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     async def allow_queue_access() -> SimpleNamespace:
         return SimpleNamespace(
-            user=SimpleNamespace(must_change_password=False),
+            user=SimpleNamespace(user_id=1, must_change_password=False),
             session=SimpleNamespace(csrf_token_hash=hash_token(CSRF_TOKEN)),
             permission_codes=QUEUE_PERMISSIONS,
         )
 
     MemoryQueueRepository.reset()
     monkeypatch.setattr(queue_api, "QueueItemRepository", MemoryQueueRepository)
+    monkeypatch.setattr(queue_api, "record_editorial_event", AsyncMock())
     app.dependency_overrides[get_current_auth] = allow_queue_access
     try:
         yield

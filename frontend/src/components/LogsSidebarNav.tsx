@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { CalendarClock, ChevronDown, ChevronRight, ScrollText, UserRoundSearch } from "lucide-react";
+import { BookOpenCheck, CalendarClock, ChevronDown, ChevronRight, ScrollText, UserRoundSearch } from "lucide-react";
 import type { Section } from "../navigation";
 
 type Props = {
@@ -8,7 +8,7 @@ type Props = {
 };
 
 export function LogsSidebarNav({ section, onSectionChange }: Props) {
-  const active = section === "logs" || section === "user_logs";
+  const active = section === "logs" || section === "user_logs" || section === "editorial_logs";
   const [open, setOpen] = useState(active);
 
   useEffect(() => {
@@ -43,6 +43,10 @@ export function LogsSidebarNav({ section, onSectionChange }: Props) {
           >
             <UserRoundSearch size={15} />
             <span className="queue-nav-channel-name">Журнал пользователей</span>
+          </button>
+          <button type="button" className={`queue-nav-channel ${section === "editorial_logs" ? "active" : ""}`} onClick={() => onSectionChange("editorial_logs")}>
+            <BookOpenCheck size={15} />
+            <span className="queue-nav-channel-name">Редакционный журнал</span>
           </button>
         </div>
       )}

@@ -38,6 +38,7 @@ from news_reposter.schemas.queue_item import (
     QueueMediaUpload,
     QueuePageRead,
 )
+from news_reposter.services.audit import record_editorial_event
 from news_reposter.services.media_storage import (
     cleanup_queue_item_media,
     queue_item_directory,
@@ -188,6 +189,9 @@ async def create_queue_item(
         item = await repository.create(data)
     except QueueItemAlreadyExistsError as exc:
         raise conflict_error("Пост уже находится в очереди этого канала") from exc
+    await record_editorial_event(
+        session, actor_user_id=auth.user.user_id, item=item, action="editorial.created"
+    )
     return queue_item_response(item)
 
 
@@ -446,7 +450,15 @@ async def update_queue_item(
     item = await get_accessible_queue_item(repository, queue_item_id, auth)
     if item is None:
         raise not_found_error()
+    changed_fields = sorted(data.model_fields_set)
     item = await repository.update(item, data)
+    await record_editorial_event(
+        session,
+        actor_user_id=auth.user.user_id,
+        item=item,
+        action="editorial.edited",
+        details={"changed_fields": changed_fields},
+    )
     return queue_item_response(item)
 
 
@@ -480,7 +492,15 @@ async def submit_queue_item(
     )
     if not item.rewritten_text or not item.rewritten_text.strip():
         raise conflict_error("Перед отправкой на модерацию нужен подготовленный текст")
+    previous_status = item.status.value
     item = await repository.set_status(item, QueueItemStatus.AWAITING_MODERATION)
+    await record_editorial_event(
+        session,
+        actor_user_id=auth.user.user_id,
+        item=item,
+        action="editorial.submitted",
+        details={"previous_status": previous_status, "status": item.status.value},
+    )
     return queue_item_response(item)
 
 
@@ -509,7 +529,15 @@ async def approve_queue_item(
     if item is None:
         raise not_found_error()
     ensure_status(item.status, {QueueItemStatus.AWAITING_MODERATION})
+    previous_status = item.status.value
     item = await repository.set_status(item, QueueItemStatus.APPROVED)
+    await record_editorial_event(
+        session,
+        actor_user_id=auth.user.user_id,
+        item=item,
+        action="editorial.approved",
+        details={"previous_status": previous_status, "status": item.status.value},
+    )
     return queue_item_response(item)
 
 
@@ -538,7 +566,15 @@ async def reject_queue_item(
     if item is None:
         raise not_found_error()
     ensure_status(item.status, {QueueItemStatus.AWAITING_MODERATION})
+    previous_status = item.status.value
     item = await repository.set_status(item, QueueItemStatus.REJECTED)
+    await record_editorial_event(
+        session,
+        actor_user_id=auth.user.user_id,
+        item=item,
+        action="editorial.rejected",
+        details={"previous_status": previous_status, "status": item.status.value},
+    )
     return queue_item_response(item)
 
 
@@ -578,7 +614,15 @@ async def reopen_queue_item(
             QueueItemStatus.SCHEDULED,
         },
     )
+    previous_status = item.status.value
     item = await repository.set_status(item, QueueItemStatus.PENDING)
+    await record_editorial_event(
+        session,
+        actor_user_id=auth.user.user_id,
+        item=item,
+        action="editorial.reopened",
+        details={"previous_status": previous_status, "status": item.status.value},
+    )
     return queue_item_response(item)
 
 
@@ -608,10 +652,22 @@ async def schedule_queue_item(
     if item is None:
         raise not_found_error()
     ensure_status(item.status, {QueueItemStatus.APPROVED})
+    previous_status = item.status.value
     item = await repository.set_status(
         item,
         QueueItemStatus.SCHEDULED,
         scheduled_at=data.scheduled_at,
+    )
+    await record_editorial_event(
+        session,
+        actor_user_id=auth.user.user_id,
+        item=item,
+        action="editorial.scheduled",
+        details={
+            "previous_status": previous_status,
+            "status": item.status.value,
+            "scheduled_at": data.scheduled_at.isoformat(),
+        },
     )
     return queue_item_response(item)
 
@@ -639,6 +695,13 @@ async def delete_queue_item(
     item = await get_accessible_queue_item(repository, queue_item_id, auth)
     if item is None:
         raise not_found_error()
+    await record_editorial_event(
+        session,
+        actor_user_id=auth.user.user_id,
+        item=item,
+        action="editorial.deleted",
+        details={"status": item.status.value},
+    )
     await repository.delete(item)
 
     cleanup_queue_item_media(queue_item_id)

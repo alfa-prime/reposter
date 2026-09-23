@@ -40,6 +40,9 @@
 .user-audit-main strong, .user-audit-person strong { overflow: hidden; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 .user-audit-main span, .user-audit-person small, .user-audit-card time { color: #74839a; font-size: 10px; line-height: 1.4; }
 .user-audit-card time { white-space: nowrap; }
+.editorial-log-toolbar { flex-wrap: wrap; }
+.editorial-log-toolbar input { width: 100%; color: #edf2fa; background: #0a1220; border: 1px solid rgba(255,255,255,.09); border-radius: 10px; padding: 9px 11px; color-scheme: dark; }
+.editorial-audit-card { grid-template-columns: 34px minmax(180px, 1.4fr) minmax(140px, 1fr) minmax(130px, .8fr) 80px auto; }
 .log-toolbar { display: flex; gap: 12px; padding: 14px; border-radius: 15px; margin-bottom: 14px; }
 .log-toolbar label { min-width: 150px; }
 .scheduler-log-list { display: grid; gap: 9px; }
@@ -71,6 +74,7 @@
 
 html[data-theme="light"] .scheduler-stat, html[data-theme="light"] .scheduler-form-card, html[data-theme="light"] .log-toolbar, html[data-theme="light"] .scheduler-log-card, html[data-theme="light"] .scheduler-log-empty { border-color: rgba(41,57,86,.10); background: rgba(255,255,255,.88); box-shadow: 0 16px 44px rgba(47,62,92,.07); }
 html[data-theme="light"] .user-audit-card { border-color: rgba(41,57,86,.10); background: rgba(255,255,255,.88); box-shadow: 0 16px 44px rgba(47,62,92,.07); }
+html[data-theme="light"] .editorial-log-toolbar input { color: #1f2b3d; background: #fff; border-color: rgba(42,58,88,.14); color-scheme: light; }
 html[data-theme="light"] .scheduler-fields input, html[data-theme="light"] .scheduler-fields select, html[data-theme="light"] .log-toolbar select { color: #1f2b3d; background: #fff; border-color: rgba(42,58,88,.14); color-scheme: light; }
 html[data-theme="light"] .scheduler-form-title, html[data-theme="light"] .scheduler-log-detail, html[data-theme="light"] .source-run-row { border-color: rgba(42,58,88,.08); }
 html[data-theme="light"] .run-status-success, html[data-theme="light"] .run-status-no_changes { color: #237447; }

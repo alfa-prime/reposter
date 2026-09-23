@@ -18,6 +18,7 @@ import { SourcesPage } from "./components/SourcesPage";
 import { TargetsPage } from "./components/TargetsPage";
 import { UsersPage } from "./components/UsersPage";
 import { UserActivityLogsPage } from "./components/UserActivityLogsPage";
+import { EditorialLogsPage } from "./components/EditorialLogsPage";
 import type { Section } from "./navigation";
 
 type ConfirmDialog = {
@@ -107,7 +108,7 @@ function AuthenticatedApp() {
     if (section === "users" && !user?.permissions.includes("users.read")) {
       setSection("queue");
     }
-    if ((section === "scheduler" || section === "logs" || section === "user_logs") && !isAdministrator) {
+    if ((section === "scheduler" || section === "logs" || section === "user_logs" || section === "editorial_logs") && !isAdministrator) {
       setSection("queue");
     }
   }, [isAdministrator, section, user]);
@@ -230,7 +231,7 @@ function AuthenticatedApp() {
     ? `Канал: ${selectedQueueTarget.name}`
     : "Общая очередь · посты из всех каналов";
 
-  const standalonePage = section === "about" || section === "scheduler" || section === "logs" || section === "user_logs" || section === "users";
+  const standalonePage = section === "about" || section === "scheduler" || section === "logs" || section === "user_logs" || section === "editorial_logs" || section === "users";
 
   return (
     <div className="shell">
@@ -275,6 +276,7 @@ function AuthenticatedApp() {
         {section === "scheduler" && isAdministrator && <SettingsPage />}
         {section === "logs" && isAdministrator && <SchedulerLogsPage />}
         {section === "user_logs" && isAdministrator && <UserActivityLogsPage />}
+        {section === "editorial_logs" && isAdministrator && <EditorialLogsPage />}
         {section === "users" && user?.permissions.includes("users.read") && <UsersPage />}
 
         {section === "queue" && (
