@@ -5,7 +5,6 @@ import {
   Info,
   Moon,
   Radio,
-  ScrollText,
   Sun,
   Users,
 } from "lucide-react";
@@ -15,6 +14,7 @@ import { projectLogo } from "../logoData";
 import type { Section } from "../navigation";
 import { applyTheme, getInitialTheme, Theme } from "../theme";
 import "../sidebarQueue.css";
+import { LogsSidebarNav } from "./LogsSidebarNav";
 import { QueueSidebarNav } from "./QueueSidebarNav";
 import { UserMenu } from "./UserMenu";
 
@@ -66,7 +66,7 @@ export function Sidebar({ section, targets, selectedQueueTargetId, onSectionChan
         )}
         {isAdministrator && <>
           <button onClick={() => onSectionChange("scheduler")} className={section === "scheduler" ? "active" : ""}><CalendarClock size={18} />Планировщик</button>
-          <button onClick={() => onSectionChange("logs")} className={section === "logs" ? "active" : ""}><ScrollText size={18} />Журналы</button>
+          <LogsSidebarNav section={section} onSectionChange={onSectionChange} />
         </>}
         <button onClick={() => onSectionChange("about")} className={section === "about" ? "active about-nav-button" : "about-nav-button"}><Info size={18} /><span>О проекте</span></button>
       </nav>
