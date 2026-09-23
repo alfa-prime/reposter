@@ -123,6 +123,17 @@ class UserService:
         self.users.add(user)
         await self.session.flush()
         if actor_user_id is not None:
+            self._record_audit(
+                actor_user_id=actor_user_id,
+                action="user.created",
+                user_id=user.user_id,
+                details={
+                    "role_codes": sorted(role.code for role in assigned_roles),
+                    "target_ids": sorted(
+                        target.target_id for target in assigned_targets
+                    ),
+                },
+            )
             self._record_target_assignment(
                 actor_user_id=actor_user_id,
                 user_id=user.user_id,
@@ -153,6 +164,9 @@ class UserService:
             )
 
         previous_target_ids = {target.target_id for target in user.targets}
+        previous_role_codes = {role.code for role in user.roles}
+        previous_display_name = user.display_name
+        previous_is_active = user.is_active
         if display_name is not None:
             user.display_name = prepare_display_name(display_name)
         if role_codes is not None:
@@ -177,6 +191,31 @@ class UserService:
                     revoked_at=datetime.now(UTC),
                     reason=SessionRevocationReason.ADMIN_REVOKED.value,
                 )
+
+        changed: dict[str, object] = {}
+        if user.display_name != previous_display_name:
+            changed["display_name"] = {
+                "previous": previous_display_name,
+                "current": user.display_name,
+            }
+        current_role_codes = {role.code for role in user.roles}
+        if current_role_codes != previous_role_codes:
+            changed["role_codes"] = {
+                "previous": sorted(previous_role_codes),
+                "current": sorted(current_role_codes),
+            }
+        if user.is_active != previous_is_active:
+            changed["is_active"] = {
+                "previous": previous_is_active,
+                "current": user.is_active,
+            }
+        if changed:
+            self._record_audit(
+                actor_user_id=actor_user_id,
+                action="user.updated",
+                user_id=user.user_id,
+                details=changed,
+            )
 
         await self._commit()
         await self._refresh_admin_user(user)
@@ -206,6 +245,11 @@ class UserService:
             revoked_at=datetime.now(UTC),
             reason=SessionRevocationReason.ADMIN_REVOKED.value,
         )
+        self._record_audit(
+            actor_user_id=actor_user_id,
+            action="user.password.reset",
+            user_id=user.user_id,
+        )
         await self._commit()
         await self._refresh_admin_user(user)
         return user
@@ -229,6 +273,12 @@ class UserService:
             user.user_id,
             revoked_at=datetime.now(UTC),
             reason=SessionRevocationReason.ADMIN_REVOKED.value,
+        )
+        self._record_audit(
+            actor_user_id=actor_user_id,
+            action="user.sessions.revoked",
+            user_id=user.user_id,
+            details={"revoked_sessions": count},
         )
         await self._commit()
         return count
@@ -345,6 +395,24 @@ class UserService:
                     "added_target_ids": sorted(current_ids - previous_ids),
                     "removed_target_ids": sorted(previous_ids - current_ids),
                 },
+            )
+        )
+
+    def _record_audit(
+        self,
+        *,
+        actor_user_id: int,
+        action: str,
+        user_id: int,
+        details: dict[str, object] | None = None,
+    ) -> None:
+        self.session.add(
+            AuditEvent(
+                actor_user_id=actor_user_id,
+                action=action,
+                subject_type="user",
+                subject_id=user_id,
+                details=details or {},
             )
         )
 

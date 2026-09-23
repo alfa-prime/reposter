@@ -33,6 +33,13 @@
 .logs-section-title { display: grid; gap: 5px; margin: 0 0 12px; }
 .logs-section-title strong { font-size: 16px; }
 .logs-section-title span { color: #78879f; font-size: 11px; }
+.user-audit-list { display: grid; gap: 9px; }
+.user-audit-card { display: grid; grid-template-columns: 34px minmax(180px, 1.4fr) minmax(150px, 1fr) minmax(150px, 1fr) auto; align-items: center; gap: 14px; padding: 15px 17px; border: 1px solid rgba(255,255,255,.075); border-radius: 15px; background: rgba(255,255,255,.025); }
+.user-audit-icon { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 10px; color: #91a3ec; background: rgba(112,130,235,.12); }
+.user-audit-main, .user-audit-person { display: grid; gap: 4px; min-width: 0; }
+.user-audit-main strong, .user-audit-person strong { overflow: hidden; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.user-audit-main span, .user-audit-person small, .user-audit-card time { color: #74839a; font-size: 10px; line-height: 1.4; }
+.user-audit-card time { white-space: nowrap; }
 .log-toolbar { display: flex; gap: 12px; padding: 14px; border-radius: 15px; margin-bottom: 14px; }
 .log-toolbar label { min-width: 150px; }
 .scheduler-log-list { display: grid; gap: 9px; }
@@ -63,6 +70,7 @@
 .log-pagination strong { min-width: 52px; color: #aab6c9; text-align: center; }
 
 html[data-theme="light"] .scheduler-stat, html[data-theme="light"] .scheduler-form-card, html[data-theme="light"] .log-toolbar, html[data-theme="light"] .scheduler-log-card, html[data-theme="light"] .scheduler-log-empty { border-color: rgba(41,57,86,.10); background: rgba(255,255,255,.88); box-shadow: 0 16px 44px rgba(47,62,92,.07); }
+html[data-theme="light"] .user-audit-card { border-color: rgba(41,57,86,.10); background: rgba(255,255,255,.88); box-shadow: 0 16px 44px rgba(47,62,92,.07); }
 html[data-theme="light"] .scheduler-fields input, html[data-theme="light"] .scheduler-fields select, html[data-theme="light"] .log-toolbar select { color: #1f2b3d; background: #fff; border-color: rgba(42,58,88,.14); color-scheme: light; }
 html[data-theme="light"] .scheduler-form-title, html[data-theme="light"] .scheduler-log-detail, html[data-theme="light"] .source-run-row { border-color: rgba(42,58,88,.08); }
 html[data-theme="light"] .run-status-success, html[data-theme="light"] .run-status-no_changes { color: #237447; }
@@ -73,6 +81,8 @@ html[data-theme="light"] .run-status-partial { color: #8e651c; }
   .scheduler-status-grid, .scheduler-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .scheduler-log-summary { grid-template-columns: 100px 1fr 1fr 20px; }
   .scheduler-log-summary > span:nth-of-type(4), .scheduler-log-summary > span:nth-of-type(5) { display: none; }
+  .user-audit-card { grid-template-columns: 34px 1fr auto; }
+  .user-audit-person { display: none; }
 }
 @media (max-width: 680px) {
   .scheduler-head { align-items: flex-start; }

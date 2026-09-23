@@ -12,6 +12,7 @@ EXPECTED_OPERATIONS = {
     ("/api/v1/admin/users", "get"): "Получить список пользователей",
     ("/api/v1/admin/users", "post"): "Создать пользователя",
     ("/api/v1/admin/roles", "get"): "Получить список ролей",
+    ("/api/v1/admin/audit", "get"): "Получить журнал действий пользователей",
     ("/api/v1/admin/users/{user_id}", "patch"): "Изменить пользователя",
     (
         "/api/v1/admin/users/{user_id}/reset-password",
@@ -149,6 +150,7 @@ INTEGRATION_WRITE_OPERATIONS = {
 ADMIN_READ_OPERATIONS = {
     ("/api/v1/admin/users", "get"),
     ("/api/v1/admin/roles", "get"),
+    ("/api/v1/admin/audit", "get"),
 }
 
 ADMIN_WRITE_OPERATIONS = {

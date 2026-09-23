@@ -342,6 +342,7 @@ def test_promoting_user_to_administrator_clears_targets_and_audits() -> None:
 def test_deactivate_user_revokes_sessions_in_same_transaction() -> None:
     async def scenario() -> None:
         session = AsyncMock()
+        session.add = Mock()
         managed = User(
             user_id=8,
             username="editor",
@@ -410,6 +411,7 @@ def test_administrator_cannot_remove_own_access() -> None:
 def test_reset_password_marks_temporary_and_revokes_sessions() -> None:
     async def scenario() -> None:
         session = AsyncMock()
+        session.add = Mock()
         managed = User(
             user_id=9,
             username="publisher",

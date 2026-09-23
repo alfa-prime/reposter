@@ -69,6 +69,27 @@ export type AdminUserUpdate = {
   target_ids?: number[];
 };
 
+export type AuditEvent = {
+  audit_event_id: number;
+  actor_user_id: number | null;
+  actor_name: string | null;
+  actor_username: string | null;
+  action: string;
+  subject_type: string;
+  subject_id: number;
+  subject_name: string | null;
+  subject_username: string | null;
+  details: Record<string, unknown>;
+  created_at: string;
+};
+
+export type AuditEventPage = {
+  items: AuditEvent[];
+  total: number;
+  offset: number;
+  limit: number;
+};
+
 export const AUTH_SESSION_EXPIRED_EVENT = "reposter:auth-session-expired";
 
 export class ApiError extends Error {
@@ -320,6 +341,12 @@ export const api = {
   }),
   adminUsers: () => request<AdminUser[]>("/api/v1/admin/users"),
   adminRoles: () => request<AdminRole[]>("/api/v1/admin/roles"),
+  auditEvents: (options: { offset: number; limit: number; actorUserId?: number; action?: string }) => {
+    const params = new URLSearchParams({ offset: String(options.offset), limit: String(options.limit) });
+    if (options.actorUserId) params.set("actor_user_id", String(options.actorUserId));
+    if (options.action) params.set("action", options.action);
+    return request<AuditEventPage>(`/api/v1/admin/audit?${params.toString()}`);
+  },
   createAdminUser: (data: AdminUserCreate) => request<AdminUser>(
     "/api/v1/admin/users",
     { method: "POST", headers: csrfHeaders(), body: JSON.stringify(data) },
