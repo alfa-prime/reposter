@@ -1,57 +1,12 @@
-# Production / demo deployment
+# Развёртывание и обслуживание News Reposter
 
-Recommended VPS baseline: Ubuntu 24.04 LTS, 2 vCPU, 4 GB RAM, 40+ GB SSD.
+Документ описывает установку на сервер, безопасное обновление, резервное
+копирование, восстановление и мониторинг. Рекомендуемая конфигурация: Ubuntu
+24.04 LTS, 2 vCPU, 4 ГБ RAM и SSD от 40 ГБ.
 
-## Recommended production mode
+## 1. Подготовка сервера
 
-Point a domain at the server and set it in `.env`:
-
-```dotenv
-SITE_ADDRESS=news.example.ru
-AUTH_COOKIE_SECURE=true
-```
-
-Caddy will obtain and renew the public TLS certificate automatically. The application uses its own user accounts, server-side sessions, roles, CSRF protection and login rate limiting; Caddy Basic Auth is not used.
-
-Allow SSH, HTTP and HTTPS:
-
-```bash
-sudo ufw allow OpenSSH
-sudo ufw allow 80/tcp
-sudo ufw allow 443/tcp
-sudo ufw enable
-```
-
-## Temporary IP-only mode
-
-For a short test without a domain, use plain HTTP:
-
-```dotenv
-SITE_ADDRESS=:80
-AUTH_COOKIE_SECURE=false
-```
-
-Then open:
-
-```text
-http://VPS_IP
-```
-
-Important: HTTP does not encrypt credentials or traffic. Use this mode only for a temporary test, do not reuse real passwords and do not place sensitive data in the instance. Switch to a domain and HTTPS before regular use.
-
-For IP-only demo mode the firewall only needs SSH and HTTP:
-
-```bash
-sudo ufw allow OpenSSH
-sudo ufw allow 80/tcp
-sudo ufw enable
-```
-
-## 1. Server preparation
-
-Install Docker Engine, the Docker Compose plugin and Git.
-
-On Ubuntu 24.04 you can use Docker's official repository or the provider's preinstalled Docker image. Verify:
+Установите Docker Engine, Docker Compose и Git:
 
 ```bash
 docker --version
@@ -59,7 +14,17 @@ docker compose version
 git --version
 ```
 
-## 2. Clone repository
+Для постоянной работы используйте домен и HTTPS. Откройте SSH, HTTP и HTTPS:
+
+```bash
+sudo ufw allow OpenSSH
+sudo ufw allow 80/tcp
+sudo ufw allow 443/tcp
+sudo ufw enable
+```
+
+Клонируйте приватный репозиторий. На сервере должен быть настроен SSH-ключ с
+доступом к GitHub:
 
 ```bash
 git clone git@github.com:alfa-prime/reposter.git
@@ -67,115 +32,117 @@ cd reposter
 git switch master
 ```
 
-Use an SSH deploy key or another secure GitHub credential for the private repository.
-
-## 3. Environment
+## 2. Настройка окружения
 
 ```bash
 cp .env.example .env
 chmod 600 .env
 ```
 
-Set at least:
+Как минимум задайте:
 
 ```dotenv
-VK_ACCESS_TOKEN=<token>
-MAX_ACCESS_TOKEN=<token>
-POSTGRES_PASSWORD=<strong-random-password>
-SITE_ADDRESS=:80
-AUTH_COOKIE_SECURE=false
+VK_ACCESS_TOKEN=токен_VK
+MAX_ACCESS_TOKEN=токен_бота_MAX
+POSTGRES_PASSWORD=длинный_случайный_пароль
+SITE_ADDRESS=news.example.ru
+AUTH_COOKIE_SECURE=true
 ```
 
-Generate a strong database password, for example:
+Пароль PostgreSQL можно создать командой `openssl rand -hex 32`.
 
-```bash
-openssl rand -hex 32
-```
+В production FastAPI доступен только во внутренней сети Docker. Caddy принимает
+HTTP/HTTPS, автоматически получает TLS-сертификат и проксирует запросы в
+приложение. Пользователей, роли, сессии, CSRF-защиту и ограничение попыток входа
+обрабатывает само приложение.
 
-## 4. Start demo/production stack
+Для короткой проверки без домена можно задать `SITE_ADDRESS=:80` и
+`AUTH_COOKIE_SECURE=false`. Обычный HTTP не шифрует пароли и не подходит для
+постоянной эксплуатации.
+
+## 3. Первый запуск
 
 ```bash
 docker compose -f compose.yaml -f compose.prod.yaml up -d --build
-```
-
-Check status:
-
-```bash
 docker compose -f compose.yaml -f compose.prod.yaml ps
 ```
 
-Watch logs if needed:
-
-```bash
-docker compose -f compose.yaml -f compose.prod.yaml logs -f frontend app
-```
-
-FastAPI is not exposed directly in the production override. Caddy terminates HTTP/HTTPS and proxies API requests; application access is protected by FastAPI user sessions and permissions.
-
-For a fresh database, create the first administrator interactively:
+Контейнер `migrate` дождётся PostgreSQL и применит миграции Alembic до запуска
+backend. Для новой базы создайте первого администратора:
 
 ```bash
 docker compose -f compose.yaml -f compose.prod.yaml exec app \
   python -m news_reposter.cli create-admin
 ```
 
-## 5. Open the demo
-
-Go to:
-
-```text
-http://VPS_IP
-```
-
-Sign in with the application administrator account.
-
-## 6. Later: add a domain and HTTPS
-
-Point an A record at the VPS IPv4 address, for example:
-
-```text
-news.example.ru -> 203.0.113.10
-```
-
-Change only:
-
-```dotenv
-SITE_ADDRESS=news.example.ru
-AUTH_COOKIE_SECURE=true
-```
-
-Then allow HTTPS and restart:
+Проверьте приложение и базу:
 
 ```bash
-sudo ufw allow 443/tcp
-docker compose -f compose.yaml -f compose.prod.yaml up -d
+curl --fail --silent https://news.example.ru/health
+curl --fail --silent https://news.example.ru/health/database
+docker compose -f compose.yaml -f compose.prod.yaml logs --tail=100 app
 ```
 
-Caddy will obtain and renew the public TLS certificate automatically when the domain points to the VPS and ports 80/443 are reachable.
+## 4. Безопасное обновление
 
-## 7. Updating
+Перед обновлением изменения должны пройти тесты и попасть в `master`:
 
 ```bash
-git pull
+cd /путь/к/reposter
+./backup/run-backup.sh
+git pull --ff-only origin master
 docker compose -f compose.yaml -f compose.prod.yaml up -d --build
 ```
 
-PostgreSQL data and Caddy configuration are stored in Docker volumes. Configure the encrypted off-site backups below before treating the instance as permanent production data storage.
+`--ff-only` запрещает неожиданное слияние истории на сервере. Docker собирает
+новые образы, применяет миграции и заменяет изменившиеся контейнеры. `.env`,
+PostgreSQL и постоянные Docker-тома не перезаписываются.
 
-## 8. Encrypted S3 backups
+После обновления:
 
-The backup contains a consistent PostgreSQL dump and the complete media volume. Restic encrypts all data locally before uploading it to a private S3 bucket. The S3 secret and the Restic encryption password are read only from the server's `.env` file and must never be committed.
+```bash
+docker compose -f compose.yaml -f compose.prod.yaml ps
+curl --fail --silent https://news.example.ru/health
+curl --fail --silent https://news.example.ru/health/database
+docker compose -f compose.yaml -f compose.prod.yaml logs --since 5m app migrate
+systemctl start reposter-monitor.service
+systemctl show reposter-monitor.service -p Result --value
+```
 
-Add the private bucket settings to `.env`:
+Для отката выберите предыдущий исправный коммит и снова соберите контейнеры.
+Если релиз менял схему или данные, сначала изучите миграцию Alembic — откатывать
+базу вслепую нельзя.
+
+## 5. Пул PostgreSQL
+
+Один процесс приложения использует до 10 постоянных и до 10 временных
+соединений:
+
+```dotenv
+DATABASE_POOL_SIZE=10
+DATABASE_MAX_OVERFLOW=10
+DATABASE_POOL_TIMEOUT_SECONDS=30
+DATABASE_POOL_RECYCLE_SECONDS=1800
+DATABASE_COMMAND_TIMEOUT_SECONDS=30
+```
+
+При добавлении процессов FastAPI или фоновых воркеров считайте суммарное число
+соединений. Не увеличивайте количество веб-процессов до выноса встроенных
+планировщиков из FastAPI.
+
+## 6. Зашифрованные резервные копии S3
+
+Копия содержит согласованный дамп PostgreSQL и весь том с медиа. Restic шифрует
+данные до отправки в приватный S3-бакет.
 
 ```dotenv
 BACKUP_S3_ENDPOINT=https://s3.twcstorage.ru
-BACKUP_S3_BUCKET=replace_with_bucket_name
+BACKUP_S3_BUCKET=имя_бакета
 BACKUP_S3_REGION=ru-1
 BACKUP_S3_PREFIX=reposter
-BACKUP_S3_ACCESS_KEY=replace_with_access_key
-BACKUP_S3_SECRET_KEY=replace_with_secret_key
-RESTIC_PASSWORD=replace_with_a_separate_long_random_password
+BACKUP_S3_ACCESS_KEY=ключ_доступа
+BACKUP_S3_SECRET_KEY=секретный_ключ
+RESTIC_PASSWORD=отдельный_длинный_пароль
 BACKUP_HOST_NAME=reposter-production
 BACKUP_KEEP_DAILY=14
 BACKUP_KEEP_WEEKLY=8
@@ -183,43 +150,38 @@ BACKUP_KEEP_MONTHLY=6
 BACKUP_CHECK_SUBSET=5%
 ```
 
-Generate the Restic password separately from the database password and keep an offline copy in a password manager. Losing it makes every backup unrecoverable:
-
-```bash
-openssl rand -base64 48
-chmod 600 .env
-```
-
-Create the first backup manually:
+Пароль Restic храните также вне сервера в менеджере паролей. Без него копии
+невозможно восстановить.
 
 ```bash
 ./backup/run-backup.sh
-```
-
-List stored snapshots and run an integrity check:
-
-```bash
-docker compose -f compose.yaml -f compose.prod.yaml --profile backup run --rm backup snapshots
+docker compose -f compose.yaml -f compose.prod.yaml --profile backup \
+  run --rm backup snapshots
 ./backup/run-verify.sh
 ```
 
-The default policy retains 14 daily, 8 weekly and 6 monthly snapshots. `BACKUP_CHECK_SUBSET=5%` verifies repository metadata and reads a rotating sample of stored data. A successful backup must be followed by a test restore before relying on it.
+По умолчанию сохраняются 14 ежедневных, 8 еженедельных и 6 ежемесячных
+снимков. Проверка читает метаданные и меняющуюся выборку из 5% данных.
 
-### Automatic daily backup
-
-The repository contains systemd unit templates. Replace `REPLACE_WITH_PROJECT_DIRECTORY` in both `.service` files with the absolute repository directory, then install and enable them:
+### Автоматическое расписание
 
 ```bash
-sudo cp backup/reposter-backup.service /etc/systemd/system/
+PROJECT_DIR=/root/Code/reposter
+sed "s|REPLACE_WITH_PROJECT_DIRECTORY|$PROJECT_DIR|g" \
+  backup/reposter-backup.service | \
+  sudo tee /etc/systemd/system/reposter-backup.service >/dev/null
+sed "s|REPLACE_WITH_PROJECT_DIRECTORY|$PROJECT_DIR|g" \
+  backup/reposter-backup-verify.service | \
+  sudo tee /etc/systemd/system/reposter-backup-verify.service >/dev/null
 sudo cp backup/reposter-backup.timer /etc/systemd/system/
-sudo cp backup/reposter-backup-verify.service /etc/systemd/system/
 sudo cp backup/reposter-backup-verify.timer /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable --now reposter-backup.timer reposter-backup-verify.timer
 systemctl list-timers 'reposter-backup*'
 ```
 
-The daily job runs around 03:15 server time and catches up after downtime. Repository verification runs monthly. Inspect the latest results with:
+Ежедневная копия создаётся примерно в 03:15 по времени сервера с небольшой
+случайной задержкой. Проверка репозитория выполняется ежемесячно.
 
 ```bash
 systemctl status reposter-backup.service
@@ -227,78 +189,71 @@ journalctl -u reposter-backup.service -n 100 --no-pager
 systemctl status reposter-backup-verify.service
 ```
 
-### Restore drill and disaster recovery
+## 7. Проверка и полное восстановление
 
-Always test recovery on a disposable server first. A restore replaces the selected database and all media files. Save the current state before starting and make sure no editors are using the application.
-
-List snapshots and note the required ID:
-
-```bash
-docker compose -f compose.yaml -f compose.prod.yaml --profile backup run --rm backup snapshots
-```
-
-Stop application traffic while keeping PostgreSQL available:
+Сначала проверяйте восстановление на временном сервере. Полное восстановление
+заменяет выбранную базу и все медиафайлы.
 
 ```bash
+docker compose -f compose.yaml -f compose.prod.yaml --profile backup \
+  run --rm backup snapshots
 docker compose -f compose.yaml -f compose.prod.yaml stop frontend app
-```
-
-Restore `latest`, or replace it with a snapshot ID. The explicit confirmation protects against an accidental destructive restore:
-
-```bash
 RESTORE_CONFIRM=RESTORE RESTORE_SNAPSHOT=latest \
   docker compose -f compose.yaml -f compose.prod.yaml --profile backup \
   run --rm -e RESTORE_CONFIRM -e RESTORE_SNAPSHOT backup restore
-```
-
-Apply any migrations added after that snapshot, start the application and check database health, authentication, queue items and several media files:
-
-```bash
 docker compose -f compose.yaml -f compose.prod.yaml run --rm migrate
 docker compose -f compose.yaml -f compose.prod.yaml up -d app frontend
-curl --fail --silent "https://${SITE_ADDRESS}/health/database"
+curl --fail --silent https://news.example.ru/health/database
 ```
 
-Record the date, selected snapshot, duration and result of each restore drill. Repeat the drill after changes to PostgreSQL, Docker volumes or backup scripts, and at least once every three months.
+Проводите проверку после изменения схемы резервирования и не реже одного раза
+в три месяца. Записывайте дату, ID снимка, длительность и результат.
 
-## 9. Health monitoring with ntfy
+## 8. Мониторинг ntfy
 
-The monitoring timer checks every five minutes:
-
-- the `postgres`, `app` and `frontend` containers are running;
-- the public application and database health endpoints respond;
-- root disk usage is below the configured threshold;
-- the most recent successful backup is not stale;
-- backup and repository verification services have not failed.
-
-Notifications are sent only when the problem changes and once after recovery. Create a long random ntfy topic, subscribe to it in the ntfy mobile or web application, and add it to `.env`:
+Каждые пять минут сервер проверяет контейнеры, публичные health-check, заполнение
+диска, свежесть копии и состояние задач резервирования. При изменении проблемы
+приходит одно аварийное сообщение, после устранения — одно сообщение о
+восстановлении.
 
 ```dotenv
-NTFY_URL=https://ntfy.sh/replace_with_a_long_random_topic
+NTFY_URL=https://ntfy.sh/длинная_случайная_тема
 NTFY_TOKEN=
-MONITOR_HEALTH_URL=https://www.uncle-vlad.ru/health
-MONITOR_DATABASE_HEALTH_URL=https://www.uncle-vlad.ru/health/database
+MONITOR_HEALTH_URL=https://news.example.ru/health
+MONITOR_DATABASE_HEALTH_URL=https://news.example.ru/health/database
 MONITOR_DISK_WARNING_PERCENT=75
 MONITOR_BACKUP_MAX_AGE_HOURS=26
 ```
 
-An anonymous ntfy topic name acts as a secret. Use a topic that fits the service's length limit, for example `reposter-` plus 24 random bytes encoded as hex, and do not publish the URL. For a reserved topic, set its access token in `NTFY_TOKEN`.
-
-Replace `REPLACE_WITH_PROJECT_DIRECTORY` in both monitoring unit files, install them and send a test notification before enabling the timer:
+Для анонимной темы её имя является секретом. Подходит `reposter-` плюс результат
+`openssl rand -hex 24`.
 
 ```bash
-sudo cp monitoring/reposter-monitor.service /etc/systemd/system/
+PROJECT_DIR=/root/Code/reposter
+sed "s|REPLACE_WITH_PROJECT_DIRECTORY|$PROJECT_DIR|g" \
+  monitoring/reposter-monitor.service | \
+  sudo tee /etc/systemd/system/reposter-monitor.service >/dev/null
 sudo cp monitoring/reposter-monitor.timer /etc/systemd/system/
 sudo systemctl daemon-reload
 set -a; . ./.env; set +a
-./monitoring/notify-ntfy.sh "News Reposter" "Тест уведомлений" default white_check_mark
+./monitoring/notify-ntfy.sh \
+  "News Reposter" "Тест уведомлений" default white_check_mark
 sudo systemctl enable --now reposter-monitor.timer
 ```
-
-Inspect the current result and schedule:
 
 ```bash
 systemctl status reposter-monitor.service
 systemctl list-timers reposter-monitor.timer
 journalctl -u reposter-monitor.service -n 100 --no-pager
 ```
+
+## 9. Постоянные данные
+
+- `postgres_data` — PostgreSQL;
+- `media_data` — изображения, видео, аватары и состояние медиа;
+- `caddy_data` — TLS-сертификаты и данные Caddy;
+- `.env` — секреты конкретного сервера;
+- S3-бакет — зашифрованные внешние копии.
+
+`docker compose down` не удаляет тома. Не используйте ключ `-v`, если не хотите
+удалить постоянные данные.
