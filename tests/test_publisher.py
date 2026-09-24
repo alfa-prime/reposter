@@ -154,3 +154,39 @@ def test_unexpected_publish_error_releases_claim_as_failed(
         assert item.error_message == "unexpected"
 
     asyncio.run(scenario())
+
+
+def test_publish_can_leave_success_for_atomic_audit_commit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Ручная публикация оставляет успех в транзакции до записи аудита."""
+
+    async def scenario() -> None:
+        item = publishable_item()
+        session = AsyncMock(spec=AsyncSession)
+        http_client = Mock(spec=httpx.AsyncClient)
+        monkeypatch.setattr(
+            publisher,
+            "_loaded_item",
+            AsyncMock(side_effect=[item, item]),
+        )
+        monkeypatch.setattr(publisher, "get_settings", max_settings)
+        monkeypatch.setattr(publisher, "MAXClient", lambda **_kwargs: SimpleNamespace())
+        monkeypatch.setattr(
+            publisher,
+            "_publish_with_media_retry",
+            AsyncMock(return_value={"message": {"body": {"mid": "mid-1"}}}),
+        )
+
+        await publisher.publish_queue_item(
+            session,
+            item.queue_item_id,
+            http_client,
+            commit_success=False,
+        )
+
+        assert session.commit.await_count == 1
+        session.flush.assert_awaited_once()
+        assert item.status == QueueItemStatus.PUBLISHED
+
+    asyncio.run(scenario())

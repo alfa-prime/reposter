@@ -56,6 +56,11 @@ class Settings(BaseSettings):
     postgres_host: str = "localhost"
     postgres_port: int = 5432
     database_echo: bool = False
+    database_pool_size: int = Field(default=10, ge=1, le=50)
+    database_max_overflow: int = Field(default=10, ge=0, le=50)
+    database_pool_timeout_seconds: float = Field(default=30.0, gt=0, le=300)
+    database_pool_recycle_seconds: int = Field(default=1800, ge=60, le=86400)
+    database_command_timeout_seconds: float = Field(default=30.0, gt=0, le=600)
 
     auth_session_idle_minutes: int = Field(default=60, ge=5, le=1440)
     auth_session_absolute_hours: int = Field(default=12, ge=1, le=720)

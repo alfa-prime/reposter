@@ -56,7 +56,10 @@ class MemoryQueueRepository:
     async def target_exists(self, target_id: int) -> bool:
         return target_id == 20
 
-    async def create(self, data: QueueItemCreate) -> SimpleNamespace:
+    async def create(
+        self, data: QueueItemCreate, *, commit: bool = True
+    ) -> SimpleNamespace:
+        del commit
         if any(
             item.post_id == data.post_id and item.target_id == data.target_id
             for item in self.records.values()
@@ -131,7 +134,10 @@ class MemoryQueueRepository:
         self,
         item: SimpleNamespace,
         data: QueueItemUpdate,
+        *,
+        commit: bool = True,
     ) -> SimpleNamespace:
+        del commit
         for field, value in data.model_dump(exclude_unset=True).items():
             setattr(item, field, value)
         item.updated_at = datetime.now(UTC)
@@ -143,14 +149,17 @@ class MemoryQueueRepository:
         new_status: QueueItemStatus,
         *,
         scheduled_at: datetime | None = None,
+        commit: bool = True,
     ) -> SimpleNamespace:
+        del commit
         item.status = new_status
         item.scheduled_at = scheduled_at
         item.error_message = None
         item.updated_at = datetime.now(UTC)
         return item
 
-    async def delete(self, item: SimpleNamespace) -> None:
+    async def delete(self, item: SimpleNamespace, *, commit: bool = True) -> None:
+        del commit
         self.records.pop(item.queue_item_id)
 
 

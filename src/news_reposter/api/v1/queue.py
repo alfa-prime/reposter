@@ -186,7 +186,7 @@ async def create_queue_item(
     if not can_access_target(auth, data.target_id):
         raise not_found_error()
     try:
-        item = await repository.create(data)
+        item = await repository.create(data, commit=False)
     except QueueItemAlreadyExistsError as exc:
         raise conflict_error("Пост уже находится в очереди этого канала") from exc
     await record_editorial_event(
@@ -451,7 +451,7 @@ async def update_queue_item(
     if item is None:
         raise not_found_error()
     changed_fields = sorted(data.model_fields_set)
-    item = await repository.update(item, data)
+    item = await repository.update(item, data, commit=False)
     await record_editorial_event(
         session,
         actor_user_id=auth.user.user_id,
@@ -493,7 +493,9 @@ async def submit_queue_item(
     if not item.rewritten_text or not item.rewritten_text.strip():
         raise conflict_error("Перед отправкой на модерацию нужен подготовленный текст")
     previous_status = item.status.value
-    item = await repository.set_status(item, QueueItemStatus.AWAITING_MODERATION)
+    item = await repository.set_status(
+        item, QueueItemStatus.AWAITING_MODERATION, commit=False
+    )
     await record_editorial_event(
         session,
         actor_user_id=auth.user.user_id,
@@ -530,7 +532,7 @@ async def approve_queue_item(
         raise not_found_error()
     ensure_status(item.status, {QueueItemStatus.AWAITING_MODERATION})
     previous_status = item.status.value
-    item = await repository.set_status(item, QueueItemStatus.APPROVED)
+    item = await repository.set_status(item, QueueItemStatus.APPROVED, commit=False)
     await record_editorial_event(
         session,
         actor_user_id=auth.user.user_id,
@@ -567,7 +569,7 @@ async def reject_queue_item(
         raise not_found_error()
     ensure_status(item.status, {QueueItemStatus.AWAITING_MODERATION})
     previous_status = item.status.value
-    item = await repository.set_status(item, QueueItemStatus.REJECTED)
+    item = await repository.set_status(item, QueueItemStatus.REJECTED, commit=False)
     await record_editorial_event(
         session,
         actor_user_id=auth.user.user_id,
@@ -615,7 +617,7 @@ async def reopen_queue_item(
         },
     )
     previous_status = item.status.value
-    item = await repository.set_status(item, QueueItemStatus.PENDING)
+    item = await repository.set_status(item, QueueItemStatus.PENDING, commit=False)
     await record_editorial_event(
         session,
         actor_user_id=auth.user.user_id,
@@ -657,6 +659,7 @@ async def schedule_queue_item(
         item,
         QueueItemStatus.SCHEDULED,
         scheduled_at=data.scheduled_at,
+        commit=False,
     )
     await record_editorial_event(
         session,
@@ -701,9 +704,9 @@ async def delete_queue_item(
         item=item,
         action="editorial.deleted",
         details={"status": item.status.value},
+        commit=False,
     )
     await repository.delete(item)
-
     cleanup_queue_item_media(queue_item_id)
 
     return Response(status_code=status.HTTP_204_NO_CONTENT)

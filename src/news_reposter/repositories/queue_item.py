@@ -27,11 +27,14 @@ class QueueItemRepository:
     async def target_exists(self, target_id: int) -> bool:
         return await self.session.get(Target, target_id) is not None
 
-    async def create(self, data: QueueItemCreate) -> QueueItem:
+    async def create(self, data: QueueItemCreate, *, commit: bool = True) -> QueueItem:
         item = QueueItem(**data.model_dump())
         self.session.add(item)
         try:
-            await self.session.commit()
+            if commit:
+                await self.session.commit()
+            else:
+                await self.session.flush()
         except IntegrityError as exc:
             await self.session.rollback()
             raise QueueItemAlreadyExistsError from exc
@@ -135,10 +138,15 @@ class QueueItemRepository:
             statement = statement.where(QueueItem.target_id.in_(allowed_target_ids))
         return await self.session.scalar(statement)
 
-    async def update(self, item: QueueItem, data: QueueItemUpdate) -> QueueItem:
+    async def update(
+        self, item: QueueItem, data: QueueItemUpdate, *, commit: bool = True
+    ) -> QueueItem:
         for field, value in data.model_dump(exclude_unset=True).items():
             setattr(item, field, value)
-        await self.session.commit()
+        if commit:
+            await self.session.commit()
+        else:
+            await self.session.flush()
         return await self.get(item.queue_item_id)  # type: ignore[return-value]
 
     async def set_status(
@@ -147,13 +155,20 @@ class QueueItemRepository:
         new_status: QueueItemStatus,
         *,
         scheduled_at: datetime | None = None,
+        commit: bool = True,
     ) -> QueueItem:
         item.status = new_status
         item.scheduled_at = scheduled_at
         item.error_message = None
-        await self.session.commit()
+        if commit:
+            await self.session.commit()
+        else:
+            await self.session.flush()
         return await self.get(item.queue_item_id)  # type: ignore[return-value]
 
-    async def delete(self, item: QueueItem) -> None:
+    async def delete(self, item: QueueItem, *, commit: bool = True) -> None:
         await self.session.delete(item)
-        await self.session.commit()
+        if commit:
+            await self.session.commit()
+        else:
+            await self.session.flush()

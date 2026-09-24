@@ -1,10 +1,12 @@
 import asyncio
 import logging
 from collections import defaultdict
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from typing import Any
 
 import httpx
-from sqlalchemy import select
+from sqlalchemy import select, text
 
 from news_reposter.config import get_settings
 from news_reposter.db.models import (
@@ -20,7 +22,7 @@ from news_reposter.db.models import (
     Target,
     TargetSource,
 )
-from news_reposter.db.session import async_session_factory
+from news_reposter.db.session import async_session_factory, engine
 from news_reposter.integrations.vk import VKAPIError, VKClient, VKPost
 from news_reposter.services.collection_history import CollectionHistory
 
@@ -28,6 +30,7 @@ logger = logging.getLogger(__name__)
 
 _collection_lock: asyncio.Lock | None = None
 _collection_lock_loop: asyncio.AbstractEventLoop | None = None
+COLLECTION_ADVISORY_LOCK_ID = 7_263_570_384_221_011
 
 
 class CollectionAlreadyRunningError(RuntimeError):
@@ -51,6 +54,26 @@ def _get_collection_lock() -> asyncio.Lock:
     return _collection_lock
 
 
+@asynccontextmanager
+async def _distributed_collection_lock() -> AsyncIterator[None]:
+    """Не допускает одновременный сбор в разных процессах приложения."""
+
+    async with engine.connect() as connection:
+        acquired = await connection.scalar(
+            text("SELECT pg_try_advisory_lock(:lock_id)"),
+            {"lock_id": COLLECTION_ADVISORY_LOCK_ID},
+        )
+        if not acquired:
+            raise CollectionAlreadyRunningError("Сбор источников уже выполняется")
+        try:
+            yield
+        finally:
+            await connection.execute(
+                text("SELECT pg_advisory_unlock(:lock_id)"),
+                {"lock_id": COLLECTION_ADVISORY_LOCK_ID},
+            )
+
+
 async def collect_active_sources_once(
     http_client: httpx.AsyncClient,
     trigger: CollectionRunTrigger = CollectionRunTrigger.MANUAL,
@@ -61,10 +84,11 @@ async def collect_active_sources_once(
     if lock.locked():
         raise CollectionAlreadyRunningError("Сбор источников уже выполняется")
     async with lock:
-        return await _collect_active_sources_once(
-            http_client=http_client,
-            trigger=trigger,
-        )
+        async with _distributed_collection_lock():
+            return await _collect_active_sources_once(
+                http_client=http_client,
+                trigger=trigger,
+            )
 
 
 async def _collect_active_sources_once(

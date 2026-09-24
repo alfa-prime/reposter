@@ -12,6 +12,7 @@ async def record_editorial_event(
     item: QueueItem,
     action: str,
     details: dict[str, Any] | None = None,
+    commit: bool = True,
 ) -> None:
     target = getattr(item, "target", None)
     event_details: dict[str, Any] = {
@@ -31,4 +32,7 @@ async def record_editorial_event(
             details=event_details,
         )
     )
-    await session.commit()
+    if commit:
+        await session.commit()
+    else:
+        await session.flush()

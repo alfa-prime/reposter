@@ -56,7 +56,12 @@ async def publish_now(
         raise HTTPException(status_code=404, detail="Элемент очереди не найден")
     previous_status = accessible_item.status.value
     try:
-        item = await publish_queue_item(session, queue_item_id, http_client)
+        item = await publish_queue_item(
+            session,
+            queue_item_id,
+            http_client,
+            commit_success=False,
+        )
     except PublicationError as exc:
         detail = str(exc)
         upstream_markers = (

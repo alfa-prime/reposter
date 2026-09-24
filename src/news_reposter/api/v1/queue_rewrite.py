@@ -100,6 +100,7 @@ async def rewrite_queue_item(
     item = await repository.update(
         item,
         QueueItemUpdate(rewritten_text=result.text),
+        commit=False,
     )
     await record_editorial_event(
         session,

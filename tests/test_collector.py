@@ -1,4 +1,5 @@
 import asyncio
+from contextlib import asynccontextmanager
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
 
@@ -9,6 +10,11 @@ import news_reposter.services.collector as collector_module
 from news_reposter.db.models import AttachmentType
 from news_reposter.integrations.vk import VKPost
 from news_reposter.services.collector import build_post_attachments
+
+
+@asynccontextmanager
+async def fake_distributed_lock():
+    yield
 
 
 class FakeSession:
@@ -110,6 +116,9 @@ def test_collector_stores_all_ten_posts_after_last_saved(
         ),
     )
     monkeypatch.setattr(
+        collector_module, "_distributed_collection_lock", fake_distributed_lock
+    )
+    monkeypatch.setattr(
         collector_module,
         "async_session_factory",
         lambda: FakeSessionContext(session),
@@ -163,6 +172,9 @@ def test_collector_serializes_manual_and_scheduled_runs(
         }
 
     monkeypatch.setattr(collector_module, "_collect_active_sources_once", fake_collect)
+    monkeypatch.setattr(
+        collector_module, "_distributed_collection_lock", fake_distributed_lock
+    )
 
     async def scenario() -> None:
         http_client = Mock(spec=httpx.AsyncClient)

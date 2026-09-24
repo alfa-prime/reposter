@@ -217,6 +217,7 @@ async def publish_queue_item(
     http_client: httpx.AsyncClient,
     *,
     allow_scheduled: bool = True,
+    commit_success: bool = True,
 ) -> QueueItem:
     """Публикует согласованный, запланированный или ранее упавший QueueItem в MAX."""
 
@@ -304,7 +305,10 @@ async def publish_queue_item(
     item.status = QueueItemStatus.PUBLISHED
     item.scheduled_at = None
     item.error_message = None
-    await session.commit()
+    if commit_success:
+        await session.commit()
+    else:
+        await session.flush()
 
     logger.info(
         "action=publish status=success queue_item_id=%s target_id=%s platform=max attempt=%s media_count=%s duration_ms=%s",
