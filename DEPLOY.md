@@ -282,7 +282,7 @@ MONITOR_DISK_WARNING_PERCENT=75
 MONITOR_BACKUP_MAX_AGE_HOURS=26
 ```
 
-An anonymous ntfy topic name acts as a secret. Use at least 32 random bytes and do not publish the URL. For a reserved topic, set its access token in `NTFY_TOKEN`.
+An anonymous ntfy topic name acts as a secret. Use a topic that fits the service's length limit, for example `reposter-` plus 24 random bytes encoded as hex, and do not publish the URL. For a reserved topic, set its access token in `NTFY_TOKEN`.
 
 Replace `REPLACE_WITH_PROJECT_DIRECTORY` in both monitoring unit files, install them and send a test notification before enabling the timer:
 
