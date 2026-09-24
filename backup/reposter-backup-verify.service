@@ -1,0 +1,13 @@
+[Unit]
+Description=Verify News Reposter encrypted backups
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=REPLACE_WITH_PROJECT_DIRECTORY
+ExecStart=REPLACE_WITH_PROJECT_DIRECTORY/backup/run-verify.sh
+
+[Install]
+WantedBy=multi-user.target

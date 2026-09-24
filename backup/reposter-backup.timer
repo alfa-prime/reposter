@@ -1,0 +1,11 @@
+[Unit]
+Description=Run News Reposter backup every night
+
+[Timer]
+OnCalendar=*-*-* 03:15:00
+RandomizedDelaySec=15m
+Persistent=true
+Unit=reposter-backup.service
+
+[Install]
+WantedBy=timers.target

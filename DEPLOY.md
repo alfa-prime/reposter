@@ -160,4 +160,103 @@ git pull
 docker compose -f compose.yaml -f compose.prod.yaml up -d --build
 ```
 
-PostgreSQL data and Caddy configuration are stored in Docker volumes. Add periodic PostgreSQL backups before treating the instance as permanent production data storage.
+PostgreSQL data and Caddy configuration are stored in Docker volumes. Configure the encrypted off-site backups below before treating the instance as permanent production data storage.
+
+## 8. Encrypted S3 backups
+
+The backup contains a consistent PostgreSQL dump and the complete media volume. Restic encrypts all data locally before uploading it to a private S3 bucket. The S3 secret and the Restic encryption password are read only from the server's `.env` file and must never be committed.
+
+Add the private bucket settings to `.env`:
+
+```dotenv
+BACKUP_S3_ENDPOINT=https://s3.twcstorage.ru
+BACKUP_S3_BUCKET=replace_with_bucket_name
+BACKUP_S3_REGION=ru-1
+BACKUP_S3_PREFIX=reposter
+BACKUP_S3_ACCESS_KEY=replace_with_access_key
+BACKUP_S3_SECRET_KEY=replace_with_secret_key
+RESTIC_PASSWORD=replace_with_a_separate_long_random_password
+BACKUP_HOST_NAME=reposter-production
+BACKUP_KEEP_DAILY=14
+BACKUP_KEEP_WEEKLY=8
+BACKUP_KEEP_MONTHLY=6
+BACKUP_CHECK_SUBSET=5%
+```
+
+Generate the Restic password separately from the database password and keep an offline copy in a password manager. Losing it makes every backup unrecoverable:
+
+```bash
+openssl rand -base64 48
+chmod 600 .env
+```
+
+Create the first backup manually:
+
+```bash
+./backup/run-backup.sh
+```
+
+List stored snapshots and run an integrity check:
+
+```bash
+docker compose -f compose.yaml -f compose.prod.yaml --profile backup run --rm backup snapshots
+./backup/run-verify.sh
+```
+
+The default policy retains 14 daily, 8 weekly and 6 monthly snapshots. `BACKUP_CHECK_SUBSET=5%` verifies repository metadata and reads a rotating sample of stored data. A successful backup must be followed by a test restore before relying on it.
+
+### Automatic daily backup
+
+The repository contains systemd unit templates. Replace `REPLACE_WITH_PROJECT_DIRECTORY` in both `.service` files with the absolute repository directory, then install and enable them:
+
+```bash
+sudo cp backup/reposter-backup.service /etc/systemd/system/
+sudo cp backup/reposter-backup.timer /etc/systemd/system/
+sudo cp backup/reposter-backup-verify.service /etc/systemd/system/
+sudo cp backup/reposter-backup-verify.timer /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now reposter-backup.timer reposter-backup-verify.timer
+systemctl list-timers 'reposter-backup*'
+```
+
+The daily job runs around 03:15 server time and catches up after downtime. Repository verification runs monthly. Inspect the latest results with:
+
+```bash
+systemctl status reposter-backup.service
+journalctl -u reposter-backup.service -n 100 --no-pager
+systemctl status reposter-backup-verify.service
+```
+
+### Restore drill and disaster recovery
+
+Always test recovery on a disposable server first. A restore replaces the selected database and all media files. Save the current state before starting and make sure no editors are using the application.
+
+List snapshots and note the required ID:
+
+```bash
+docker compose -f compose.yaml -f compose.prod.yaml --profile backup run --rm backup snapshots
+```
+
+Stop application traffic while keeping PostgreSQL available:
+
+```bash
+docker compose -f compose.yaml -f compose.prod.yaml stop frontend app
+```
+
+Restore `latest`, or replace it with a snapshot ID. The explicit confirmation protects against an accidental destructive restore:
+
+```bash
+RESTORE_CONFIRM=RESTORE RESTORE_SNAPSHOT=latest \
+  docker compose -f compose.yaml -f compose.prod.yaml --profile backup \
+  run --rm -e RESTORE_CONFIRM -e RESTORE_SNAPSHOT backup restore
+```
+
+Apply any migrations added after that snapshot, start the application and check database health, authentication, queue items and several media files:
+
+```bash
+docker compose -f compose.yaml -f compose.prod.yaml run --rm migrate
+docker compose -f compose.yaml -f compose.prod.yaml up -d app frontend
+curl --fail --silent "https://${SITE_ADDRESS}/health/database"
+```
+
+Record the date, selected snapshot, duration and result of each restore drill. Repeat the drill after changes to PostgreSQL, Docker volumes or backup scripts, and at least once every three months.

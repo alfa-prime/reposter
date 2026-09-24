@@ -1,0 +1,11 @@
+[Unit]
+Description=Verify News Reposter backups monthly
+
+[Timer]
+OnCalendar=monthly
+RandomizedDelaySec=1h
+Persistent=true
+Unit=reposter-backup-verify.service
+
+[Install]
+WantedBy=timers.target

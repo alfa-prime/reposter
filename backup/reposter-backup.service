@@ -1,0 +1,13 @@
+[Unit]
+Description=News Reposter encrypted backup
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=REPLACE_WITH_PROJECT_DIRECTORY
+ExecStart=REPLACE_WITH_PROJECT_DIRECTORY/backup/run-backup.sh
+
+[Install]
+WantedBy=multi-user.target
