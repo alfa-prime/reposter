@@ -1,0 +1,12 @@
+[Unit]
+Description=Monitor News Reposter every five minutes
+
+[Timer]
+OnBootSec=2m
+OnUnitActiveSec=5m
+AccuracySec=30s
+Persistent=true
+Unit=reposter-monitor.service
+
+[Install]
+WantedBy=timers.target

@@ -260,3 +260,45 @@ curl --fail --silent "https://${SITE_ADDRESS}/health/database"
 ```
 
 Record the date, selected snapshot, duration and result of each restore drill. Repeat the drill after changes to PostgreSQL, Docker volumes or backup scripts, and at least once every three months.
+
+## 9. Health monitoring with ntfy
+
+The monitoring timer checks every five minutes:
+
+- the `postgres`, `app` and `frontend` containers are running;
+- the public application and database health endpoints respond;
+- root disk usage is below the configured threshold;
+- the most recent successful backup is not stale;
+- backup and repository verification services have not failed.
+
+Notifications are sent only when the problem changes and once after recovery. Create a long random ntfy topic, subscribe to it in the ntfy mobile or web application, and add it to `.env`:
+
+```dotenv
+NTFY_URL=https://ntfy.sh/replace_with_a_long_random_topic
+NTFY_TOKEN=
+MONITOR_HEALTH_URL=https://www.uncle-vlad.ru/health
+MONITOR_DATABASE_HEALTH_URL=https://www.uncle-vlad.ru/health/database
+MONITOR_DISK_WARNING_PERCENT=75
+MONITOR_BACKUP_MAX_AGE_HOURS=26
+```
+
+An anonymous ntfy topic name acts as a secret. Use at least 32 random bytes and do not publish the URL. For a reserved topic, set its access token in `NTFY_TOKEN`.
+
+Replace `REPLACE_WITH_PROJECT_DIRECTORY` in both monitoring unit files, install them and send a test notification before enabling the timer:
+
+```bash
+sudo cp monitoring/reposter-monitor.service /etc/systemd/system/
+sudo cp monitoring/reposter-monitor.timer /etc/systemd/system/
+sudo systemctl daemon-reload
+set -a; . ./.env; set +a
+./monitoring/notify-ntfy.sh "News Reposter" "Тест уведомлений" default white_check_mark
+sudo systemctl enable --now reposter-monitor.timer
+```
+
+Inspect the current result and schedule:
+
+```bash
+systemctl status reposter-monitor.service
+systemctl list-timers reposter-monitor.timer
+journalctl -u reposter-monitor.service -n 100 --no-pager
+```

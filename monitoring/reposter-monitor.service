@@ -1,0 +1,12 @@
+[Unit]
+Description=Monitor News Reposter health
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=REPLACE_WITH_PROJECT_DIRECTORY
+EnvironmentFile=REPLACE_WITH_PROJECT_DIRECTORY/.env
+Environment=REPOSTER_PROJECT_DIRECTORY=REPLACE_WITH_PROJECT_DIRECTORY
+ExecStart=REPLACE_WITH_PROJECT_DIRECTORY/monitoring/check-health.sh

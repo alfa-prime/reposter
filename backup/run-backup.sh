@@ -5,3 +5,7 @@ project_directory=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 cd "$project_directory"
 
 docker compose -f compose.yaml -f compose.prod.yaml --profile backup run --rm backup backup
+
+state_directory=${MONITOR_STATE_DIRECTORY:-/var/lib/reposter-monitor}
+mkdir -p "$state_directory"
+touch "${state_directory}/last-backup-success"
