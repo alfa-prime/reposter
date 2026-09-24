@@ -1,0 +1,11 @@
+[Unit]
+Description=Send weekly News Reposter status summary
+
+[Timer]
+OnCalendar=Mon *-*-* 09:00:00 Europe/Moscow
+RandomizedDelaySec=10m
+Persistent=true
+Unit=reposter-weekly-summary.service
+
+[Install]
+WantedBy=timers.target

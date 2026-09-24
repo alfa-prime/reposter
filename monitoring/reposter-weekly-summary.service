@@ -1,0 +1,12 @@
+[Unit]
+Description=Send weekly News Reposter status summary
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=REPLACE_WITH_PROJECT_DIRECTORY
+EnvironmentFile=REPLACE_WITH_PROJECT_DIRECTORY/.env
+Environment=REPOSTER_PROJECT_DIRECTORY=REPLACE_WITH_PROJECT_DIRECTORY
+ExecStart=REPLACE_WITH_PROJECT_DIRECTORY/monitoring/send-weekly-summary.sh

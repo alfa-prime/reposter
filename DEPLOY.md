@@ -214,7 +214,8 @@ curl --fail --silent https://news.example.ru/health/database
 Каждые пять минут сервер проверяет контейнеры, публичные health-check, заполнение
 диска, свежесть копии и состояние задач резервирования. При изменении проблемы
 приходит одно аварийное сообщение, после устранения — одно сообщение о
-восстановлении.
+восстановлении. По понедельникам около 09:00 по Москве приходит обычная
+недельная сводка: последняя копия, контейнеры, диск и состояние проверки S3.
 
 ```dotenv
 NTFY_URL=https://ntfy.sh/длинная_случайная_тема
@@ -234,16 +235,22 @@ sed "s|REPLACE_WITH_PROJECT_DIRECTORY|$PROJECT_DIR|g" \
   monitoring/reposter-monitor.service | \
   sudo tee /etc/systemd/system/reposter-monitor.service >/dev/null
 sudo cp monitoring/reposter-monitor.timer /etc/systemd/system/
+sed "s|REPLACE_WITH_PROJECT_DIRECTORY|$PROJECT_DIR|g" \
+  monitoring/reposter-weekly-summary.service | \
+  sudo tee /etc/systemd/system/reposter-weekly-summary.service >/dev/null
+sudo cp monitoring/reposter-weekly-summary.timer /etc/systemd/system/
 sudo systemctl daemon-reload
 set -a; . ./.env; set +a
 ./monitoring/notify-ntfy.sh \
   "News Reposter" "Тест уведомлений" default white_check_mark
 sudo systemctl enable --now reposter-monitor.timer
+sudo systemctl enable --now reposter-weekly-summary.timer
 ```
 
 ```bash
 systemctl status reposter-monitor.service
 systemctl list-timers reposter-monitor.timer
+systemctl list-timers reposter-weekly-summary.timer
 journalctl -u reposter-monitor.service -n 100 --no-pager
 ```
 
