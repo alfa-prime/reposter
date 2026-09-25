@@ -9,6 +9,12 @@ const labels: Record<string, string> = {
   "editorial.approved": "Одобрен", "editorial.rejected": "Отклонён",
   "editorial.reopened": "Возвращён в работу", "editorial.scheduled": "Запланирован",
   "editorial.published": "Опубликован", "editorial.deleted": "Удалён",
+  "editorial.publication_unknown": "Результат публикации неизвестен",
+  "editorial.publication_checked": "Публикация проверена в MAX",
+  "editorial.publication_reconciled": "Публикация найдена в MAX",
+  "editorial.publication_marked_manually": "Публикация подтверждена вручную",
+  "editorial.publication_retried": "Публикация отправлена повторно",
+  "editorial.publication_returned_to_work": "Возвращён в работу после проверки",
 };
 
 const formatDate = (value: string) => new Intl.DateTimeFormat("ru-RU", { dateStyle: "short", timeStyle: "medium" }).format(new Date(value));
@@ -21,6 +27,10 @@ function detail(event: EditorialAuditEvent) {
     return `Изменено: ${fields.map((field) => names[String(field)] ?? String(field)).join(", ")}`;
   }
   if (event.action === "editorial.scheduled" && event.details.scheduled_at) return `На ${formatDate(String(event.details.scheduled_at))}`;
+  if (event.action === "editorial.publication_checked") {
+    const outcomes: Record<string, string> = { found: "найдена", not_found: "не найдена", ambiguous: "найдено несколько совпадений" };
+    return `Результат: ${outcomes[String(event.details.outcome)] ?? String(event.details.outcome ?? "проверено")}`;
+  }
   const before = event.details.previous_status;
   const after = event.details.status;
   return before && after ? `${String(before)} → ${String(after)}` : `Материал #${event.queue_item_id}`;

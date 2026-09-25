@@ -18,7 +18,7 @@ from news_reposter.api.v1.queue_permissions import (
     QueueReadDep,
     get_accessible_queue_item,
 )
-from news_reposter.db.models import AttachmentType
+from news_reposter.db.models import AttachmentType, QueueItemStatus
 from news_reposter.db.session import get_db_session
 from news_reposter.repositories.queue_item import QueueItemRepository
 from news_reposter.services.media_storage import (
@@ -140,6 +140,11 @@ async def update_media_state(
     )
     if item is None:
         raise HTTPException(status_code=404, detail="Элемент очереди не найден")
+    if item.status == QueueItemStatus.PUBLICATION_UNKNOWN:
+        raise HTTPException(
+            status_code=409,
+            detail="Набор медиа нельзя менять, пока результат публикации не проверен",
+        )
 
     available = set(available_keys(item))
     if len(data.media_order) != len(set(data.media_order)):

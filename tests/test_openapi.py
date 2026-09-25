@@ -113,6 +113,10 @@ QUEUE_WRITE_OPERATIONS = {
     ("/api/v1/queue/{queue_item_id}/reopen", "post"),
     ("/api/v1/queue/{queue_item_id}/schedule", "post"),
     ("/api/v1/queue/{queue_item_id}/publish-now", "post"),
+    ("/api/v1/queue/{queue_item_id}/check-publication", "post"),
+    ("/api/v1/queue/{queue_item_id}/mark-published", "post"),
+    ("/api/v1/queue/{queue_item_id}/retry-publication", "post"),
+    ("/api/v1/queue/{queue_item_id}/return-to-work", "post"),
 }
 
 DIRECTORY_READ_OPERATIONS = {

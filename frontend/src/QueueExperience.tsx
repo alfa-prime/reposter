@@ -5,6 +5,7 @@ import { QueueActionsFooter } from "./components/QueueActionsFooter";
 import { QueueDrawerHeader } from "./components/QueueDrawerHeader";
 import { QueueMediaSection } from "./components/QueueMediaSection";
 import { QueuePagination } from "./components/QueuePagination";
+import { PublicationRecoveryPanel } from "./components/PublicationRecoveryPanel";
 import { QueuePostCard } from "./components/QueuePostCard";
 import { QueueSchedulePanel } from "./components/QueueSchedulePanel";
 import { queueTabConfig, QueueTabs, QueueTab } from "./components/QueueTabs";
@@ -23,6 +24,7 @@ const statusLabels: Record<string, string> = {
   scheduled: "Запланирован",
   published: "Опубликован",
   failed: "Ошибка публикации",
+  publication_unknown: "Результат публикации неизвестен",
 };
 
 const defaultPageSize = 20;
@@ -45,6 +47,10 @@ const emptyState: Record<QueueTab, { title: string; text: string }> = {
   scheduled: {
     title: "Очередь публикаций пуста",
     text: "Согласованные и запланированные публикации появятся здесь.",
+  },
+  attention: {
+    title: "Нет публикаций для проверки",
+    text: "Здесь появятся материалы, для которых MAX не подтвердил результат отправки.",
   },
   archive: {
     title: "Архив пуст",
@@ -115,6 +121,7 @@ export function QueueExperience({ collectSignal = 0, targetId, openItemId = null
     storage: queueTabConfig.storage.statuses.reduce((sum, status) => sum + (statusCounts[status] ?? 0), 0),
     moderation: queueTabConfig.moderation.statuses.reduce((sum, status) => sum + (statusCounts[status] ?? 0), 0),
     scheduled: queueTabConfig.scheduled.statuses.reduce((sum, status) => sum + (statusCounts[status] ?? 0), 0),
+    attention: queueTabConfig.attention.statuses.reduce((sum, status) => sum + (statusCounts[status] ?? 0), 0),
     archive: queueTabConfig.archive.statuses.reduce((sum, status) => sum + (statusCounts[status] ?? 0), 0),
   }), [statusCounts]);
 
@@ -408,6 +415,43 @@ export function QueueExperience({ collectSignal = 0, targetId, openItemId = null
     }
   }
 
+  async function checkPublication() {
+    if (!selected) return;
+    setBusy(true);
+    setError("");
+    try {
+      const result = await api.checkPublication(selected.queue_item_id);
+      replaceItem(result.item);
+      setMessage(result.message);
+      if (result.item.status !== "publication_unknown") {
+        closeDrawer();
+        await loadQueue();
+      }
+    } catch (exc) {
+      setError(exc instanceof Error ? exc.message : "Не удалось проверить MAX");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function markPublished() {
+    if (!selected) return;
+    const comment = window.prompt("Укажите, где вы увидели публикацию (обязательный комментарий):");
+    if (!comment?.trim()) return;
+    const link = window.prompt("Ссылка на публикацию, если есть:") ?? "";
+    await runAction(() => api.markPublished(selected.queue_item_id, comment.trim(), link.trim()), "Публикация подтверждена вручную");
+  }
+
+  async function retryPublication() {
+    if (!selected || !window.confirm("Вы проверили канал и публикации там нет? Повторная отправка может создать дубликат.")) return;
+    await runAction(() => api.retryPublication(selected.queue_item_id), "Повторная отправка выполнена");
+  }
+
+  async function returnPublicationToWork() {
+    if (!selected || !window.confirm("Вернуть материал на редактирование? Он должен будет заново пройти согласование.")) return;
+    await runAction(() => api.returnPublicationToWork(selected.queue_item_id), "Материал возвращён в работу");
+  }
+
   if (loading) {
     return <div className="editorial-empty"><Archive size={32}/><strong>Загружаю очередь…</strong></div>;
   }
@@ -492,10 +536,21 @@ export function QueueExperience({ collectSignal = 0, targetId, openItemId = null
               onNotice={setMessage}
             />
 
+            {selected.status === "publication_unknown" && (
+              <PublicationRecoveryPanel
+                item={selected}
+                busy={busy}
+                onCheck={() => void checkPublication()}
+                onMarkPublished={() => void markPublished()}
+                onRetry={() => void retryPublication()}
+                onReturnToWork={() => void returnPublicationToWork()}
+              />
+            )}
+
             <QueueTextEditor
               value={text}
               originalText={selected.original_text}
-              readonly={["published", "scheduled"].includes(selected.status)}
+              readonly={["published", "scheduled", "publication_unknown"].includes(selected.status)}
               editing={editing}
               busy={busy}
               rewriteBusy={rewriteBusy}
@@ -505,11 +560,13 @@ export function QueueExperience({ collectSignal = 0, targetId, openItemId = null
               onRewrite={() => void rewrite()}
             />
 
-            <PostSignatureSection
-              item={selected}
-              onUpdated={replaceItem}
-              onError={setError}
-            />
+            {selected.status !== "publication_unknown" && (
+              <PostSignatureSection
+                item={selected}
+                onUpdated={replaceItem}
+                onError={setError}
+              />
+            )}
 
             {selected.status === "approved" && (
               <QueueSchedulePanel

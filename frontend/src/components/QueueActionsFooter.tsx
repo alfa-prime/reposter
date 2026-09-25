@@ -33,6 +33,7 @@ export function QueueActionsFooter({
   onReopen,
   onDelete,
 }: QueueActionsFooterProps) {
+  if (item.status === "publication_unknown") return null;
   const canSubmit = ["pending", "rewriting", "rejected"].includes(item.status);
   const awaitingModeration = item.status === "awaiting_moderation";
   const canPublishNow = ["approved", "scheduled", "failed"].includes(item.status) && item.target_platform === "max";

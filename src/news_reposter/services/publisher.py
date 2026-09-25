@@ -1,4 +1,5 @@
 import asyncio
+import hashlib
 import logging
 import mimetypes
 import re
@@ -19,6 +20,8 @@ from news_reposter.db.models import (
     AttachmentType,
     Post,
     Publication,
+    PublicationAttempt,
+    PublicationAttemptStatus,
     PublicationStatus,
     QueueItem,
     QueueItemStatus,
@@ -31,6 +34,10 @@ logger = logging.getLogger(__name__)
 
 class PublicationError(RuntimeError):
     """Ошибка подготовки или отправки публикации."""
+
+
+class PublicationUnknownError(PublicationError):
+    """MAX мог принять сообщение, но приложение не получило надёжный ответ."""
 
 
 def _publication_text(item: QueueItem) -> str:
@@ -203,6 +210,9 @@ async def _loaded_item(
             selectinload(QueueItem.post).selectinload(Post.attachments),
             selectinload(QueueItem.target),
             selectinload(QueueItem.publication),
+            selectinload(QueueItem.publication).selectinload(
+                Publication.attempt_history
+            ),
         )
         .where(QueueItem.queue_item_id == queue_item_id)
     )
@@ -218,6 +228,9 @@ async def publish_queue_item(
     *,
     allow_scheduled: bool = True,
     commit_success: bool = True,
+    actor_user_id: int | None = None,
+    trigger: str = "scheduled",
+    allow_unknown_retry: bool = False,
 ) -> QueueItem:
     """Публикует согласованный, запланированный или ранее упавший QueueItem в MAX."""
 
@@ -229,6 +242,8 @@ async def publish_queue_item(
     allowed = {QueueItemStatus.APPROVED, QueueItemStatus.FAILED}
     if allow_scheduled:
         allowed.add(QueueItemStatus.SCHEDULED)
+    if allow_unknown_retry:
+        allowed.add(QueueItemStatus.PUBLICATION_UNKNOWN)
     if item.status not in allowed:
         raise PublicationError(f"Публикация недоступна для статуса {item.status.value}")
 
@@ -237,6 +252,14 @@ async def publish_queue_item(
         raise PublicationError("Этот пост уже опубликован")
     if publication is not None and publication.status == PublicationStatus.PUBLISHING:
         raise PublicationError("Публикация этого поста уже выполняется")
+    if (
+        publication is not None
+        and publication.status == PublicationStatus.UNKNOWN
+        and not allow_unknown_retry
+    ):
+        raise PublicationError(
+            "Сначала проверьте канал: предыдущая попытка могла быть опубликована"
+        )
 
     if item.target.platform.lower() != "max":
         raise PublicationError("Автопубликация пока подключена только для MAX")
@@ -256,14 +279,28 @@ async def publish_queue_item(
         session.add(publication)
         await session.flush()
 
+    text = _publication_text(item)
+    fingerprint = hashlib.sha256(text.encode("utf-8")).hexdigest()
+
     publication.status = PublicationStatus.PUBLISHING
     publication.attempts += 1
     publication.error_message = None
     item.error_message = None
+    attempt = PublicationAttempt(
+        publication_id=publication.publication_id,
+        attempt_number=publication.attempts,
+        status=PublicationAttemptStatus.SENDING,
+        trigger=trigger,
+        initiated_by_user_id=actor_user_id,
+        content_fingerprint=fingerprint,
+        prepared_text=text,
+    )
+    session.add(attempt)
     await session.commit()
 
     started_at = time.perf_counter()
 
+    message_send_started = False
     try:
         client = MAXClient(
             access_token=settings.max_access_token,
@@ -271,10 +308,11 @@ async def publish_queue_item(
             chat_id=chat_id,
             api_url=settings.max_api_url,
         )
-        text = _publication_text(item)
         attachments = await _max_attachments(item, client)
+        attempt.media_count = len(attachments)
         if not text and not attachments:
             raise PublicationError("Публикация не содержит текста или медиа")
+        message_send_started = True
         response = await _publish_with_media_retry(
             client,
             text=text,
@@ -282,10 +320,27 @@ async def publish_queue_item(
         )
         mid, url = _message_fields(response)
     except Exception as exc:
-        publication.status = PublicationStatus.FAILED
+        uncertain = (
+            message_send_started
+            and isinstance(exc, MAXAPIError)
+            and (exc.status_code is None or exc.status_code >= 500)
+        )
+        publication.status = (
+            PublicationStatus.UNKNOWN if uncertain else PublicationStatus.FAILED
+        )
         publication.error_message = str(exc)
-        item.status = QueueItemStatus.FAILED
+        item.status = (
+            QueueItemStatus.PUBLICATION_UNKNOWN if uncertain else QueueItemStatus.FAILED
+        )
         item.error_message = str(exc)
+        attempt.status = (
+            PublicationAttemptStatus.UNKNOWN
+            if uncertain
+            else PublicationAttemptStatus.FAILED
+        )
+        attempt.error_type = type(exc).__name__
+        attempt.error_message = str(exc)
+        attempt.finished_at = datetime.now(UTC)
         await session.commit()
         logger.warning(
             "action=publish status=failed queue_item_id=%s target_id=%s platform=max attempt=%s duration_ms=%s error_type=%s",
@@ -295,13 +350,18 @@ async def publish_queue_item(
             round((time.perf_counter() - started_at) * 1000),
             type(exc).__name__,
         )
-        raise PublicationError(str(exc)) from exc
+        error_class = PublicationUnknownError if uncertain else PublicationError
+        raise error_class(str(exc)) from exc
 
     publication.status = PublicationStatus.PUBLISHED
     publication.external_message_id = mid
     publication.publication_url = url
     publication.published_at = datetime.now(UTC)
     publication.error_message = None
+    attempt.status = PublicationAttemptStatus.CONFIRMED
+    attempt.external_message_id = mid
+    attempt.publication_url = url
+    attempt.finished_at = datetime.now(UTC)
     item.status = QueueItemStatus.PUBLISHED
     item.scheduled_at = None
     item.error_message = None

@@ -6,9 +6,15 @@ import httpx
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from news_reposter.db.models import Publication, PublicationStatus, QueueItemStatus
+from news_reposter.db.models import (
+    Publication,
+    PublicationAttemptStatus,
+    PublicationStatus,
+    QueueItemStatus,
+)
+from news_reposter.integrations.max import MAXAPIError
 from news_reposter.services import publisher
-from news_reposter.services.publisher import PublicationError
+from news_reposter.services.publisher import PublicationError, PublicationUnknownError
 
 
 def publishable_item(
@@ -152,6 +158,37 @@ def test_unexpected_publish_error_releases_claim_as_failed(
         assert item.publication.status == PublicationStatus.FAILED
         assert item.status == QueueItemStatus.FAILED
         assert item.error_message == "unexpected"
+
+    asyncio.run(scenario())
+
+
+def test_lost_max_response_requires_reconciliation_instead_of_blind_retry(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Сетевой обрыв после начала отправки сохраняется как неопределённый результат."""
+
+    async def scenario() -> None:
+        item = publishable_item()
+        session = AsyncMock(spec=AsyncSession)
+        http_client = Mock(spec=httpx.AsyncClient)
+        monkeypatch.setattr(publisher, "_loaded_item", AsyncMock(return_value=item))
+        monkeypatch.setattr(publisher, "get_settings", max_settings)
+        monkeypatch.setattr(publisher, "MAXClient", lambda **_kwargs: SimpleNamespace())
+        monkeypatch.setattr(
+            publisher,
+            "_publish_with_media_retry",
+            AsyncMock(side_effect=MAXAPIError("connection reset")),
+        )
+
+        with pytest.raises(PublicationUnknownError, match="connection reset"):
+            await publisher.publish_queue_item(session, item.queue_item_id, http_client)
+
+        attempt = session.add.call_args.args[0]
+        assert item.publication.status == PublicationStatus.UNKNOWN
+        assert item.status == QueueItemStatus.PUBLICATION_UNKNOWN
+        assert attempt.status == PublicationAttemptStatus.UNKNOWN
+        assert attempt.prepared_text == "Готовая новость"
+        assert attempt.finished_at is not None
 
     asyncio.run(scenario())
 

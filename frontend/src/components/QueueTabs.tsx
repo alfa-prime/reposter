@@ -1,11 +1,12 @@
-import { Archive, ClipboardCheck, Clock3, Inbox, RefreshCw } from "lucide-react";
+import { AlertTriangle, Archive, ClipboardCheck, Clock3, Inbox, RefreshCw } from "lucide-react";
 
-export type QueueTab = "storage" | "moderation" | "scheduled" | "archive";
+export type QueueTab = "storage" | "moderation" | "scheduled" | "attention" | "archive";
 
 export const queueTabConfig: Record<QueueTab, { label: string; statuses: string[] }> = {
   storage: { label: "Хранилище постов", statuses: ["pending", "rewriting", "rejected"] },
   moderation: { label: "На модерации", statuses: ["awaiting_moderation"] },
   scheduled: { label: "Очередь публикаций", statuses: ["approved", "scheduled"] },
+  attention: { label: "Требуют внимания", statuses: ["publication_unknown"] },
   archive: { label: "Архив", statuses: ["published", "failed"] },
 };
 
@@ -32,7 +33,9 @@ export function QueueTabs({ tab, counts, busy, onChange, onRefresh }: QueueTabsP
             : key === "moderation"
               ? <ClipboardCheck size={17} />
               : key === "scheduled"
-                ? <Clock3 size={17} />
+              ? <Clock3 size={17} />
+              : key === "attention"
+                ? <AlertTriangle size={17} />
                 : <Archive size={17} />}
           <span>{queueTabConfig[key].label}</span>
           <b>{counts[key]}</b>

@@ -127,7 +127,34 @@ export type QueueItem = {
   error_message?: string | null;
   status: string;
   photos: QueuePhoto[];
+  publication?: PublicationInfo | null;
 };
+
+export type PublicationAttempt = {
+  publication_attempt_id: number;
+  attempt_number: number;
+  status: "sending" | "confirmed" | "failed" | "unknown";
+  trigger: string;
+  external_message_id?: string | null;
+  publication_url?: string | null;
+  error_message?: string | null;
+  started_at: string;
+  finished_at?: string | null;
+  check_count: number;
+  last_checked_at?: string | null;
+};
+
+export type PublicationInfo = {
+  status: string;
+  external_message_id?: string | null;
+  publication_url?: string | null;
+  attempts: number;
+  error_message?: string | null;
+  published_at?: string | null;
+  attempt_history: PublicationAttempt[];
+};
+
+export type PublicationRecoveryResult = { item: QueueItem; outcome: string; message: string };
 
 export type QueuePage = {
   items: QueueItem[];
@@ -421,6 +448,10 @@ export const api = {
   reopen: (id: number) => request<QueueItem>(`/api/v1/queue/${id}/reopen`, { method: "POST", headers: csrfHeaders() }),
   schedule: (id: number, scheduledAt: string) => request<QueueItem>(`/api/v1/queue/${id}/schedule`, { method: "POST", headers: csrfHeaders(), body: JSON.stringify({ scheduled_at: scheduledAt }) }),
   publishNow: (id: number) => request<QueueItem>(`/api/v1/queue/${id}/publish-now`, { method: "POST", headers: csrfHeaders() }),
+  checkPublication: (id: number) => request<PublicationRecoveryResult>(`/api/v1/queue/${id}/check-publication`, { method: "POST", headers: csrfHeaders() }),
+  markPublished: (id: number, comment: string, publicationUrl?: string) => request<QueueItem>(`/api/v1/queue/${id}/mark-published`, { method: "POST", headers: csrfHeaders(), body: JSON.stringify({ comment, publication_url: publicationUrl || null }) }),
+  retryPublication: (id: number) => request<QueueItem>(`/api/v1/queue/${id}/retry-publication`, { method: "POST", headers: csrfHeaders(), body: JSON.stringify({ checked_channel: true, accept_duplicate_risk: true }) }),
+  returnPublicationToWork: (id: number) => request<QueueItem>(`/api/v1/queue/${id}/return-to-work`, { method: "POST", headers: csrfHeaders() }),
   deleteQueueItem: (id: number) => request<void>(`/api/v1/queue/${id}`, { method: "DELETE", headers: csrfHeaders() }),
   uploadQueuePhoto: async (id: number, file: File) => request<QueueItem>(`/api/v1/queue/${id}/media`, { method: "POST", headers: csrfHeaders(), body: JSON.stringify({ filename: file.name, content_type: file.type, data_base64: await fileToBase64(file) }) }),
   deleteQueuePhoto: (id: number, mediaId: string) => request<QueueItem>(`/api/v1/queue/${id}/media/${encodeURIComponent(mediaId)}`, { method: "DELETE", headers: csrfHeaders() }),

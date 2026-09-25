@@ -26,6 +26,7 @@ class QueueItemStatus(StrEnum):
     SCHEDULED = "scheduled"
     PUBLISHED = "published"
     FAILED = "failed"
+    PUBLICATION_UNKNOWN = "publication_unknown"
 
 
 class AttachmentType(StrEnum):
@@ -46,6 +47,16 @@ class PublicationStatus(StrEnum):
     PUBLISHING = "publishing"
     PUBLISHED = "published"
     FAILED = "failed"
+    UNKNOWN = "unknown"
+
+
+class PublicationAttemptStatus(StrEnum):
+    """Результат отдельной попытки публикации."""
+
+    SENDING = "sending"
+    CONFIRMED = "confirmed"
+    FAILED = "failed"
+    UNKNOWN = "unknown"
 
 
 class CollectionRunTrigger(StrEnum):

@@ -78,6 +78,14 @@ def ensure_status(item_status: QueueItemStatus, allowed: set[QueueItemStatus]) -
         )
 
 
+def ensure_not_reconciling(item_status: QueueItemStatus) -> None:
+    if item_status == QueueItemStatus.PUBLICATION_UNKNOWN:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Материал нельзя изменять, пока результат публикации не проверен",
+        )
+
+
 def media_directory(queue_item_id: int) -> FilePath:
     return queue_item_directory(queue_item_id)
 
@@ -336,6 +344,7 @@ async def upload_queue_media(
     item = await get_accessible_queue_item(repository, queue_item_id, auth)
     if item is None:
         raise not_found_error()
+    ensure_not_reconciling(item.status)
 
     extension = ALLOWED_IMAGE_TYPES.get(data.content_type.lower())
     if extension is None:
@@ -412,6 +421,7 @@ async def delete_queue_media(
     item = await get_accessible_queue_item(repository, queue_item_id, auth)
     if item is None:
         raise not_found_error()
+    ensure_not_reconciling(item.status)
 
     safe_name = FilePath(media_id).name
     if safe_name != media_id:
@@ -450,6 +460,7 @@ async def update_queue_item(
     item = await get_accessible_queue_item(repository, queue_item_id, auth)
     if item is None:
         raise not_found_error()
+    ensure_not_reconciling(item.status)
     changed_fields = sorted(data.model_fields_set)
     item = await repository.update(item, data, commit=False)
     await record_editorial_event(
@@ -698,6 +709,7 @@ async def delete_queue_item(
     item = await get_accessible_queue_item(repository, queue_item_id, auth)
     if item is None:
         raise not_found_error()
+    ensure_not_reconciling(item.status)
     await record_editorial_event(
         session,
         actor_user_id=auth.user.user_id,

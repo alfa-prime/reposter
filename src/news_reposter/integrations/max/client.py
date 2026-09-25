@@ -62,6 +62,26 @@ class MAXClient:
     async def get_chat(self, chat_id: int) -> dict[str, Any]:
         return await self._get_json(f"/chats/{chat_id}")
 
+    async def get_messages(
+        self,
+        *,
+        chat_id: int | None = None,
+        from_timestamp: int | None = None,
+        to_timestamp: int | None = None,
+        count: int = 100,
+    ) -> dict[str, Any]:
+        """Возвращает сообщения канала для сверки неопределённой публикации."""
+
+        effective_chat_id = chat_id if chat_id is not None else self._chat_id
+        if effective_chat_id is None:
+            raise ValueError("Для чтения сообщений необходимо указать chat_id")
+        params: dict[str, Any] = {"chat_id": effective_chat_id, "count": count}
+        if from_timestamp is not None:
+            params["from"] = from_timestamp
+        if to_timestamp is not None:
+            params["to"] = to_timestamp
+        return await self._get_json("/messages", params=params)
+
     async def request_upload(
         self,
         media_type: Literal["image", "video", "audio", "file"],

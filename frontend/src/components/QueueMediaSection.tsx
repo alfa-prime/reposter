@@ -36,7 +36,7 @@ export function QueueMediaSection({
   onError,
   onNotice,
 }: QueueMediaSectionProps) {
-  const readonly = item.status === "published";
+  const readonly = ["published", "publication_unknown"].includes(item.status);
 
   return (
     <div className="drawer-media">

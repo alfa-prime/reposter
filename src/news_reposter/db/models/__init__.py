@@ -11,6 +11,7 @@ from news_reposter.db.models.enums import (
     CollectionRunTrigger,
     CollectionSourceRunStatus,
     PostStatus,
+    PublicationAttemptStatus,
     PublicationStatus,
     QueueItemStatus,
 )
@@ -19,6 +20,7 @@ from news_reposter.db.models.max_channel import MAXChannel
 from news_reposter.db.models.permission import Permission
 from news_reposter.db.models.post import Post
 from news_reposter.db.models.publication import Publication
+from news_reposter.db.models.publication_attempt import PublicationAttempt
 from news_reposter.db.models.queue_item import QueueItem
 from news_reposter.db.models.role import Role
 from news_reposter.db.models.role_permission import RolePermission
@@ -46,6 +48,8 @@ __all__ = [
     "PostAttachment",
     "PostStatus",
     "Publication",
+    "PublicationAttempt",
+    "PublicationAttemptStatus",
     "PublicationStatus",
     "QueueItem",
     "QueueItemStatus",

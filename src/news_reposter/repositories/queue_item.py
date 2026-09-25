@@ -7,7 +7,13 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from news_reposter.db.models import Post, QueueItem, QueueItemStatus, Target
+from news_reposter.db.models import (
+    Post,
+    Publication,
+    QueueItem,
+    QueueItemStatus,
+    Target,
+)
 from news_reposter.schemas.queue_item import QueueItemCreate, QueueItemUpdate
 
 
@@ -56,6 +62,9 @@ class QueueItemRepository:
             .options(
                 selectinload(QueueItem.post).selectinload(Post.attachments),
                 selectinload(QueueItem.target),
+                selectinload(QueueItem.publication).selectinload(
+                    Publication.attempt_history
+                ),
             )
             .order_by(QueueItem.queue_item_id.desc())
         )
@@ -89,6 +98,9 @@ class QueueItemRepository:
             .options(
                 selectinload(QueueItem.post).selectinload(Post.attachments),
                 selectinload(QueueItem.target),
+                selectinload(QueueItem.publication).selectinload(
+                    Publication.attempt_history
+                ),
             )
             .where(QueueItem.status.in_(statuses))
             .order_by(QueueItem.queue_item_id.desc())
@@ -131,6 +143,9 @@ class QueueItemRepository:
             .options(
                 selectinload(QueueItem.post).selectinload(Post.attachments),
                 selectinload(QueueItem.target),
+                selectinload(QueueItem.publication).selectinload(
+                    Publication.attempt_history
+                ),
             )
             .where(QueueItem.queue_item_id == queue_item_id)
         )

@@ -4,7 +4,11 @@ from datetime import UTC, datetime
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from news_reposter.db.models.enums import QueueItemStatus
+from news_reposter.db.models.enums import (
+    PublicationAttemptStatus,
+    PublicationStatus,
+    QueueItemStatus,
+)
 from news_reposter.services.media_validation import (
     MediaValidationError,
     validate_image_content,
@@ -89,6 +93,34 @@ class QueuePhotoRead(BaseModel):
     )
 
 
+class PublicationAttemptRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    publication_attempt_id: int
+    attempt_number: int
+    status: PublicationAttemptStatus
+    trigger: str
+    external_message_id: str | None = None
+    publication_url: str | None = None
+    error_message: str | None = None
+    started_at: datetime
+    finished_at: datetime | None = None
+    check_count: int = 0
+    last_checked_at: datetime | None = None
+
+
+class PublicationRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    status: PublicationStatus
+    external_message_id: str | None = None
+    publication_url: str | None = None
+    attempts: int
+    error_message: str | None = None
+    published_at: datetime | None = None
+    attempt_history: list[PublicationAttemptRead] = Field(default_factory=list)
+
+
 class QueueItemRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -110,6 +142,24 @@ class QueueItemRead(BaseModel):
     target_platform: str | None = None
     target_url: str | None = None
     target_default_signature: str | None = None
+    publication: PublicationRead | None = None
+
+
+class PublicationRecoveryResult(BaseModel):
+    item: QueueItemRead
+    outcome: str
+    message: str
+
+
+class MarkPublishedRequest(BaseModel):
+    publication_url: str | None = Field(default=None, max_length=2048)
+    external_message_id: str | None = Field(default=None, max_length=255)
+    comment: str = Field(min_length=3, max_length=1000)
+
+
+class RetryPublicationRequest(BaseModel):
+    checked_channel: bool
+    accept_duplicate_risk: bool
 
 
 class QueuePageRead(BaseModel):

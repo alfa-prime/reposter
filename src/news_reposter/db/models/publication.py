@@ -18,6 +18,7 @@ from news_reposter.db.base import Base
 from news_reposter.db.models.enums import PublicationStatus, enum_values
 
 if TYPE_CHECKING:
+    from news_reposter.db.models.publication_attempt import PublicationAttempt
     from news_reposter.db.models.queue_item import QueueItem
 
 
@@ -69,3 +70,9 @@ class Publication(Base):
     )
 
     queue_item: Mapped["QueueItem"] = relationship(back_populates="publication")
+    attempt_history: Mapped[list["PublicationAttempt"]] = relationship(
+        back_populates="publication",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        order_by="PublicationAttempt.attempt_number.desc()",
+    )

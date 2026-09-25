@@ -20,7 +20,7 @@ from news_reposter.api.v1.queue_permissions import (
     QueueReadDep,
     get_accessible_queue_item,
 )
-from news_reposter.db.models import AttachmentType
+from news_reposter.db.models import AttachmentType, QueueItemStatus
 from news_reposter.db.session import get_db_session
 from news_reposter.repositories.queue_item import QueueItemRepository
 from news_reposter.services.media_storage import queue_item_directory
@@ -174,6 +174,14 @@ async def _get_item(
     return item
 
 
+def _ensure_not_reconciling(item: Any) -> None:
+    if item.status == QueueItemStatus.PUBLICATION_UNKNOWN:
+        raise HTTPException(
+            status_code=409,
+            detail="Видео нельзя менять, пока результат публикации не проверен",
+        )
+
+
 @router.get(
     "/{queue_item_id}/video-info",
     summary="Получить сведения о видео публикации",
@@ -217,7 +225,8 @@ async def upload_queue_video(
     _csrf_auth: CsrfAuthContextDep,
     _same_origin: SameOriginDep,
 ) -> dict[str, Any]:
-    await _get_item(queue_item_id, session, auth)
+    item = await _get_item(queue_item_id, session, auth)
+    _ensure_not_reconciling(item)
 
     extension = ALLOWED_VIDEO_TYPES.get(data.content_type.lower())
     if extension is None:
@@ -293,7 +302,8 @@ async def delete_queue_video(
     _csrf_auth: CsrfAuthContextDep,
     _same_origin: SameOriginDep,
 ) -> None:
-    await _get_item(queue_item_id, session, auth)
+    item = await _get_item(queue_item_id, session, auth)
+    _ensure_not_reconciling(item)
     safe_name = FilePath(media_id).name
     if (
         safe_name != media_id

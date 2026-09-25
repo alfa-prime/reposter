@@ -20,6 +20,7 @@
 .editorial-status.status-awaiting_moderation { color: #ffdfac; background: rgba(222,158,62,.11); border-color: rgba(222,158,62,.20); }
 .editorial-status.status-approved, .editorial-status.status-scheduled { color: #bff9d7; background: rgba(72,182,123,.10); border-color: rgba(72,182,123,.18); }
 .editorial-status.status-rejected, .editorial-status.status-failed { color: #ffc5ce; background: rgba(220,75,99,.10); border-color: rgba(220,75,99,.18); }
+.editorial-status.status-publication_unknown { color: #ffd58a; background: rgba(245,158,11,.12); border-color: rgba(245,158,11,.28); }
 .editorial-empty { grid-column: 1 / -1; min-height: 260px; display: grid; place-content: center; justify-items: center; gap: 8px; color: #7d8ba3; border: 1px dashed rgba(255,255,255,.10); border-radius: 16px; }
 .editorial-empty strong { color: #cbd4e4; margin-top: 5px; }
 .editorial-empty span { max-width: 420px; text-align: center; font-size: 12px; }
@@ -373,3 +374,14 @@ html[data-theme="light"] .link-dialog input {
     display: none;
   }
 }
+.publication-recovery { margin: 18px 22px; padding: 18px; border: 1px solid rgba(245, 158, 11, .45); border-radius: 16px; background: rgba(245, 158, 11, .08); }
+.publication-recovery-title { display: flex; gap: 12px; color: #f59e0b; }
+.publication-recovery-title strong { color: var(--text-primary, #f8fafc); }
+.publication-recovery-title p { margin: 6px 0 0; color: var(--text-secondary, #94a3b8); line-height: 1.45; }
+.publication-recovery-actions { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 16px; }
+.publication-recovery-actions button, .publication-recovery-actions .button-link { display: inline-flex; align-items: center; gap: 7px; text-decoration: none; }
+.publication-attempts { margin-top: 16px; color: var(--text-secondary, #94a3b8); }
+.publication-attempts summary { cursor: pointer; font-weight: 700; }
+.publication-attempt { display: grid; grid-template-columns: 120px 1fr auto; gap: 6px 14px; padding: 11px 0; border-top: 1px solid rgba(148, 163, 184, .16); }
+.publication-attempt strong { color: var(--text-primary, #f8fafc); }
+.publication-attempt small { grid-column: 2 / -1; }
