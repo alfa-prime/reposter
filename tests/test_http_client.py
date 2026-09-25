@@ -113,8 +113,10 @@ def test_lifespan_registers_and_closes_http_client(monkeypatch) -> None:
     client = AsyncMock(spec=httpx.AsyncClient)
     collection_scheduler = SimpleNamespace(start=Mock(), stop=AsyncMock())
     publication_scheduler = SimpleNamespace(start=Mock(), stop=AsyncMock())
+    media_cleanup_scheduler = SimpleNamespace(start=Mock(), stop=AsyncMock())
     collection_scheduler_factory = Mock(return_value=collection_scheduler)
     publication_scheduler_factory = Mock(return_value=publication_scheduler)
+    media_cleanup_scheduler_factory = Mock(return_value=media_cleanup_scheduler)
     close_database = AsyncMock()
 
     monkeypatch.setattr(main_module, "create_http_client", lambda: client)
@@ -128,6 +130,11 @@ def test_lifespan_registers_and_closes_http_client(monkeypatch) -> None:
         "PublicationScheduler",
         publication_scheduler_factory,
     )
+    monkeypatch.setattr(
+        main_module,
+        "MediaCleanupScheduler",
+        media_cleanup_scheduler_factory,
+    )
     monkeypatch.setattr(main_module, "close_database", close_database)
 
     async def scenario() -> None:
@@ -140,9 +147,11 @@ def test_lifespan_registers_and_closes_http_client(monkeypatch) -> None:
             publication_scheduler_factory.assert_called_once_with(client)
             collection_scheduler.start.assert_called_once_with()
             publication_scheduler.start.assert_called_once_with()
+            media_cleanup_scheduler.start.assert_called_once_with()
             client.aclose.assert_not_awaited()
 
         publication_scheduler.stop.assert_awaited_once_with()
+        media_cleanup_scheduler.stop.assert_awaited_once_with()
         collection_scheduler.stop.assert_awaited_once_with()
         client.aclose.assert_awaited_once_with()
         close_database.assert_awaited_once_with()

@@ -19,7 +19,7 @@ from news_reposter.db.models import AttachmentType, QueueItemStatus
 from news_reposter.main import app
 from news_reposter.repositories.queue_item import QueueItemAlreadyExistsError
 from news_reposter.schemas.queue_item import QueueItemCreate, QueueItemUpdate
-from news_reposter.services import media_storage
+from news_reposter.services import media_storage, media_upload
 
 CSRF_TOKEN = "queue-csrf-token"
 CSRF_COOKIE_NAME = get_settings().auth_csrf_cookie_name
@@ -249,6 +249,7 @@ def test_queue_crud_and_moderation(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(media_storage, "MEDIA_ROOT", tmp_path)
+    monkeypatch.setattr(media_upload, "ensure_disk_space", lambda *_args: None)
 
     async def scenario() -> None:
         transport = httpx.ASGITransport(app=app)
@@ -284,6 +285,17 @@ def test_queue_crud_and_moderation(
             )
             assert edited.status_code == 200
             assert edited.json()["rewritten_text"] == "Подготовленный текст"
+
+            uploaded = await client.post(
+                "/api/v1/queue/1/media",
+                content=b"\x89PNG\r\n\x1a\npayload",
+                headers={
+                    "Content-Type": "image/png",
+                    "X-Filename": "photo.png",
+                },
+            )
+            assert uploaded.status_code == 200
+            assert len(uploaded.json()["photos"]) == 1
 
             submitted = await client.post("/api/v1/queue/1/submit")
             assert submitted.status_code == 200

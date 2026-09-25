@@ -1,3 +1,4 @@
+import asyncio
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Response, status
@@ -318,5 +319,5 @@ async def delete_target(
         raise not_found_error()
     queue_item_ids = await repository.queue_item_ids(target_id)
     await repository.delete(target)
-    cleanup_queue_items_media(queue_item_ids)
+    await asyncio.to_thread(cleanup_queue_items_media, queue_item_ids)
     return Response(status_code=status.HTTP_204_NO_CONTENT)

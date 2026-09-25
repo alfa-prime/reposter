@@ -1,5 +1,3 @@
-import base64
-import binascii
 from datetime import UTC, datetime
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -8,10 +6,6 @@ from news_reposter.db.models.enums import (
     PublicationAttemptStatus,
     PublicationStatus,
     QueueItemStatus,
-)
-from news_reposter.services.media_validation import (
-    MediaValidationError,
-    validate_image_content,
 )
 
 
@@ -54,28 +48,6 @@ class QueueItemSchedule(BaseModel):
         if value <= datetime.now(UTC):
             raise ValueError("дата и время публикации должны быть в будущем")
         return value
-
-
-class QueueMediaUpload(BaseModel):
-    filename: str = Field(
-        min_length=1, max_length=255, description="Исходное имя файла"
-    )
-    content_type: str = Field(description="MIME-тип изображения")
-    data_base64: str = Field(min_length=1, description="Содержимое файла в Base64")
-
-    @model_validator(mode="after")
-    def validate_real_image_type(self) -> "QueueMediaUpload":
-        try:
-            content = base64.b64decode(self.data_base64, validate=True)
-        except (binascii.Error, ValueError) as exc:
-            raise ValueError("некорректные Base64-данные изображения") from exc
-        if not content:
-            raise ValueError("пустой файл изображения")
-        try:
-            validate_image_content(content, self.content_type)
-        except MediaValidationError as exc:
-            raise ValueError(str(exc)) from exc
-        return self
 
 
 class QueuePhotoRead(BaseModel):

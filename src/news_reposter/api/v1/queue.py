@@ -1,10 +1,17 @@
-import base64
-import binascii
+import asyncio
 from pathlib import Path as FilePath
 from typing import Annotated, Any
-from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, Path, Query, Response, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    HTTPException,
+    Path,
+    Query,
+    Request,
+    Response,
+    status,
+)
 from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -14,6 +21,7 @@ from news_reposter.api.dependencies import (
     CsrfAuthContextDep,
     SameOriginDep,
 )
+from news_reposter.api.v1.queue_media_state import load_state
 from news_reposter.api.v1.queue_permissions import (
     QueueEditDep,
     QueueModerateDep,
@@ -24,6 +32,7 @@ from news_reposter.api.v1.queue_permissions import (
     get_accessible_queue_item,
     target_scope,
 )
+from news_reposter.config import get_settings
 from news_reposter.db.models import AttachmentType, QueueItemStatus
 from news_reposter.db.session import get_db_session
 from news_reposter.repositories.queue_item import (
@@ -35,7 +44,6 @@ from news_reposter.schemas.queue_item import (
     QueueItemRead,
     QueueItemSchedule,
     QueueItemUpdate,
-    QueueMediaUpload,
     QueuePageRead,
 )
 from news_reposter.services.audit import record_editorial_event
@@ -43,6 +51,13 @@ from news_reposter.services.media_storage import (
     cleanup_queue_item_media,
     queue_item_directory,
 )
+from news_reposter.services.media_upload import (
+    local_attachment_count,
+    stream_file_to_disk,
+    upload_metadata,
+    upload_slot,
+)
+from news_reposter.services.media_validation import validate_image_content
 
 router = APIRouter(
     prefix="/queue",
@@ -50,7 +65,6 @@ router = APIRouter(
 )
 Session = Annotated[AsyncSession, Depends(get_db_session)]
 
-MAX_UPLOAD_BYTES = 10 * 1024 * 1024
 ALLOWED_IMAGE_TYPES = {
     "image/jpeg": ".jpg",
     "image/png": ".png",
@@ -99,7 +113,7 @@ def uploaded_photos(queue_item_id: int, start_position: int) -> list[dict[str, A
     for index, path in enumerate(
         sorted(directory.iterdir(), key=lambda item: item.stat().st_mtime)
     ):
-        if not path.is_file():
+        if not path.is_file() or path.name.startswith(".upload-"):
             continue
         photos.append(
             {
@@ -334,7 +348,7 @@ async def upload_queue_media(
     queue_item_id: Annotated[
         int, Path(gt=0, description="Идентификатор элемента очереди")
     ],
-    data: QueueMediaUpload,
+    request: Request,
     session: Session,
     auth: QueueEditDep,
     _csrf_auth: CsrfAuthContextDep,
@@ -346,29 +360,33 @@ async def upload_queue_media(
         raise not_found_error()
     ensure_not_reconciling(item.status)
 
-    extension = ALLOWED_IMAGE_TYPES.get(data.content_type.lower())
+    _filename, content_type = upload_metadata(request)
+    extension = ALLOWED_IMAGE_TYPES.get(content_type)
     if extension is None:
         raise HTTPException(
             status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
             detail="Поддерживаются только JPEG, PNG и WebP",
         )
 
-    try:
-        content = base64.b64decode(data.data_base64, validate=True)
-    except (binascii.Error, ValueError) as exc:
-        raise HTTPException(
-            status_code=400, detail="Некорректные данные файла"
-        ) from exc
-
-    if len(content) > MAX_UPLOAD_BYTES:
-        raise HTTPException(status_code=413, detail="Файл больше 10 МБ")
-    if not content:
-        raise HTTPException(status_code=400, detail="Пустой файл")
-
     directory = media_directory(queue_item_id)
-    directory.mkdir(parents=True, exist_ok=True)
-    filename = f"{uuid4().hex}{extension}"
-    (directory / filename).write_bytes(content)
+    settings = get_settings()
+    async with upload_slot(queue_item_id):
+        source_count = sum(key.startswith("source:") for key in load_state(item))
+        stored_count = await asyncio.to_thread(local_attachment_count, directory)
+        if source_count + stored_count >= settings.media_item_max_attachments:
+            raise HTTPException(
+                status_code=413,
+                detail="В материале уже максимальное число вложений",
+            )
+        await stream_file_to_disk(
+            request,
+            directory=directory,
+            filename_prefix="",
+            extension=extension,
+            max_bytes=settings.media_image_max_bytes,
+            validate=validate_image_content,
+            content_type=content_type,
+        )
     return queue_item_response(item)
 
 
@@ -429,7 +447,7 @@ async def delete_queue_media(
     path = media_directory(queue_item_id) / safe_name
     if not path.is_file():
         raise HTTPException(status_code=404, detail="Файл не найден")
-    path.unlink()
+    await asyncio.to_thread(path.unlink)
     return queue_item_response(item)
 
 
@@ -719,6 +737,6 @@ async def delete_queue_item(
         commit=False,
     )
     await repository.delete(item)
-    cleanup_queue_item_media(queue_item_id)
+    await asyncio.to_thread(cleanup_queue_item_media, queue_item_id)
 
     return Response(status_code=status.HTTP_204_NO_CONTENT)

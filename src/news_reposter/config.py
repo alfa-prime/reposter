@@ -72,6 +72,16 @@ class Settings(BaseSettings):
     auth_login_max_attempts_per_ip: int = Field(default=20, ge=1, le=1000)
     auth_cookie_secure: bool = True
 
+    media_image_max_bytes: int = Field(default=10 * 1024 * 1024, ge=1024)
+    media_video_max_bytes: int = Field(default=50 * 1024 * 1024, ge=1024)
+    media_item_max_bytes: int = Field(default=150 * 1024 * 1024, ge=1024)
+    media_item_max_attachments: int = Field(default=12, ge=1, le=100)
+    media_max_concurrent_uploads: int = Field(default=3, ge=1, le=100)
+    media_min_free_bytes: int = Field(default=5 * 1024 * 1024 * 1024, ge=0)
+    media_min_free_percent: float = Field(default=10.0, ge=0, le=95)
+    media_temp_max_age_hours: int = Field(default=24, ge=1, le=720)
+    media_orphan_max_age_days: int = Field(default=7, ge=1, le=365)
+
     @model_validator(mode="after")
     def validate_session_policy(self) -> Self:
         """Проверяет согласованность сроков жизни серверной сессии."""
@@ -85,6 +95,12 @@ class Settings(BaseSettings):
             raise ValueError(
                 "AUTH_SESSION_IDLE_MINUTES должен быть меньше "
                 "AUTH_SESSION_ABSOLUTE_HOURS"
+            )
+        if self.media_item_max_bytes < max(
+            self.media_image_max_bytes, self.media_video_max_bytes
+        ):
+            raise ValueError(
+                "MEDIA_ITEM_MAX_BYTES не может быть меньше лимита одного медиафайла"
             )
         return self
 

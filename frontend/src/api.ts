@@ -412,7 +412,7 @@ export const api = {
   queueMediaState: (id: number) => request<QueueMediaState>(`/api/v1/queue/${id}/media-state`),
   updateQueueMediaState: (id: number, mediaOrder: string[]) => request<QueueMediaState>(`/api/v1/queue/${id}/media-state`, { method: "PUT", headers: csrfHeaders(), body: JSON.stringify({ media_order: mediaOrder }) }),
   queueVideoInfo: (id: number) => request<QueueVideoInfo>(`/api/v1/queue/${id}/video-info`),
-  uploadQueueVideo: async (id: number, file: File) => request<UploadedVideo>(`/api/v1/queue/${id}/video`, { method: "POST", headers: csrfHeaders(), body: JSON.stringify({ filename: file.name, content_type: file.type, data_base64: await fileToBase64(file) }) }),
+  uploadQueueVideo: (id: number, file: File) => request<UploadedVideo>(`/api/v1/queue/${id}/video`, { method: "POST", headers: { ...csrfHeaders(), "Content-Type": file.type || "application/octet-stream", "X-Filename": encodeURIComponent(file.name) }, body: file }),
   deleteQueueVideo: (id: number, mediaId: string) => request<void>(`/api/v1/queue/${id}/video/${encodeURIComponent(mediaId)}`, { method: "DELETE", headers: csrfHeaders() }),
   targets: () => request<Target[]>("/api/v1/targets?limit=100"),
   target: (id: number) => request<Target>(`/api/v1/targets/${id}`),
@@ -453,6 +453,6 @@ export const api = {
   retryPublication: (id: number) => request<QueueItem>(`/api/v1/queue/${id}/retry-publication`, { method: "POST", headers: csrfHeaders(), body: JSON.stringify({ checked_channel: true, accept_duplicate_risk: true }) }),
   returnPublicationToWork: (id: number) => request<QueueItem>(`/api/v1/queue/${id}/return-to-work`, { method: "POST", headers: csrfHeaders() }),
   deleteQueueItem: (id: number) => request<void>(`/api/v1/queue/${id}`, { method: "DELETE", headers: csrfHeaders() }),
-  uploadQueuePhoto: async (id: number, file: File) => request<QueueItem>(`/api/v1/queue/${id}/media`, { method: "POST", headers: csrfHeaders(), body: JSON.stringify({ filename: file.name, content_type: file.type, data_base64: await fileToBase64(file) }) }),
+  uploadQueuePhoto: (id: number, file: File) => request<QueueItem>(`/api/v1/queue/${id}/media`, { method: "POST", headers: { ...csrfHeaders(), "Content-Type": file.type || "application/octet-stream", "X-Filename": encodeURIComponent(file.name) }, body: file }),
   deleteQueuePhoto: (id: number, mediaId: string) => request<QueueItem>(`/api/v1/queue/${id}/media/${encodeURIComponent(mediaId)}`, { method: "DELETE", headers: csrfHeaders() }),
 };

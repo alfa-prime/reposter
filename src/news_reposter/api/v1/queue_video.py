@@ -1,12 +1,9 @@
-import base64
-import binascii
+import asyncio
 from pathlib import Path as FilePath
 from typing import Annotated, Any
-from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, Path, status
+from fastapi import APIRouter, Depends, HTTPException, Path, Request, status
 from fastapi.responses import FileResponse
-from pydantic import BaseModel, Field, model_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from news_reposter.api.dependencies import (
@@ -15,19 +12,24 @@ from news_reposter.api.dependencies import (
     CsrfAuthContextDep,
     SameOriginDep,
 )
+from news_reposter.api.v1.queue_media_state import load_state
 from news_reposter.api.v1.queue_permissions import (
     QueueEditDep,
     QueueReadDep,
     get_accessible_queue_item,
 )
+from news_reposter.config import get_settings
 from news_reposter.db.models import AttachmentType, QueueItemStatus
 from news_reposter.db.session import get_db_session
 from news_reposter.repositories.queue_item import QueueItemRepository
 from news_reposter.services.media_storage import queue_item_directory
-from news_reposter.services.media_validation import (
-    MediaValidationError,
-    validate_video_content,
+from news_reposter.services.media_upload import (
+    local_attachment_count,
+    stream_file_to_disk,
+    upload_metadata,
+    upload_slot,
 )
+from news_reposter.services.media_validation import validate_video_content
 
 router = APIRouter(
     prefix="/queue",
@@ -35,33 +37,12 @@ router = APIRouter(
 )
 Session = Annotated[AsyncSession, Depends(get_db_session)]
 
-MAX_VIDEO_BYTES = 50 * 1024 * 1024
 ALLOWED_VIDEO_TYPES = {
     "video/mp4": ".mp4",
     "video/webm": ".webm",
     "video/quicktime": ".mov",
 }
 VIDEO_EXTENSIONS = set(ALLOWED_VIDEO_TYPES.values())
-
-
-class QueueVideoUpload(BaseModel):
-    filename: str = Field(min_length=1, max_length=255)
-    content_type: str
-    data_base64: str = Field(min_length=1)
-
-    @model_validator(mode="after")
-    def validate_real_video_type(self) -> "QueueVideoUpload":
-        try:
-            content = base64.b64decode(self.data_base64, validate=True)
-        except (binascii.Error, ValueError) as exc:
-            raise ValueError("некорректные Base64-данные видео") from exc
-        if not content:
-            raise ValueError("пустой видеофайл")
-        try:
-            validate_video_content(content, self.content_type)
-        except MediaValidationError as exc:
-            raise ValueError(str(exc)) from exc
-        return self
 
 
 def video_directory(queue_item_id: int) -> FilePath:
@@ -219,7 +200,7 @@ async def get_queue_video_info(
 )
 async def upload_queue_video(
     queue_item_id: Annotated[int, Path(gt=0)],
-    data: QueueVideoUpload,
+    request: Request,
     session: Session,
     auth: QueueEditDep,
     _csrf_auth: CsrfAuthContextDep,
@@ -228,35 +209,42 @@ async def upload_queue_video(
     item = await _get_item(queue_item_id, session, auth)
     _ensure_not_reconciling(item)
 
-    extension = ALLOWED_VIDEO_TYPES.get(data.content_type.lower())
+    original_filename, content_type = upload_metadata(request)
+    extension = ALLOWED_VIDEO_TYPES.get(content_type)
     if extension is None:
         raise HTTPException(
             status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
             detail="Поддерживаются MP4, WebM и MOV",
         )
 
-    try:
-        content = base64.b64decode(data.data_base64, validate=True)
-    except (binascii.Error, ValueError) as exc:
-        raise HTTPException(
-            status_code=400, detail="Некорректные данные файла"
-        ) from exc
-
-    if not content:
-        raise HTTPException(status_code=400, detail="Пустой файл")
-    if len(content) > MAX_VIDEO_BYTES:
-        raise HTTPException(status_code=413, detail="Видео больше 50 МБ")
-
     directory = video_directory(queue_item_id)
-    directory.mkdir(parents=True, exist_ok=True)
-    filename = f"video-{uuid4().hex}{extension}"
-    (directory / filename).write_bytes(content)
+    settings = get_settings()
+    async with upload_slot(queue_item_id):
+        source_count = sum(key.startswith("source:") for key in load_state(item))
+        stored_count = await asyncio.to_thread(
+            local_attachment_count, queue_item_directory(queue_item_id)
+        )
+        if source_count + stored_count >= settings.media_item_max_attachments:
+            raise HTTPException(
+                status_code=413,
+                detail="В материале уже максимальное число вложений",
+            )
+        path, size = await stream_file_to_disk(
+            request,
+            directory=directory,
+            item_directory=queue_item_directory(queue_item_id),
+            filename_prefix="video-",
+            extension=extension,
+            max_bytes=settings.media_video_max_bytes,
+            validate=validate_video_content,
+            content_type=content_type,
+        )
 
     return {
-        "media_id": filename,
-        "filename": data.filename,
-        "source_url": f"/api/v1/queue/{queue_item_id}/video/{filename}",
-        "size": len(content),
+        "media_id": path.name,
+        "filename": original_filename,
+        "source_url": f"/api/v1/queue/{queue_item_id}/video/{path.name}",
+        "size": size,
         "kind": "uploaded",
     }
 
@@ -314,4 +302,4 @@ async def delete_queue_video(
     path = video_directory(queue_item_id) / safe_name
     if not path.is_file():
         raise HTTPException(status_code=404, detail="Видео не найдено")
-    path.unlink()
+    await asyncio.to_thread(path.unlink)

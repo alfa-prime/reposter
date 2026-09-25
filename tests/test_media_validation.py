@@ -1,10 +1,5 @@
-import base64
-
 import pytest
-from pydantic import ValidationError
 
-from news_reposter.api.v1.queue_video import QueueVideoUpload
-from news_reposter.schemas.queue_item import QueueMediaUpload
 from news_reposter.services.media_validation import (
     MediaValidationError,
     detect_image_type,
@@ -56,32 +51,3 @@ def test_media_validation_rejects_unknown_and_mismatched_types() -> None:
         validate_video_content(b"invalid", "video/mp4")
     with pytest.raises(MediaValidationError, match="Фактический тип"):
         validate_video_content(MP4, "video/webm")
-
-
-def test_upload_schemas_validate_real_file_signatures() -> None:
-    image = QueueMediaUpload(
-        filename="photo.png",
-        content_type="image/png",
-        data_base64=base64.b64encode(PNG).decode(),
-    )
-    video = QueueVideoUpload(
-        filename="clip.mp4",
-        content_type="video/mp4",
-        data_base64=base64.b64encode(MP4).decode(),
-    )
-
-    assert image.filename == "photo.png"
-    assert video.filename == "clip.mp4"
-
-    with pytest.raises(ValidationError, match="Фактический тип"):
-        QueueMediaUpload(
-            filename="fake.jpg",
-            content_type="image/jpeg",
-            data_base64=base64.b64encode(PNG).decode(),
-        )
-    with pytest.raises(ValidationError, match="Base64"):
-        QueueVideoUpload(
-            filename="broken.mp4",
-            content_type="video/mp4",
-            data_base64="not-base64!",
-        )
