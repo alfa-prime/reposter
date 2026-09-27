@@ -1,0 +1,45 @@
+# Opt-in durable workers before switching the transport to Celery.
+# Start with: docker compose -f compose.yaml -f compose.prod.yaml -f compose.tasks.yaml --profile background up -d --build
+x-task-worker: &task-worker
+  profiles: [background]
+  build: .
+  image: reposter-app
+  restart: unless-stopped
+  init: true
+  stop_grace_period: 30s
+  env_file: [.env]
+  environment:
+    POSTGRES_HOST: postgres
+    POSTGRES_PORT: 5432
+    HTTP_CA_FILE: /app/certs/russian_trusted_ca.pem
+    MEDIA_ROOT: /app/data/media
+  volumes:
+    - ./certs:/app/certs:ro
+    - media_data:/app/data/media
+  depends_on:
+    postgres: {condition: service_healthy}
+    migrate: {condition: service_completed_successfully}
+  logging:
+    driver: json-file
+    options: {max-size: "10m", max-file: "5"}
+  mem_limit: 512m
+  cpus: 0.5
+services:
+  app:
+    environment:
+      BACKGROUND_TASKS_ENABLED: "true"
+  task-outbox:
+    <<: *task-worker
+    command: [python, -m, news_reposter.background.worker, --dispatch]
+  task-rewrite:
+    <<: *task-worker
+    command: [python, -m, news_reposter.background.worker, --queue, rewrite]
+  task-collection:
+    <<: *task-worker
+    command: [python, -m, news_reposter.background.worker, --queue, collection]
+  task-publication:
+    <<: *task-worker
+    command: [python, -m, news_reposter.background.worker, --queue, publication]
+  task-maintenance:
+    <<: *task-worker
+    command: [python, -m, news_reposter.background.worker, --queue, maintenance]

@@ -1,7 +1,8 @@
 from datetime import datetime
 from typing import TYPE_CHECKING
+from uuid import UUID
 
-from sqlalchemy import DateTime, Enum, Index, Integer, Text, func
+from sqlalchemy import DateTime, Enum, ForeignKey, Index, Integer, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from news_reposter.db.base import Base
@@ -31,6 +32,9 @@ class CollectionRun(Base):
     )
 
     collection_run_id: Mapped[int] = mapped_column(primary_key=True)
+    background_task_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("background_tasks.task_id", ondelete="SET NULL"), index=True
+    )
     trigger: Mapped[CollectionRunTrigger] = mapped_column(
         Enum(
             CollectionRunTrigger,

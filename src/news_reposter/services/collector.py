@@ -77,6 +77,8 @@ async def _distributed_collection_lock() -> AsyncIterator[None]:
 async def collect_active_sources_once(
     http_client: httpx.AsyncClient,
     trigger: CollectionRunTrigger = CollectionRunTrigger.MANUAL,
+    *,
+    task_id=None,
 ) -> dict[str, int]:
     """Забирает новые посты активных VK-источников и создаёт очередь."""
 
@@ -88,17 +90,22 @@ async def collect_active_sources_once(
             return await _collect_active_sources_once(
                 http_client=http_client,
                 trigger=trigger,
+                task_id=task_id,
             )
 
 
 async def _collect_active_sources_once(
     http_client: httpx.AsyncClient,
     trigger: CollectionRunTrigger = CollectionRunTrigger.MANUAL,
+    *,
+    task_id=None,
 ) -> dict[str, int]:
     """Выполняет один сериализованный проход сборщика."""
 
     history = CollectionHistory()
-    run_id = await history.start_run(trigger)
+    run_id = await history.start_run(
+        trigger, **({"task_id": task_id} if task_id else {})
+    )
     summary = {
         "run_id": run_id,
         "sources_total": 0,

@@ -86,18 +86,18 @@ class MediaCleanupScheduler:
         self._task = None
 
     async def run_once(self) -> tuple[int, int]:
-        async with async_session_factory() as session:
-            ids = set((await session.scalars(select(QueueItem.queue_item_id))).all())
-        result = await asyncio.to_thread(
-            cleanup_orphaned_media, media_storage.MEDIA_ROOT, ids
-        )
-        if any(result):
-            logger.info(
-                "Очистка медиа: временных файлов %s, потерянных каталогов %s",
-                result[0],
-                result[1],
-            )
-        return result
+        if get_settings().background_tasks_enabled:
+            from news_reposter.background.contracts import ActiveTaskConflict
+            from news_reposter.background.intents import enqueue_maintenance
+
+            async with async_session_factory() as session:
+                try:
+                    await enqueue_maintenance(session)
+                    await session.commit()
+                except ActiveTaskConflict:
+                    await session.rollback()
+            return 0, 0
+        return await cleanup_media_once()
 
     async def _run(self) -> None:
         while True:
@@ -108,3 +108,18 @@ class MediaCleanupScheduler:
             except Exception:
                 logger.exception("Ошибка фоновой очистки медиа")
             await asyncio.sleep(self.interval_seconds)
+
+
+async def cleanup_media_once() -> tuple[int, int]:
+    async with async_session_factory() as session:
+        ids = set((await session.scalars(select(QueueItem.queue_item_id))).all())
+    result = await asyncio.to_thread(
+        cleanup_orphaned_media, media_storage.MEDIA_ROOT, ids
+    )
+    if any(result):
+        logger.info(
+            "Очистка медиа: временных файлов %s, потерянных каталогов %s",
+            result[0],
+            result[1],
+        )
+    return result

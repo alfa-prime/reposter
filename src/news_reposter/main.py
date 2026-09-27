@@ -6,6 +6,7 @@ from fastapi import FastAPI
 from news_reposter.api.v1.admin_users import router as admin_users_router
 from news_reposter.api.v1.audit import router as audit_router
 from news_reposter.api.v1.auth import router as auth_router
+from news_reposter.api.v1.background_tasks import router as background_tasks_router
 from news_reposter.api.v1.collection import router as collection_router
 from news_reposter.api.v1.max import router as max_router
 from news_reposter.api.v1.queue import router as queue_router
@@ -17,6 +18,7 @@ from news_reposter.api.v1.sources import router as sources_router
 from news_reposter.api.v1.system import router as system_router
 from news_reposter.api.v1.target_sources import router as target_sources_router
 from news_reposter.api.v1.targets import router as targets_router
+from news_reposter.api.v1.task_submission import router as task_submission_router
 from news_reposter.api.v1.vk import router as vk_router
 from news_reposter.config import get_settings
 from news_reposter.db.session import close_database
@@ -135,3 +137,5 @@ app.include_router(queue_publish_router, prefix="/api/v1")
 app.include_router(queue_rewrite_router, prefix="/api/v1")
 app.include_router(collection_router, prefix="/api/v1")
 app.include_router(system_router)
+app.include_router(background_tasks_router, prefix="/api/v1")
+app.include_router(task_submission_router, prefix="/api/v1")

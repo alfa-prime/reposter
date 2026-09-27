@@ -1,5 +1,6 @@
 from datetime import datetime
 from typing import TYPE_CHECKING
+from uuid import UUID
 
 from sqlalchemy import DateTime, Enum, ForeignKey, Index, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -26,6 +27,9 @@ class PublicationAttempt(Base):
     )
 
     publication_attempt_id: Mapped[int] = mapped_column(primary_key=True)
+    background_task_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("background_tasks.task_id", ondelete="SET NULL"), index=True
+    )
     publication_id: Mapped[int] = mapped_column(
         ForeignKey("publications.publication_id", ondelete="CASCADE"), nullable=False
     )
