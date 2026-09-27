@@ -20,9 +20,11 @@ class AuditEventRead(BaseModel):
 
 class AuditEventPage(BaseModel):
     items: list[AuditEventRead]
-    total: int = Field(ge=0)
+    total: int | None = Field(ge=0)
     offset: int = Field(ge=0)
     limit: int = Field(ge=1)
+    next_cursor: str | None = None
+    has_more: bool = False
 
 
 class EditorialAuditEventRead(BaseModel):
@@ -42,6 +44,8 @@ class EditorialAuditEventRead(BaseModel):
 
 class EditorialAuditEventPage(BaseModel):
     items: list[EditorialAuditEventRead]
-    total: int = Field(ge=0)
+    total: int | None = Field(ge=0)
     offset: int = Field(ge=0)
     limit: int = Field(ge=1)
+    next_cursor: str | None = None
+    has_more: bool = False

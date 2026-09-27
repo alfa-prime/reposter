@@ -61,6 +61,29 @@ class CollectionRepository:
         )
         return list(result.all()), int(count or 0)
 
+    async def list_runs_after(
+        self,
+        *,
+        limit: int,
+        before_id: int | None = None,
+        status: CollectionRunStatus | None = None,
+        trigger: CollectionRunTrigger | None = None,
+    ) -> list[CollectionRun]:
+        filters = []
+        if before_id is not None:
+            filters.append(CollectionRun.collection_run_id < before_id)
+        if status is not None:
+            filters.append(CollectionRun.status == status)
+        if trigger is not None:
+            filters.append(CollectionRun.trigger == trigger)
+        result = await self.session.scalars(
+            select(CollectionRun)
+            .where(*filters)
+            .order_by(CollectionRun.collection_run_id.desc())
+            .limit(limit + 1)
+        )
+        return list(result.all())
+
     async def get_run(self, run_id: int) -> CollectionRun | None:
         return await self.session.scalar(
             select(CollectionRun)

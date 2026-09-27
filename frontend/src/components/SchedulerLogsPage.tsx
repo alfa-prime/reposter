@@ -1,6 +1,8 @@
-import { useCallback, useEffect, useState } from "react";
-import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, RefreshCw } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { ChevronDown, ChevronUp, RefreshCw } from "lucide-react";
 import { api, CollectionRun, CollectionRunDetail } from "../api";
+import { useJournalPage } from "../useJournalPage";
+import { JournalPagination } from "./JournalPagination";
 import "../scheduler.css";
 
 const statusLabels: Record<string, string> = { running: "Выполняется", success: "Успешно", partial: "Частично", failed: "Ошибка", skipped: "Пропущен", interrupted: "Прерван", no_changes: "Без изменений" };
@@ -17,38 +19,30 @@ function duration(run: CollectionRun) {
 }
 
 export function SchedulerLogsPage() {
-  const [runs, setRuns] = useState<CollectionRun[]>([]);
-  const [total, setTotal] = useState(0);
-  const [offset, setOffset] = useState(0);
   const [limit, setLimit] = useState(20);
   const [status, setStatus] = useState("");
   const [trigger, setTrigger] = useState("");
   const [expanded, setExpanded] = useState<number | null>(null);
+  const detailRequest = useRef(0);
   const [detail, setDetail] = useState<CollectionRunDetail | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
 
-  const load = useCallback(async () => {
-    setBusy(true); setError("");
-    try {
-      const page = await api.collectionRuns({ offset, limit, status: status || undefined, trigger: trigger || undefined });
-      setRuns(page.items); setTotal(page.total);
-    } catch (exc) { setError(exc instanceof Error ? exc.message : "Не удалось загрузить журнал"); }
-    finally { setBusy(false); }
-  }, [offset, limit, status, trigger]);
+  const fetchPage = useCallback((cursor: string | null, signal: AbortSignal) =>
+    api.collectionRuns({ cursor, signal, limit, status: status || undefined, trigger: trigger || undefined }),
+    [limit, status, trigger]);
+  const journal = useJournalPage(JSON.stringify([limit, status, trigger]), fetchPage);
+  const { items: runs, busy, error, setError, load } = journal;
+  useEffect(() => { detailRequest.current += 1; setExpanded(null); setDetail(null); }, [limit, status, trigger, journal.pageNumber]);
 
-  useEffect(() => { void load(); }, [load]);
-  useEffect(() => { setOffset(0); }, [limit, status, trigger]);
+  useEffect(() => () => { detailRequest.current += 1; }, []);
 
   async function toggle(runId: number) {
+    const requestId = ++detailRequest.current;
     if (expanded === runId) { setExpanded(null); setDetail(null); return; }
     setExpanded(runId); setDetail(null);
-    try { setDetail(await api.collectionRun(runId)); }
-    catch (exc) { setError(exc instanceof Error ? exc.message : "Не удалось загрузить детали запуска"); }
+    try { const data = await api.collectionRun(runId); if (detailRequest.current === requestId) setDetail(data); }
+    catch (exc) { if (detailRequest.current === requestId) setError(exc instanceof Error ? exc.message : "Не удалось загрузить детали запуска"); }
   }
 
-  const page = Math.floor(offset / limit) + 1;
-  const pages = Math.max(1, Math.ceil(total / limit));
 
   return (
     <section className="settings-page scheduler-page">
@@ -95,7 +89,7 @@ export function SchedulerLogsPage() {
         </div>)}
       </div>
 
-      <div className="log-pagination"><span>Запуски {total ? offset + 1 : 0}–{Math.min(offset + limit, total)} из {total}</span><div><button className="icon-button" disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - limit))}><ChevronLeft size={17} /></button><strong>{page} / {pages}</strong><button className="icon-button" disabled={offset + limit >= total} onClick={() => setOffset(offset + limit)}><ChevronRight size={17} /></button></div></div>
+      <JournalPagination {...journal} count={runs.length} limit={limit} label="Запуски" />
     </section>
   );
 }

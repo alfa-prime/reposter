@@ -83,19 +83,22 @@ export type AuditEvent = {
   created_at: string;
 };
 
-export type AuditEventPage = {
-  items: AuditEvent[];
-  total: number;
+export type JournalPage<T> = {
+  items: T[];
+  total: number | null;
   offset: number;
   limit: number;
+  next_cursor: string | null;
+  has_more: boolean;
 };
+export type AuditEventPage = JournalPage<AuditEvent>;
 
 export type EditorialAuditEvent = {
   audit_event_id: number; actor_user_id: number | null; actor_name: string | null; actor_username: string | null;
   action: string; queue_item_id: number; post_id: number | null; target_id: number | null; target_name: string | null;
   material_exists: boolean; details: Record<string, unknown>; created_at: string;
 };
-export type EditorialAuditEventPage = { items: EditorialAuditEvent[]; total: number; offset: number; limit: number };
+export type EditorialAuditEventPage = JournalPage<EditorialAuditEvent>;
 
 export const AUTH_SESSION_EXPIRED_EVENT = "reposter:auth-session-expired";
 
@@ -201,7 +204,7 @@ export type CollectionSettings = { enabled: boolean; interval_minutes: number; s
 export type CollectionRun = { collection_run_id: number; trigger: CollectionRunTrigger; status: CollectionRunStatus; started_at: string; finished_at?: string | null; sources_total: number; sources_checked: number; sources_succeeded: number; sources_failed: number; posts_found: number; posts_created: number; queue_items_created: number; error_message?: string | null };
 export type CollectionSourceRun = { collection_source_run_id: number; source_id?: number | null; source_name: string; source_url: string; status: "running" | "success" | "no_changes" | "failed" | "interrupted"; started_at: string; finished_at?: string | null; last_post_id_before?: string | null; last_post_id_after?: string | null; posts_found: number; posts_created: number; queue_items_created: number; error_type?: string | null; error_message?: string | null };
 export type CollectionRunDetail = CollectionRun & { source_runs: CollectionSourceRun[] };
-export type CollectionRunPage = { items: CollectionRun[]; total: number; offset: number; limit: number };
+export type CollectionRunPage = JournalPage<CollectionRun>;
 export type CollectionStatus = { enabled: boolean; running: boolean; next_run_at?: string | null; last_run?: CollectionRun | null; last_success_at?: string | null; consecutive_failures: number };
 
 export type TargetPlatform = "max" | "telegram" | "vk";
@@ -375,21 +378,23 @@ export const api = {
   }),
   adminUsers: () => request<AdminUser[]>("/api/v1/admin/users"),
   adminRoles: () => request<AdminRole[]>("/api/v1/admin/roles"),
-  auditEvents: (options: { offset: number; limit: number; actorUserId?: number; action?: string }) => {
-    const params = new URLSearchParams({ offset: String(options.offset), limit: String(options.limit) });
+  auditEvents: (options: { cursor?: string | null; limit: number; signal?: AbortSignal; actorUserId?: number; action?: string }) => {
+    const params = new URLSearchParams({ pagination: "cursor", limit: String(options.limit) });
+    if (options.cursor) params.set("cursor", options.cursor);
     if (options.actorUserId) params.set("actor_user_id", String(options.actorUserId));
     if (options.action) params.set("action", options.action);
-    return request<AuditEventPage>(`/api/v1/admin/audit?${params.toString()}`);
+    return request<AuditEventPage>(`/api/v1/admin/audit?${params.toString()}`, { signal: options.signal });
   },
-  editorialAuditEvents: (options: { offset: number; limit: number; actorUserId?: number; targetId?: number; queueItemId?: number; action?: string; dateFrom?: string; dateTo?: string }) => {
-    const params = new URLSearchParams({ offset: String(options.offset), limit: String(options.limit) });
+  editorialAuditEvents: (options: { cursor?: string | null; limit: number; signal?: AbortSignal; actorUserId?: number; targetId?: number; queueItemId?: number; action?: string; dateFrom?: string; dateTo?: string }) => {
+    const params = new URLSearchParams({ pagination: "cursor", limit: String(options.limit) });
+    if (options.cursor) params.set("cursor", options.cursor);
     if (options.actorUserId) params.set("actor_user_id", String(options.actorUserId));
     if (options.targetId) params.set("target_id", String(options.targetId));
     if (options.queueItemId) params.set("queue_item_id", String(options.queueItemId));
     if (options.action) params.set("action", options.action);
     if (options.dateFrom) params.set("date_from", options.dateFrom);
     if (options.dateTo) params.set("date_to", options.dateTo);
-    return request<EditorialAuditEventPage>(`/api/v1/admin/audit/editorial?${params.toString()}`);
+    return request<EditorialAuditEventPage>(`/api/v1/admin/audit/editorial?${params.toString()}`, { signal: options.signal });
   },
   createAdminUser: (data: AdminUserCreate) => request<AdminUser>(
     "/api/v1/admin/users",
@@ -422,11 +427,12 @@ export const api = {
   collectionSettings: () => request<CollectionSettings>("/api/v1/system/collection/settings"),
   updateCollectionSettings: (data: Omit<CollectionSettings, "updated_at">) => request<CollectionSettings>("/api/v1/system/collection/settings", { method: "PUT", headers: csrfHeaders(), body: JSON.stringify(data) }),
   collectionStatus: () => request<CollectionStatus>("/api/v1/system/collection/status"),
-  collectionRuns: (options: { offset: number; limit: number; status?: string; trigger?: string }) => {
-    const params = new URLSearchParams({ offset: String(options.offset), limit: String(options.limit) });
+  collectionRuns: (options: { cursor?: string | null; limit: number; signal?: AbortSignal; status?: string; trigger?: string }) => {
+    const params = new URLSearchParams({ pagination: "cursor", limit: String(options.limit) });
+    if (options.cursor) params.set("cursor", options.cursor);
     if (options.status) params.set("status", options.status);
     if (options.trigger) params.set("trigger", options.trigger);
-    return request<CollectionRunPage>(`/api/v1/system/collection/runs?${params.toString()}`);
+    return request<CollectionRunPage>(`/api/v1/system/collection/runs?${params.toString()}`, { signal: options.signal });
   },
   collectionRun: (id: number) => request<CollectionRunDetail>(`/api/v1/system/collection/runs/${id}`),
   maxChannelByLink: (link: string) => request<MaxChannelInfo>(`/api/v1/targets/resolve-max?link=${encodeURIComponent(link)}`),

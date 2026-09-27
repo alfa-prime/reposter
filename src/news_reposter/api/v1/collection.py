@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -11,6 +11,13 @@ from news_reposter.api.dependencies import (
     SameOriginDep,
     require_permission,
 )
+from news_reposter.api.journal_pagination import (
+    cursor_context,
+    decode_cursor,
+    encode_cursor,
+    validate_pagination,
+)
+from news_reposter.api.journal_session import JournalSession
 from news_reposter.auth.context import AuthContext
 from news_reposter.auth.rbac import PermissionCode
 from news_reposter.db.models import CollectionRunStatus, CollectionRunTrigger
@@ -111,22 +118,44 @@ async def get_collection_status(
     responses=PERMISSION_AUTH_RESPONSES,
 )
 async def list_collection_runs(
-    session: Session,
     _auth: SchedulerReadDep,
-    offset: Annotated[int, Query(ge=0)] = 0,
+    session: JournalSession,
+    offset: Annotated[int, Query(ge=0, le=10000)] = 0,
     limit: Annotated[int, Query(ge=1, le=100)] = 20,
     run_status: Annotated[CollectionRunStatus | None, Query(alias="status")] = None,
     trigger: CollectionRunTrigger | None = None,
+    pagination: Literal["offset", "cursor"] = "offset",
+    cursor: Annotated[str | None, Query(max_length=512)] = None,
 ) -> CollectionRunPage:
-    items, total = await CollectionRepository(session).list_runs(
-        offset=offset,
-        limit=limit,
-        status=run_status,
-        trigger=trigger,
+    validate_pagination(pagination, cursor, offset)
+    context = cursor_context("collection", {"status": run_status, "trigger": trigger})
+    boundary = decode_cursor(cursor, context)
+    repository = CollectionRepository(session)
+    total = None
+    if pagination == "cursor":
+        items = await repository.list_runs_after(
+            limit=limit,
+            before_id=boundary.row_id if boundary else None,
+            status=run_status,
+            trigger=trigger,
+        )
+        has_more = len(items) > limit
+        items = items[:limit]
+    else:
+        items, total = await repository.list_runs(
+            offset=offset, limit=limit, status=run_status, trigger=trigger
+        )
+        has_more = offset + len(items) < total
+    next_cursor = (
+        encode_cursor(context, items[-1].collection_run_id)
+        if has_more and items
+        else None
     )
     return CollectionRunPage(
         items=[CollectionRunRead.model_validate(item) for item in items],
         total=total,
+        next_cursor=next_cursor,
+        has_more=has_more,
         offset=offset,
         limit=limit,
     )

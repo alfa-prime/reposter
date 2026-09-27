@@ -62,6 +62,8 @@ class Settings(BaseSettings):
     database_pool_recycle_seconds: int = Field(default=1800, ge=60, le=86400)
     database_command_timeout_seconds: float = Field(default=30.0, gt=0, le=600)
 
+    database_journal_timeout_seconds: float = Field(default=5.0, gt=0, le=60)
+
     auth_session_idle_minutes: int = Field(default=60, ge=5, le=1440)
     auth_session_absolute_hours: int = Field(default=12, ge=1, le=720)
     auth_session_touch_interval_minutes: int = Field(default=5, ge=1, le=60)

@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, Enum, Integer, Text, func
+from sqlalchemy import DateTime, Enum, Index, Integer, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from news_reposter.db.base import Base
@@ -19,6 +19,16 @@ class CollectionRun(Base):
     """Один ручной или плановый проход по активным источникам."""
 
     __tablename__ = "collection_runs"
+    __table_args__ = (
+        Index("ix_collection_runs_status_page", "status", "collection_run_id"),
+        Index("ix_collection_runs_trigger_page", "trigger", "collection_run_id"),
+        Index(
+            "ix_collection_runs_status_trigger_page",
+            "status",
+            "trigger",
+            "collection_run_id",
+        ),
+    )
 
     collection_run_id: Mapped[int] = mapped_column(primary_key=True)
     trigger: Mapped[CollectionRunTrigger] = mapped_column(
