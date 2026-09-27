@@ -151,7 +151,10 @@ class CollectionScheduler:
 
     async def _run(self) -> None:
         try:
-            await CollectionHistory().interrupt_stale_runs()
+            from news_reposter.config import get_settings
+
+            if not get_settings().background_tasks_enabled:
+                await CollectionHistory().interrupt_stale_runs()
         except Exception:
             logger.exception("Не удалось закрыть прерванные запуски сборщика")
 
@@ -182,6 +185,25 @@ class CollectionScheduler:
                 await self._wait_for_change(60)
 
     async def run_once(self) -> dict[str, int]:
+        from news_reposter.config import get_settings
+
+        if get_settings().background_tasks_enabled:
+            from news_reposter.background.contracts import ActiveTaskConflict
+            from news_reposter.background.intents import enqueue_collection
+
+            now = datetime.now().astimezone()
+            schedule = await load_collection_schedule()
+            slot = int(now.timestamp()) // (schedule.interval_minutes * 60)
+            async with async_session_factory() as session:
+                try:
+                    await enqueue_collection(
+                        session,
+                        f"collection:scheduled:{slot}:{schedule.interval_minutes}",
+                    )
+                    await session.commit()
+                except ActiveTaskConflict:
+                    await session.rollback()
+            return {"queued": 1}
         summary = await collect_active_sources_once(
             self._http_client,
             CollectionRunTrigger.SCHEDULED,

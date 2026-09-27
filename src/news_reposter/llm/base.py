@@ -5,6 +5,13 @@ from typing import Protocol
 class LLMProviderError(RuntimeError):
     """Ошибка взаимодействия с провайдером LLM."""
 
+    def __init__(
+        self, message: str, *, retryable: bool = False, retry_after: float | None = None
+    ):
+        super().__init__(message)
+        self.retryable = retryable
+        self.retry_after = retry_after
+
 
 @dataclass(slots=True)
 class RewriteRequest:

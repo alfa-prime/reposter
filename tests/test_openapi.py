@@ -83,11 +83,13 @@ SCHEDULER_READ_OPERATIONS = {
 }
 
 COLLECTION_WRITE_OPERATIONS = {
+    ("/api/v1/system/collection/tasks", "post"),
     ("/api/v1/system/collect-now", "post"),
     ("/api/v1/system/collection/settings", "put"),
 }
 
 QUEUE_READ_OPERATIONS = {
+    ("/api/v1/tasks/{task_id}", "get"),
     ("/api/v1/queue", "get"),
     ("/api/v1/queue/page", "get"),
     ("/api/v1/queue/{queue_item_id}", "get"),
@@ -98,6 +100,9 @@ QUEUE_READ_OPERATIONS = {
 }
 
 QUEUE_WRITE_OPERATIONS = {
+    ("/api/v1/tasks/{task_id}/cancel", "post"),
+    ("/api/v1/queue/{queue_item_id}/rewrite-task", "post"),
+    ("/api/v1/queue/{queue_item_id}/publish-task", "post"),
     ("/api/v1/queue", "post"),
     ("/api/v1/queue/{queue_item_id}", "patch"),
     ("/api/v1/queue/{queue_item_id}", "delete"),

@@ -4,6 +4,7 @@ import logging
 import mimetypes
 import re
 import time
+from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -231,6 +232,8 @@ async def publish_queue_item(
     actor_user_id: int | None = None,
     trigger: str = "scheduled",
     allow_unknown_retry: bool = False,
+    task_id=None,
+    on_success: Callable[[AsyncSession, QueueItem], Awaitable[None]] | None = None,
 ) -> QueueItem:
     """Публикует согласованный, запланированный или ранее упавший QueueItem в MAX."""
 
@@ -288,6 +291,7 @@ async def publish_queue_item(
     item.error_message = None
     attempt = PublicationAttempt(
         publication_id=publication.publication_id,
+        background_task_id=task_id,
         attempt_number=publication.attempts,
         status=PublicationAttemptStatus.SENDING,
         trigger=trigger,
@@ -365,6 +369,8 @@ async def publish_queue_item(
     item.status = QueueItemStatus.PUBLISHED
     item.scheduled_at = None
     item.error_message = None
+    if on_success is not None:
+        await on_success(session, item)
     if commit_success:
         await session.commit()
     else:

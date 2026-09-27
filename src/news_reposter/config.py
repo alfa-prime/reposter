@@ -64,6 +64,10 @@ class Settings(BaseSettings):
 
     database_journal_timeout_seconds: float = Field(default=5.0, gt=0, le=60)
 
+    background_tasks_enabled: bool = False
+    background_task_lease_seconds: int = Field(default=90, ge=30, le=600)
+    background_task_poll_seconds: float = Field(default=2, gt=0, le=60)
+
     auth_session_idle_minutes: int = Field(default=60, ge=5, le=1440)
     auth_session_absolute_hours: int = Field(default=12, ge=1, le=720)
     auth_session_touch_interval_minutes: int = Field(default=5, ge=1, le=60)

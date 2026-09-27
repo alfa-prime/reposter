@@ -114,7 +114,7 @@ class GigaChatProvider:
             )
         except httpx.HTTPError as exc:
             raise LLMProviderError(
-                f"Не удалось выполнить запрос к GigaChat: {exc}"
+                f"Не удалось выполнить запрос к GigaChat: {exc}", retryable=True
             ) from exc
 
     async def _get_access_token(self) -> str:
@@ -141,7 +141,7 @@ class GigaChatProvider:
                 )
             except httpx.HTTPError as exc:
                 raise LLMProviderError(
-                    f"Не удалось получить токен GigaChat: {exc}"
+                    f"Не удалось получить токен GigaChat: {exc}", retryable=True
                 ) from exc
 
             if response.is_error:
@@ -176,4 +176,12 @@ class GigaChatProvider:
         except ValueError:
             pass
         suffix = f": {detail}" if detail else ""
-        return LLMProviderError(f"{prefix} ({response.status_code}){suffix}")
+        try:
+            retry_after = float(response.headers.get("Retry-After", ""))
+        except ValueError:
+            retry_after = None
+        return LLMProviderError(
+            f"{prefix} ({response.status_code}){suffix}",
+            retryable=response.status_code == 429 or response.status_code >= 500,
+            retry_after=retry_after,
+        )

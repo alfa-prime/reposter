@@ -27,9 +27,13 @@ def safe_error_message(error: BaseException) -> str:
 class CollectionHistory:
     """Записывает ход сбора независимо от транзакций с постами."""
 
-    async def start_run(self, trigger: CollectionRunTrigger) -> int:
+    async def start_run(self, trigger: CollectionRunTrigger, *, task_id=None) -> int:
         async with async_session_factory() as session:
-            run = CollectionRun(trigger=trigger, status=CollectionRunStatus.RUNNING)
+            run = CollectionRun(
+                trigger=trigger,
+                status=CollectionRunStatus.RUNNING,
+                background_task_id=task_id,
+            )
             session.add(run)
             await session.commit()
             return run.collection_run_id
