@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
-import { ChevronLeft, ChevronRight, RefreshCw, ShieldCheck } from "lucide-react";
+import { RefreshCw, ShieldCheck } from "lucide-react";
 import { AdminUser, api, AuditEvent } from "../api";
+import { useJournalPage } from "../useJournalPage";
+import { JournalPagination } from "./JournalPagination";
 import "../scheduler.css";
 
 const actionLabels: Record<string, string> = {
@@ -39,33 +41,22 @@ function eventDetails(event: AuditEvent): string {
 }
 
 export function UserActivityLogsPage() {
-  const [events, setEvents] = useState<AuditEvent[]>([]);
   const [users, setUsers] = useState<AdminUser[]>([]);
-  const [total, setTotal] = useState(0);
-  const [offset, setOffset] = useState(0);
   const [limit, setLimit] = useState(20);
   const [actorUserId, setActorUserId] = useState(0);
   const [action, setAction] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
 
-  const load = useCallback(async () => {
-    setBusy(true); setError("");
-    try {
-      const [page, userData] = await Promise.all([
-        api.auditEvents({ offset, limit, actorUserId: actorUserId || undefined, action: action || undefined }),
-        users.length ? Promise.resolve(users) : api.adminUsers(),
-      ]);
-      setEvents(page.items); setTotal(page.total); setUsers(userData);
-    } catch (exc) { setError(exc instanceof Error ? exc.message : "Не удалось загрузить журнал"); }
-    finally { setBusy(false); }
-  }, [action, actorUserId, limit, offset, users]);
-
-  useEffect(() => { void load(); }, [load]);
-  useEffect(() => { setOffset(0); }, [action, actorUserId, limit]);
-
-  const page = Math.floor(offset / limit) + 1;
-  const pages = Math.max(1, Math.ceil(total / limit));
+  const fetchPage = useCallback((cursor: string | null, signal: AbortSignal) =>
+    api.auditEvents({ cursor, signal, limit, actorUserId: actorUserId || undefined, action: action || undefined }),
+    [action, actorUserId, limit]);
+  const journal = useJournalPage(JSON.stringify([action, actorUserId, limit]), fetchPage);
+  const { items: events, busy, error, setError, load } = journal;
+  useEffect(() => {
+    let active = true;
+    void api.adminUsers().then((data) => { if (active) setUsers(data); })
+      .catch((exc: unknown) => { if (active) setError(exc instanceof Error ? exc.message : "Не удалось загрузить пользователей"); });
+    return () => { active = false; };
+  }, [setError]);
 
   return (
     <section className="settings-page scheduler-page">
@@ -93,7 +84,7 @@ export function UserActivityLogsPage() {
         </article>)}
       </div>
 
-      <div className="log-pagination"><span>События {total ? offset + 1 : 0}–{Math.min(offset + limit, total)} из {total}</span><div><button className="icon-button" disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - limit))}><ChevronLeft size={17} /></button><strong>{page} / {pages}</strong><button className="icon-button" disabled={offset + limit >= total} onClick={() => setOffset(offset + limit)}><ChevronRight size={17} /></button></div></div>
+      <JournalPagination {...journal} count={events.length} limit={limit} label="События" />
     </section>
   );
 }

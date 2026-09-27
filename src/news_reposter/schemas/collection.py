@@ -86,9 +86,11 @@ class CollectionRunDetail(CollectionRunRead):
 
 class CollectionRunPage(BaseModel):
     items: list[CollectionRunRead]
-    total: int
+    total: int | None
     offset: int
     limit: int
+    next_cursor: str | None = None
+    has_more: bool = False
 
 
 class CollectionStatusRead(BaseModel):
