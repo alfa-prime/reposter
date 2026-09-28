@@ -642,6 +642,90 @@ def test_publication_confirms_domain_and_task_in_one_commit(monkeypatch):
     isolated(scenario)
 
 
+def test_manual_retry_requires_channel_check_before_queueing(monkeypatch):
+    from fastapi import HTTPException
+
+    from news_reposter.api.v1.task_submission import retry_publication_task
+    from news_reposter.schemas.background_task import PublicationRetrySubmission
+    from news_reposter.services import publisher
+
+    async def scenario():
+        item_id, target_id, user_id = await material(
+            QueueItemStatus.PUBLICATION_UNKNOWN
+        )
+        async with async_session_factory() as session:
+            pub = Publication(
+                queue_item_id=item_id, status=PublicationStatus.UNKNOWN, attempts=1
+            )
+            session.add(pub)
+            await session.flush()
+            attempt = PublicationAttempt(
+                publication_id=pub.publication_id,
+                attempt_number=1,
+                status=PublicationAttemptStatus.UNKNOWN,
+                trigger="manual",
+                prepared_text="editor text",
+                content_fingerprint="0" * 64,
+            )
+            session.add(attempt)
+            await session.commit()
+        auth = SimpleNamespace(user=SimpleNamespace(user_id=user_id), target_ids=None)
+        data = PublicationRetrySubmission(
+            idempotency_key="test-retry-" + uuid4().hex,
+            checked_channel=True,
+            accept_duplicate_risk=True,
+        )
+        settings = get_settings()
+        old_background, old_token = (
+            settings.background_tasks_enabled,
+            settings.max_access_token,
+        )
+        settings.background_tasks_enabled = True
+        settings.max_access_token = "test-token"
+        calls = []
+
+        async def send(client, **kwargs):
+            calls.append(True)
+            return {"message": {"body": {"mid": "retried-mid"}}}
+
+        monkeypatch.setattr(publisher, "_publish_with_media_retry", send)
+        try:
+            async with async_session_factory() as session:
+                with pytest.raises(HTTPException) as error:
+                    await retry_publication_task(
+                        item_id, data, auth, session, None, None
+                    )
+                assert error.value.status_code == 409
+            async with async_session_factory() as session:
+                attempt = await session.scalar(
+                    select(PublicationAttempt).where(
+                        PublicationAttempt.publication_id == pub.publication_id
+                    )
+                )
+                attempt.check_count = 1
+                await session.commit()
+            async with async_session_factory() as session:
+                queued = await retry_publication_task(
+                    item_id, data, auth, session, None, None
+                )
+            assert queued.state == TaskState.PENDING
+            assert calls == []
+            await PostgresTransport().publish(queued.task_id, "publication", uuid4())
+            assert await worker.run_once(TaskQueue.PUBLICATION, None)
+            async with async_session_factory() as session:
+                task = await session.get(BackgroundTask, queued.task_id)
+                item = await _loaded_item(session, item_id)
+                assert task.state == TaskState.SUCCEEDED
+                assert item.status == QueueItemStatus.PUBLISHED
+                assert item.publication.status == PublicationStatus.PUBLISHED
+                assert calls == [True]
+        finally:
+            settings.background_tasks_enabled = old_background
+            settings.max_access_token = old_token
+
+    isolated(scenario)
+
+
 def test_crashed_sender_requires_review_and_marks_only_its_attempt():
     async def scenario():
         item_id, _, _ = await material(QueueItemStatus.APPROVED)

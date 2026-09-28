@@ -6,7 +6,6 @@ from uuid import UUID
 from celery import Celery
 
 from news_reposter.background.contracts import TaskQueue
-from news_reposter.background.outbox import PostgresTransport
 from news_reposter.config import get_settings
 
 celery_app = Celery("news_reposter", broker=get_settings().redis_url)
@@ -36,6 +35,11 @@ def maintenance_task(task_id: str) -> None:
     run_task(task_id, TaskQueue.MAINTENANCE)
 
 
+@celery_app.task(name="news_reposter.publication")
+def publication_task(task_id: str) -> None:
+    run_task(task_id, TaskQueue.PUBLICATION)
+
+
 def run_task(task_id: str, queue: TaskQueue) -> None:
     # A new event loop per delivery needs a fresh SQLAlchemy pool each time.
     from news_reposter.background.worker import run_once
@@ -54,23 +58,20 @@ def run_task(task_id: str, queue: TaskQueue) -> None:
 
 
 class MixedTransport:
-    """Use Redis for rewrite, collection and maintenance; PG for publication."""
-
-    def __init__(self) -> None:
-        self.postgres = PostgresTransport()
+    """Deliver all task IDs via Redis; PostgreSQL owns task state."""
 
     async def publish(self, task_id: UUID, queue: str, event_id: UUID) -> None:
         task = {
             TaskQueue.REWRITE: rewrite_task,
             TaskQueue.COLLECTION: collection_task,
             TaskQueue.MAINTENANCE: maintenance_task,
+            TaskQueue.PUBLICATION: publication_task,
         }.get(queue)
-        if task is not None:
-            await asyncio.to_thread(
-                task.apply_async,
-                args=(str(task_id),),
-                queue=queue,
-                task_id=str(event_id),
-            )
-        else:
-            await self.postgres.publish(task_id, queue, event_id)
+        if task is None:
+            raise ValueError(f"Unknown task queue: {queue}")
+        await asyncio.to_thread(
+            task.apply_async,
+            args=(str(task_id),),
+            queue=queue,
+            task_id=str(event_id),
+        )

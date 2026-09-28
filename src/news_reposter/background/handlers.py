@@ -21,6 +21,7 @@ from news_reposter.background.store import finish, owned
 from news_reposter.db.models import (
     BackgroundTask,
     CollectionRunTrigger,
+    PublicationAttemptStatus,
     PublicationStatus,
     QueueItemStatus,
 )
@@ -117,6 +118,10 @@ async def rewrite(task: BackgroundTask, client: httpx.AsyncClient) -> Completion
 
 async def publication(task: BackgroundTask, client: httpx.AsyncClient) -> Completion:
     result = {"queue_item_id": task.subject_id}
+    manual_retry = (
+        task.payload.get("trigger") == "manual_retry"
+        and task.payload.get("accept_duplicate_risk") is True
+    )
 
     async def confirmed(session, item):
         await finish(
@@ -131,6 +136,18 @@ async def publication(task: BackgroundTask, client: httpx.AsyncClient) -> Comple
                 details={"task_id": str(task.task_id)},
                 commit=False,
             )
+            if manual_retry:
+                await record_editorial_event(
+                    session,
+                    actor_user_id=task.actor_user_id,
+                    item=item,
+                    action="editorial.publication_retried",
+                    details={
+                        "task_id": str(task.task_id),
+                        "accepted_duplicate_risk": True,
+                    },
+                    commit=False,
+                )
 
     async with async_session_factory() as session:
         await owned(session, task.task_id, task.lease_token)
@@ -142,11 +159,25 @@ async def publication(task: BackgroundTask, client: httpx.AsyncClient) -> Comple
             return Completion(
                 {"queue_item_id": task.subject_id, "already_published": True}
             )
-        if item.publication and item.publication.status in {
-            PublicationStatus.PUBLISHING,
-            PublicationStatus.UNKNOWN,
-        }:
+        if item.publication and item.publication.status == PublicationStatus.PUBLISHING:
             raise ReviewRequired("publication_outcome_unknown")
+        if item.publication and item.publication.status == PublicationStatus.UNKNOWN:
+            latest = max(
+                item.publication.attempt_history,
+                key=lambda attempt: attempt.attempt_number,
+                default=None,
+            )
+            checked = (
+                latest is not None
+                and latest.status == PublicationAttemptStatus.UNKNOWN
+                and latest.check_count >= 1
+            )
+            if (
+                not manual_retry
+                or item.status != QueueItemStatus.PUBLICATION_UNKNOWN
+                or not checked
+            ):
+                raise ReviewRequired("publication_outcome_unknown")
         if publication_snapshot(item) != task.payload["snapshot"]:
             raise PermanentTaskError("material_changed")
         # Keep the item row locked until publisher reserves its sending attempt.
@@ -159,6 +190,7 @@ async def publication(task: BackgroundTask, client: httpx.AsyncClient) -> Comple
                 trigger=task.payload["trigger"],
                 task_id=task.task_id,
                 on_success=confirmed,
+                allow_unknown_retry=manual_retry,
             )
         except PublicationUnknownError as exc:
             raise ReviewRequired("publication_outcome_unknown") from exc

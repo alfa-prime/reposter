@@ -8,6 +8,7 @@ from news_reposter.background.celery_app import (
     MixedTransport,
     collection_task,
     maintenance_task,
+    publication_task,
     rewrite_task,
 )
 from news_reposter.background.contracts import (
@@ -61,6 +62,7 @@ def test_only_explicit_transient_errors_are_retried():
         (TaskQueue.REWRITE, rewrite_task),
         (TaskQueue.COLLECTION, collection_task),
         (TaskQueue.MAINTENANCE, maintenance_task),
+        (TaskQueue.PUBLICATION, publication_task),
     ],
 )
 def test_celery_transport_sends_only_the_id(monkeypatch, queue, celery_task):

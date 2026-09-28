@@ -30,6 +30,7 @@ const statusLabels: Record<string, string> = {
 const defaultPageSize = 20;
 
 type PendingRewrite = { itemId: number; idempotencyKey: string; taskId?: string };
+type PendingPublication = { itemId: number; idempotencyKey: string; retry: boolean; taskId?: string };
 
 function rewriteStorageKey(itemId: number) { return `reposter:rewrite-task:${itemId}`; }
 
@@ -45,6 +46,22 @@ function storedRewrite(itemId: number): PendingRewrite | null {
 
 function saveRewrite(task: PendingRewrite) {
   window.sessionStorage.setItem(rewriteStorageKey(task.itemId), JSON.stringify(task));
+}
+
+function publicationStorageKey(itemId: number) { return `reposter:publication-task:${itemId}`; }
+
+function storedPublication(itemId: number): PendingPublication | null {
+  try {
+    const stored = window.sessionStorage.getItem(publicationStorageKey(itemId));
+    if (!stored) return null;
+    const value = JSON.parse(stored) as PendingPublication;
+    return value.itemId === itemId && typeof value.idempotencyKey === "string" && typeof value.retry === "boolean"
+      ? value : null;
+  } catch { return null; }
+}
+
+function savePublication(task: PendingPublication) {
+  window.sessionStorage.setItem(publicationStorageKey(task.itemId), JSON.stringify(task));
 }
 
 function rewriteFailure(code: string | null) {
@@ -126,6 +143,9 @@ export function QueueExperience({ collectSignal = 0, targetId, openItemId = null
   const [rewriteBusy, setRewriteBusy] = useState(false);
   const [rewriteTask, setRewriteTask] = useState<PendingRewrite | null>(null);
   const [rewriteCheck, setRewriteCheck] = useState(0);
+  const [publicationBusy, setPublicationBusy] = useState(false);
+  const [publicationTask, setPublicationTask] = useState<PendingPublication | null>(null);
+  const [publicationCheck, setPublicationCheck] = useState(0);
   const selectedIdRef = useRef(selectedId);
   selectedIdRef.current = selectedId;
   const [message, setMessage] = useState("");
@@ -215,6 +235,8 @@ export function QueueExperience({ collectSignal = 0, targetId, openItemId = null
   useEffect(() => {
     setRewriteBusy(false);
     setRewriteTask(selectedId === null ? null : storedRewrite(selectedId));
+    setPublicationBusy(false);
+    setPublicationTask(selectedId === null ? null : storedPublication(selectedId));
   }, [selectedId]);
 
   useEffect(() => {
@@ -260,6 +282,54 @@ export function QueueExperience({ collectSignal = 0, targetId, openItemId = null
     void check();
     return () => { controller.abort(); window.clearTimeout(timer); };
   }, [selectedId, rewriteTask?.taskId, rewriteCheck]);
+
+  useEffect(() => {
+    if (!publicationTask?.taskId || selectedId !== publicationTask.itemId) return;
+    const controller = new AbortController();
+    const itemId = publicationTask.itemId;
+    const taskId = publicationTask.taskId;
+    let timer: number | undefined;
+    setPublicationBusy(true);
+
+    async function check() {
+      try {
+        const task = await api.backgroundTask(taskId, controller.signal);
+        if (controller.signal.aborted) return;
+        if (!["succeeded", "failed", "cancelled", "needs_review"].includes(task.state)) {
+          timer = window.setTimeout(() => void check(), task.state === "retry_wait" ? 10_000 : task.state === "pending" ? 5000 : 3000);
+          return;
+        }
+        const updated = await api.queueItem(itemId, controller.signal);
+        if (controller.signal.aborted) return;
+        replaceItem(updated);
+        window.sessionStorage.removeItem(publicationStorageKey(itemId));
+        setPublicationTask(null);
+        setPublicationBusy(false);
+        if (task.state === "succeeded") {
+          setMessage("Публикация отправлена");
+          closeDrawer();
+          await loadQueue();
+        } else if (updated.status === "publication_unknown" || task.state === "needs_review") {
+          setMessage("Результат отправки неизвестен. Проверьте канал MAX перед повтором.");
+          if (updated.status === "publication_unknown") setTab("attention");
+        } else {
+          setError(task.error_code === "material_changed" ? "Материал изменился после постановки публикации в очередь." : "Публикация не выполнена. Проверьте материал и настройки MAX.");
+        }
+      } catch (exc) {
+        if (controller.signal.aborted) return;
+        setPublicationBusy(false);
+        if (exc instanceof ApiError && [403, 404].includes(exc.status)) {
+          window.sessionStorage.removeItem(publicationStorageKey(itemId));
+          setPublicationTask(null);
+          setError("Задача публикации недоступна. Проверьте материал и права доступа.");
+        } else {
+          setError("Не удалось проверить задачу публикации. Нажмите «Опубликовать сейчас», чтобы продолжить проверку.");
+        }
+      }
+    }
+    void check();
+    return () => { controller.abort(); window.clearTimeout(timer); };
+  }, [selectedId, publicationTask?.taskId, publicationCheck]);
 
   useEffect(() => {
     if (!selectedId) return;
@@ -483,13 +553,52 @@ export function QueueExperience({ collectSignal = 0, targetId, openItemId = null
     }
   }
 
-  async function publishNow() {
-    if (!selected) return;
-    const updated = await runAction(
-      () => api.publishNow(selected.queue_item_id),
-      "Публикация отправлена",
-    );
-    if (updated) closeDrawer();
+  async function publishNow(retry = false) {
+    if (!selected || publicationBusy) return;
+    const itemId = selected.queue_item_id;
+    setPublicationBusy(true);
+    setError("");
+    let queued = false;
+    try {
+      const stored = storedPublication(itemId);
+      const pending = stored?.retry === retry ? stored : { itemId, idempotencyKey: crypto.randomUUID(), retry };
+      if (!pending.taskId) {
+        savePublication(pending);
+        try {
+          const task = retry
+            ? await api.submitPublicationRetryTask(itemId, pending.idempotencyKey)
+            : await api.submitPublicationTask(itemId, pending.idempotencyKey);
+          pending.taskId = task.task_id;
+          savePublication(pending);
+        } catch (exc) {
+          if (!(exc instanceof ApiError && exc.status === 503 && exc.message === "Фоновое исполнение ещё не включено")) throw exc;
+          window.sessionStorage.removeItem(publicationStorageKey(itemId));
+          const updated = retry ? await api.retryPublication(itemId) : await api.publishNow(itemId);
+          replaceItem(updated);
+          if (updated.status === "publication_unknown") {
+            setMessage("Результат отправки неизвестен. Проверьте канал MAX перед повтором.");
+            setTab("attention");
+          } else {
+            setMessage("Публикация отправлена");
+            closeDrawer();
+            await loadQueue();
+          }
+          return;
+        }
+      }
+      if (selectedIdRef.current === itemId) {
+        queued = true;
+        setPublicationTask(pending);
+        setPublicationCheck((current) => current + 1);
+      }
+    } catch (exc) {
+      if (exc instanceof ApiError && [400, 403, 404, 409, 422].includes(exc.status)) {
+        window.sessionStorage.removeItem(publicationStorageKey(itemId));
+      }
+      if (selectedIdRef.current === itemId) setError(exc instanceof Error ? exc.message : "Не удалось запустить публикацию");
+    } finally {
+      if (!queued) setPublicationBusy(false);
+    }
   }
 
   async function schedule() {
@@ -553,7 +662,7 @@ export function QueueExperience({ collectSignal = 0, targetId, openItemId = null
 
   async function retryPublication() {
     if (!selected || !window.confirm("Вы проверили канал и публикации там нет? Повторная отправка может создать дубликат.")) return;
-    await runAction(() => api.retryPublication(selected.queue_item_id), "Повторная отправка выполнена");
+    await publishNow(true);
   }
 
   async function returnPublicationToWork() {
@@ -632,7 +741,7 @@ export function QueueExperience({ collectSignal = 0, targetId, openItemId = null
               item={selected}
               orderedPhotos={orderedPhotos}
               mediaOrder={mediaOrder}
-              busy={busy || rewriteBusy}
+              busy={busy || rewriteBusy || publicationBusy}
               mediaKey={mediaKey}
               onRemoveAll={() => void saveMedia([])}
               onRestoreAll={() => void saveMedia(selected.photos.map(mediaKey))}
@@ -648,7 +757,7 @@ export function QueueExperience({ collectSignal = 0, targetId, openItemId = null
             {selected.status === "publication_unknown" && (
               <PublicationRecoveryPanel
                 item={selected}
-                busy={busy}
+                busy={busy || publicationBusy}
                 onCheck={() => void checkPublication()}
                 onMarkPublished={() => void markPublished()}
                 onRetry={() => void retryPublication()}
@@ -659,9 +768,9 @@ export function QueueExperience({ collectSignal = 0, targetId, openItemId = null
             <QueueTextEditor
               value={text}
               originalText={selected.original_text}
-              readonly={["published", "scheduled", "publication_unknown"].includes(selected.status)}
+              readonly={publicationBusy || ["published", "scheduled", "publication_unknown"].includes(selected.status)}
               editing={editing}
-              busy={busy || rewriteBusy}
+              busy={busy || rewriteBusy || publicationBusy}
               rewriteBusy={rewriteBusy}
               canRewrite={["pending", "rewriting", "rejected"].includes(selected.status)}
               onEditingChange={setEditing}
@@ -680,7 +789,7 @@ export function QueueExperience({ collectSignal = 0, targetId, openItemId = null
             {selected.status === "approved" && (
               <QueueSchedulePanel
                 value={scheduleAt}
-                busy={busy}
+                busy={busy || publicationBusy}
                 error={scheduleError}
                 onChange={(value, changedPart) => {
                   setScheduleAt(value);
@@ -695,10 +804,11 @@ export function QueueExperience({ collectSignal = 0, targetId, openItemId = null
               />
             )}
 
+            {publicationBusy && <p role="status" className="editorial-message">Публикация выполняется. Ожидаю подтверждения MAX…</p>}
             <QueueActionsFooter
               item={selected}
               editing={editing}
-              busy={busy}
+              busy={busy || publicationBusy}
               onSaveText={() => void saveText()}
               onSubmit={() => void submitForModeration()}
               onApprove={() => void runAction(() => api.approve(selected.queue_item_id))}

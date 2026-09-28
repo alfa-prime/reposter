@@ -35,7 +35,12 @@ async def reconcile_celery(*, limit: int = 100) -> int:
                 .join(BackgroundTask, BackgroundTask.task_id == TaskOutbox.task_id)
                 .where(
                     BackgroundTask.queue.in_(
-                        [TaskQueue.REWRITE, TaskQueue.COLLECTION, TaskQueue.MAINTENANCE]
+                        [
+                            TaskQueue.REWRITE,
+                            TaskQueue.COLLECTION,
+                            TaskQueue.MAINTENANCE,
+                            TaskQueue.PUBLICATION,
+                        ]
                     ),
                     TaskOutbox.delivered_at.is_not(None),
                     (TaskOutbox.lease_until.is_(None))

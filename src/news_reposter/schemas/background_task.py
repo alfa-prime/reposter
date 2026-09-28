@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -10,6 +11,11 @@ class TaskSubmission(BaseModel):
     idempotency_key: str = Field(
         min_length=8, max_length=128, pattern=r"^[A-Za-z0-9_.:-]+$"
     )
+
+
+class PublicationRetrySubmission(TaskSubmission):
+    checked_channel: Literal[True]
+    accept_duplicate_risk: Literal[True]
 
 
 class TaskRead(BaseModel):

@@ -32,9 +32,18 @@ from news_reposter.background.intents import (
 )
 from news_reposter.background.store import enqueue
 from news_reposter.config import get_settings
-from news_reposter.db.models import BackgroundTask, QueueItemStatus
+from news_reposter.db.models import (
+    BackgroundTask,
+    PublicationAttemptStatus,
+    PublicationStatus,
+    QueueItemStatus,
+)
 from news_reposter.db.session import get_db_session
-from news_reposter.schemas.background_task import TaskRead, TaskSubmission
+from news_reposter.schemas.background_task import (
+    PublicationRetrySubmission,
+    TaskRead,
+    TaskSubmission,
+)
 from news_reposter.services.publisher import _loaded_item
 from news_reposter.services.rewrite import RewriteServiceError
 
@@ -146,6 +155,80 @@ async def publish_task(
     return await submit_material(
         session, auth, data, queue_item_id, TaskQueue.PUBLICATION
     )
+
+
+@router.post(
+    "/queue/{queue_item_id}/retry-publication-task",
+    status_code=202,
+    response_model=TaskRead,
+    summary="Повторить проверенную публикацию в фоновой очереди",
+)
+async def retry_publication_task(
+    queue_item_id: int,
+    data: PublicationRetrySubmission,
+    auth: QueuePublishDep,
+    session: Session,
+    _csrf: CsrfAuthContextDep,
+    _origin: SameOriginDep,
+):
+    enabled()
+    key = f"publication-retry:{auth.user.user_id}:{data.idempotency_key}"
+    existing = await session.scalar(
+        select(BackgroundTask).where(BackgroundTask.idempotency_key == key)
+    )
+    if existing:
+        if existing.subject_id != queue_item_id:
+            raise HTTPException(
+                status_code=409, detail="Ключ использован для другого материала"
+            )
+        check_task_access(existing, auth)
+        return TaskRead.model_validate(existing)
+
+    item = await _loaded_item(session, queue_item_id, for_update=True)
+    if item is None or not can_access_target(auth, item.target_id):
+        raise HTTPException(status_code=404, detail="Материал не найден")
+    publication = item.publication
+    attempt = (
+        max(
+            publication.attempt_history,
+            key=lambda row: row.attempt_number,
+            default=None,
+        )
+        if publication is not None
+        else None
+    )
+    if (
+        item.status != QueueItemStatus.PUBLICATION_UNKNOWN
+        or publication is None
+        or publication.status != PublicationStatus.UNKNOWN
+        or attempt is None
+        or attempt.status != PublicationAttemptStatus.UNKNOWN
+        or attempt.check_count < 1
+    ):
+        raise HTTPException(
+            status_code=409,
+            detail="Сначала проверьте публикацию в MAX",
+        )
+    try:
+        task = await enqueue(
+            session,
+            TaskQueue.PUBLICATION,
+            key,
+            {
+                "snapshot": publication_snapshot(item),
+                "trigger": "manual_retry",
+                "accept_duplicate_risk": True,
+            },
+            actor_user_id=auth.user.user_id,
+            subject_id=queue_item_id,
+            target_id=item.target_id,
+        )
+    except (ActiveTaskConflict, IdempotencyConflict) as exc:
+        raise HTTPException(
+            status_code=409, detail="Задача публикации уже существует"
+        ) from exc
+    await session.commit()
+    return TaskRead.model_validate(task)
 
 
 @router.post(
