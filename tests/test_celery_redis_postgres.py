@@ -120,7 +120,9 @@ def test_real_celery_redelivery_after_redis_message_loss():
                 assert await redis.delete("maintenance") == 1
                 async with async_session_factory() as session:
                     row = await session.scalar(
-                        select(TaskOutbox).where(TaskOutbox.task_id == maintenance.task_id)
+                        select(TaskOutbox).where(
+                            TaskOutbox.task_id == maintenance.task_id
+                        )
                     )
                     row.delivered_at = datetime.now(UTC) - timedelta(minutes=3)
                     await session.commit()
