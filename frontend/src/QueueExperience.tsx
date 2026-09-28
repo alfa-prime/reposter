@@ -51,7 +51,8 @@ function rewriteFailure(code: string | null) {
   if (code === "material_changed") return "Материал изменился во время рерайта. Проверьте текст и попробуйте снова.";
   if (code === "actor_disabled" || code === "permission_revoked" || code === "target_access_revoked") return "Рерайт остановлен: проверьте права доступа.";
   if (code === "llm_not_configured") return "Сервис рерайта не настроен.";
-  return `Рерайт не выполнен${code ? ` (${code})` : ""}. Попробуйте снова.`;
+  if (["provider_timeout", "llm_provider_unavailable", "http_provider_unavailable"].includes(code ?? "")) return "Сервис ИИ временно недоступен. Попробуйте позже.";
+  return "Рерайт не выполнен. Попробуйте снова или обратитесь к администратору.";
 }
 
 function savedPageSize() {
