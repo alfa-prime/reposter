@@ -97,7 +97,7 @@ jobs:
         env:
           RUN_POSTGRES_TESTS: "1"
           RUN_REDIS_TESTS: "1"
-        run: uv run pytest tests/test_auth_postgres.py tests/test_journal_postgres.py tests/test_background_postgres.py tests/test_celery_redis_postgres.py
+        run: uv run pytest tests/test_auth_postgres.py tests/test_journal_postgres.py tests/test_background_postgres.py tests/test_celery_redis_postgres.py tests/test_api_workers_postgres.py
 
       - name: Downgrade database to base
         run: uv run alembic downgrade base
@@ -143,6 +143,25 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Validate two-worker production Compose configuration
+        env:
+          API_WORKERS: "2"
+        run: |
+          cp .env.example .env
+          docker compose -f compose.yaml -f compose.prod.yaml -f compose.tasks.yaml --profile background config --format json | python -c '
+          import json
+          import sys
+
+          services = json.load(sys.stdin)["services"]
+          command = services["app"]["command"]
+          assert command[command.index("--workers") + 1] == "2", command
+          assert services["scheduler"]["command"] == ["python", "-m", "news_reposter.services.scheduler_runner"]
+          for queue in ("rewrite", "collection", "maintenance", "publication"):
+              assert "--queues=" + queue in services["task-" + queue]["command"]
+          assert "task-outbox" in services and "redis" in services
+          print("Two API workers, separate scheduler and all four Celery queues configured")
+          '
 
       - name: Build backend image
         run: docker build --tag news-reposter:ci .
