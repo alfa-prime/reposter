@@ -54,6 +54,15 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
+      redis:
+        image: redis:7.4-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
 
     env:
       POSTGRES_DB: news_reposter
@@ -61,6 +70,7 @@ jobs:
       POSTGRES_PASSWORD: news_reposter
       POSTGRES_HOST: localhost
       POSTGRES_PORT: "5432"
+      REDIS_URL: redis://localhost:6379/15
 
     steps:
       - name: Checkout repository
@@ -86,7 +96,8 @@ jobs:
       - name: Run PostgreSQL integration tests
         env:
           RUN_POSTGRES_TESTS: "1"
-        run: uv run pytest tests/test_auth_postgres.py tests/test_journal_postgres.py tests/test_background_postgres.py
+          RUN_REDIS_TESTS: "1"
+        run: uv run pytest tests/test_auth_postgres.py tests/test_journal_postgres.py tests/test_background_postgres.py tests/test_celery_redis_postgres.py
 
       - name: Downgrade database to base
         run: uv run alembic downgrade base
