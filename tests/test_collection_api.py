@@ -72,7 +72,7 @@ def test_schedule_schema_rejects_equal_times_and_unknown_timezone() -> None:
         )
 
 
-def test_update_settings_notifies_running_scheduler(
+def test_update_settings_persists_for_separate_scheduler(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     settings = make_settings()
@@ -91,11 +91,6 @@ def test_update_settings_notifies_running_scheduler(
                 setattr(model, field, value)
             return model
 
-    scheduler = SimpleNamespace(notify_settings_changed=lambda: calls.append(True))
-    request = SimpleNamespace(
-        app=SimpleNamespace(state=SimpleNamespace(collection_scheduler=scheduler))
-    )
-    calls: list[bool] = []
     monkeypatch.setattr(collection_api, "CollectionRepository", FakeRepository)
     data = CollectionSettingsUpdate(
         enabled=True,
@@ -108,7 +103,6 @@ def test_update_settings_notifies_running_scheduler(
     result = asyncio.run(
         collection_api.update_collection_settings(
             data,
-            request,
             None,
             None,
             None,
@@ -118,7 +112,6 @@ def test_update_settings_notifies_running_scheduler(
 
     assert result.enabled is True
     assert result.start_time == time(20)
-    assert calls == [True]
 
 
 def test_collection_status_reports_next_run_and_failures(

@@ -1,6 +1,6 @@
 import asyncio
 from datetime import datetime, time
-from unittest.mock import Mock
+from unittest.mock import AsyncMock, Mock
 from zoneinfo import ZoneInfo
 
 import httpx
@@ -99,3 +99,34 @@ def test_scheduler_run_once_marks_scheduled_trigger(
 
     assert result == expected
     assert triggers == [CollectionRunTrigger.SCHEDULED]
+
+
+def test_scheduler_reloads_disabled_settings_without_api_notification(monkeypatch):
+    reads = 0
+    refreshed = asyncio.Event()
+
+    async def load_schedule():
+        nonlocal reads
+        reads += 1
+        if reads == 2:
+            refreshed.set()
+        return make_schedule(enabled=False)
+
+    monkeypatch.setattr(scheduler_module, "SETTINGS_POLL_SECONDS", 0.01)
+    monkeypatch.setattr(scheduler_module, "load_collection_schedule", load_schedule)
+    monkeypatch.setattr(
+        scheduler_module.CollectionHistory,
+        "interrupt_stale_runs",
+        AsyncMock(),
+    )
+
+    async def scenario():
+        scheduler = CollectionScheduler(Mock(spec=httpx.AsyncClient))
+        scheduler.start()
+        try:
+            await asyncio.wait_for(refreshed.wait(), timeout=1)
+        finally:
+            await scheduler.stop()
+
+    asyncio.run(scenario())
+    assert reads >= 2

@@ -72,6 +72,34 @@ services:
       start_period: 10s
     logging: *default-logging
 
+  scheduler:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    init: true
+    stop_grace_period: 30s
+    env_file:
+      - .env
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      DATABASE_POOL_SIZE: 2
+      DATABASE_MAX_OVERFLOW: 2
+      MEDIA_ROOT: /app/data/media
+    volumes:
+      - ./certs:/app/certs:ro
+      - media_data:/app/data/media
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    command: [python, -m, news_reposter.services.scheduler_runner]
+    logging: *default-logging
+    mem_limit: 512m
+    cpus: 0.5
+
   frontend:
     build:
       context: ./frontend

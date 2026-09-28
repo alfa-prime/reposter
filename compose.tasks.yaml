@@ -45,6 +45,9 @@ services:
   app:
     environment:
       BACKGROUND_TASKS_ENABLED: "true"
+  scheduler:
+    environment:
+      BACKGROUND_TASKS_ENABLED: "true"
   task-outbox:
     <<: *task-worker
     environment:

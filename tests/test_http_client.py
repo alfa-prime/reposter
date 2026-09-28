@@ -111,30 +111,9 @@ def test_llm_provider_dependency_reports_missing_configuration(monkeypatch) -> N
 
 def test_lifespan_registers_and_closes_http_client(monkeypatch) -> None:
     client = AsyncMock(spec=httpx.AsyncClient)
-    collection_scheduler = SimpleNamespace(start=Mock(), stop=AsyncMock())
-    publication_scheduler = SimpleNamespace(start=Mock(), stop=AsyncMock())
-    media_cleanup_scheduler = SimpleNamespace(start=Mock(), stop=AsyncMock())
-    collection_scheduler_factory = Mock(return_value=collection_scheduler)
-    publication_scheduler_factory = Mock(return_value=publication_scheduler)
-    media_cleanup_scheduler_factory = Mock(return_value=media_cleanup_scheduler)
     close_database = AsyncMock()
 
     monkeypatch.setattr(main_module, "create_http_client", lambda: client)
-    monkeypatch.setattr(
-        main_module,
-        "CollectionScheduler",
-        collection_scheduler_factory,
-    )
-    monkeypatch.setattr(
-        main_module,
-        "PublicationScheduler",
-        publication_scheduler_factory,
-    )
-    monkeypatch.setattr(
-        main_module,
-        "MediaCleanupScheduler",
-        media_cleanup_scheduler_factory,
-    )
     monkeypatch.setattr(main_module, "close_database", close_database)
 
     async def scenario() -> None:
@@ -142,17 +121,9 @@ def test_lifespan_registers_and_closes_http_client(monkeypatch) -> None:
         async with main_module.lifespan(app):
             assert app.state.http_client is client
             assert app.state.llm_provider is None
-            assert app.state.collection_scheduler is collection_scheduler
-            collection_scheduler_factory.assert_called_once_with(client)
-            publication_scheduler_factory.assert_called_once_with(client)
-            collection_scheduler.start.assert_called_once_with()
-            publication_scheduler.start.assert_called_once_with()
-            media_cleanup_scheduler.start.assert_called_once_with()
+            assert not hasattr(app.state, "collection_scheduler")
             client.aclose.assert_not_awaited()
 
-        publication_scheduler.stop.assert_awaited_once_with()
-        media_cleanup_scheduler.stop.assert_awaited_once_with()
-        collection_scheduler.stop.assert_awaited_once_with()
         client.aclose.assert_awaited_once_with()
         close_database.assert_awaited_once_with()
 

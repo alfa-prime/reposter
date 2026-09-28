@@ -17,6 +17,7 @@ from news_reposter.services.collector import (
 )
 
 logger = logging.getLogger(__name__)
+SETTINGS_POLL_SECONDS = 10
 
 
 @dataclass(frozen=True, slots=True)
@@ -158,20 +159,30 @@ class CollectionScheduler:
         except Exception:
             logger.exception("Не удалось закрыть прерванные запуски сборщика")
 
+        last_announcement: tuple[CollectionSchedule, datetime | None] | None = None
         while True:
             try:
                 schedule = await load_collection_schedule()
                 if not schedule.enabled:
-                    logger.info("Автоматический сбор отключён")
-                    await self._wait_for_change()
+                    announcement = (schedule, None)
+                    if last_announcement != announcement:
+                        logger.info("Автоматический сбор отключён")
+                        last_announcement = announcement
+                    await self._wait_for_change(SETTINGS_POLL_SECONDS)
                     continue
 
                 now = datetime.now(schedule.zoneinfo())
                 next_run = next_run_at(now, schedule)
-                logger.info("Следующий автоматический сбор: %s", next_run.isoformat())
-                if await self._wait_for_change(
-                    max(0.0, (next_run - now).total_seconds())
-                ):
+                announcement = (schedule, next_run)
+                if last_announcement != announcement:
+                    logger.info(
+                        "Следующий автоматический сбор: %s", next_run.isoformat()
+                    )
+                    last_announcement = announcement
+                remaining = max(0.0, (next_run - now).total_seconds())
+                if await self._wait_for_change(min(remaining, SETTINGS_POLL_SECONDS)):
+                    continue
+                if remaining > SETTINGS_POLL_SECONDS:
                     continue
                 await self.run_once()
             except asyncio.CancelledError:

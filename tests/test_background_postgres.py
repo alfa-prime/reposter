@@ -4,11 +4,12 @@ import asyncio
 import os
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
+from unittest.mock import AsyncMock
 from uuid import uuid4
 
 import httpx
 import pytest
-from sqlalchemy import delete, func, select, update
+from sqlalchemy import delete, func, select, text, update
 from test_auth_postgres import run_postgres_scenario
 
 from news_reposter.background import handlers, worker
@@ -52,13 +53,76 @@ from news_reposter.db.models import (
     TaskOutbox,
     User,
 )
-from news_reposter.db.session import async_session_factory
+from news_reposter.db.session import async_session_factory, engine
 from news_reposter.llm import RewriteResult
+from news_reposter.services import scheduler_runner
 from news_reposter.services.publisher import _loaded_item
+from news_reposter.services.scheduler_runner import LOCK_KEY
 
 pytestmark = pytest.mark.skipif(
     os.getenv("RUN_POSTGRES_TESTS") != "1", reason="requires disposable PostgreSQL"
 )
+
+
+def test_scheduler_lock_excludes_second_process_and_releases_on_disconnect():
+    async def scenario():
+        async with engine.connect() as leader, engine.connect() as standby:
+            query = text("SELECT pg_try_advisory_lock(:key)")
+            assert await leader.scalar(query, {"key": LOCK_KEY}) is True
+            await leader.commit()
+            assert await standby.scalar(query, {"key": LOCK_KEY}) is False
+            await standby.commit()
+            await leader.invalidate()
+            assert await standby.scalar(query, {"key": LOCK_KEY}) is True
+            await standby.commit()
+            await standby.invalidate()
+
+    run_postgres_scenario(scenario)
+
+
+def test_scheduler_runner_holds_lock_until_shutdown(monkeypatch):
+    started = asyncio.Event()
+    instances = []
+    client = SimpleNamespace(aclose=AsyncMock())
+
+    class FakeScheduler:
+        def __init__(self, *_args):
+            instances.append(self)
+            self.stopped = False
+
+        def start(self):
+            if len(instances) == 3:
+                started.set()
+
+        async def stop(self):
+            self.stopped = True
+
+    monkeypatch.setattr(scheduler_runner, "create_http_client", lambda: client)
+    monkeypatch.setattr(scheduler_runner, "CollectionScheduler", FakeScheduler)
+    monkeypatch.setattr(scheduler_runner, "PublicationScheduler", FakeScheduler)
+    monkeypatch.setattr(scheduler_runner, "MediaCleanupScheduler", FakeScheduler)
+
+    async def scenario():
+        stop = asyncio.Event()
+        task = asyncio.create_task(scheduler_runner.run_schedulers(stop))
+        try:
+            await asyncio.wait_for(started.wait(), timeout=5)
+            async with engine.connect() as standby:
+                query = text("SELECT pg_try_advisory_lock(:key)")
+                assert await standby.scalar(query, {"key": LOCK_KEY}) is False
+                await standby.commit()
+        finally:
+            stop.set()
+            await asyncio.wait_for(task, timeout=5)
+        assert len(instances) == 3
+        assert all(instance.stopped for instance in instances)
+        client.aclose.assert_awaited_once_with()
+        async with engine.connect() as standby:
+            assert await standby.scalar(query, {"key": LOCK_KEY}) is True
+            await standby.commit()
+            await standby.invalidate()
+
+    run_postgres_scenario(scenario)
 
 
 def isolated(scenario):

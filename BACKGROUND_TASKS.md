@@ -5,6 +5,8 @@
 исполняется прежним PostgreSQL воркером. По умолчанию
 `BACKGROUND_TASKS_ENABLED=false`, `BACKGROUND_TASK_TRANSPORT=postgres`.
 `compose.tasks.yaml` включает Redis, диспетчер outbox и четыре типа исполнителей.
+Планировщики сбора, публикации и очистки работают в отдельном сервисе `scheduler`
+из `compose.yaml`. FastAPI не запускает планировщики в своём процессе.
 Кнопки рерайта и ручного сбора используют асинхронные endpoints, когда фоновые
 задачи включены. Пока `BACKGROUND_TASKS_ENABLED=false`, работают прежние
 синхронные endpoints; публикация в интерфейсе пока работает по старому сценарию.
@@ -103,8 +105,8 @@ Backoff экспоненциальный с jitter. Числовой `Retry-Afte
 Пример последовательности после резервной копии и проверки миграций:
 
 ```sh
-docker compose -f compose.yaml -f compose.prod.yaml -f compose.tasks.yaml --profile background build app migrate task-outbox task-rewrite task-collection task-maintenance
-docker compose -f compose.yaml -f compose.prod.yaml -f compose.tasks.yaml --profile background up -d --no-build app redis task-outbox task-rewrite task-collection task-publication task-maintenance
+docker compose -f compose.yaml -f compose.prod.yaml -f compose.tasks.yaml --profile background build app scheduler migrate task-outbox task-rewrite task-collection task-maintenance
+docker compose -f compose.yaml -f compose.prod.yaml -f compose.tasks.yaml --profile background up -d --no-build app scheduler redis task-outbox task-rewrite task-collection task-publication task-maintenance
 ```
 
 Воркеры используют один образ приложения, общий media volume и доверенные TLS
@@ -113,8 +115,14 @@ docker compose -f compose.yaml -f compose.prod.yaml -f compose.tasks.yaml --prof
 соединениями на процесс. Перед масштабированием
 нужно проверить общий бюджет подключений PostgreSQL и памяти. После включения всегда
 использовать все три compose файла и профиль `background` при управлении приложением.
+Отдельный `scheduler` также работает при обычном запуске двух compose файлов и
+выполняет прежние задачи напрямую, когда фоновые задачи отключены. При
+редактировании расписания API сохраняет настройки в PostgreSQL, планировщик
+перечитывает их в течение 10 секунд. Лидерство защищено сеансовой блокировкой
+PostgreSQL: вторая копия ждёт освобождения блокировки. При потере соединения
+планировщик останавливает циклы и заново получает лидерство.
 
-Проверить `/health`, состояния контейнеров, логи dispatcher/worker, новые запуски сбора
+Проверить `/health`, состояния контейнеров, логи scheduler/dispatcher/worker, новые запуски сбора
 и отсутствие рестартов. Для наблюдения (в read-only транзакции):
 
 ```sql
@@ -133,19 +141,22 @@ ORDER BY finished_at DESC LIMIT 20;
 
 ## Откат исполнения
 
-1. Отключить производителей, пересоздав app с обычными compose файлами и
-   `BACKGROUND_TASKS_ENABLED=false` в `.env`. Дождаться завершения `running` задач;
-   при аварийном останове публикация требует проверки канала.
-2. Остановить `task-outbox` и четыре task worker. Если был аварийный останов,
-   `python -m news_reposter.background.worker --recover` должен закрыть просроченные lease; новые задачи
-   при этом не принимать. Сначала проверить все `sending`/`publication_unknown`.
+1. Остановить `scheduler` в профиле `background` и пересоздать app с обычными
+   compose файлами и `BACKGROUND_TASKS_ENABLED=false` в `.env`.
+   Дождаться завершения `running` задач; при аварийном останове публикация
+   требует проверки канала.
+2. Остановить `task-outbox` и четыре task worker. При аварийном останове
+   `python -m news_reposter.background.worker --recover` закрывает просроченные
+   lease; новые задачи в этот момент не принимать. Сначала проверить все
+   `sending`/`publication_unknown`. Затем запустить `scheduler` с обычными
+   compose файлами и `BACKGROUND_TASKS_ENABLED=false`.
 3. При необходимости вернуть предыдущий образ приложения. Таблицы задач оставлять:
    это история и ключи дедупликации. Production downgrade миграции удалит историю
    и для обычного отката не нужен.
 
 ## Следующие этапы
 
-Сейчас планировщики работают внутри каждого процесса FastAPI. Перед запуском
-нескольких процессов API их нужно вынести в один отдельный процесс. Затем
-перенести публикацию на Celery с сохранением проверки неопределённой отправки:
+Планировщики вынесены из FastAPI в отдельный процесс. Перед завершением перехода
+и запуском нескольких процессов API нужно перенести публикацию на Celery с
+сохранением проверки неопределённой отправки:
 повторная доставка сообщения из брокера не гарантирует единственной отправки в MAX.
