@@ -1,6 +1,6 @@
-import { ChangeEvent, useEffect, useMemo, useState } from "react";
+import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Archive, X } from "lucide-react";
-import { api, QueueItem, QueuePhoto } from "./api";
+import { ApiError, api, QueueItem, QueuePhoto } from "./api";
 import { QueueActionsFooter } from "./components/QueueActionsFooter";
 import { QueueDrawerHeader } from "./components/QueueDrawerHeader";
 import { QueueMediaSection } from "./components/QueueMediaSection";
@@ -28,6 +28,31 @@ const statusLabels: Record<string, string> = {
 };
 
 const defaultPageSize = 20;
+
+type PendingRewrite = { itemId: number; idempotencyKey: string; taskId?: string };
+
+function rewriteStorageKey(itemId: number) { return `reposter:rewrite-task:${itemId}`; }
+
+function storedRewrite(itemId: number): PendingRewrite | null {
+  try {
+    const stored = window.sessionStorage.getItem(rewriteStorageKey(itemId));
+    if (!stored) return null;
+    const value = JSON.parse(stored) as PendingRewrite;
+    return value.itemId === itemId && typeof value.idempotencyKey === "string"
+      ? value : null;
+  } catch { return null; }
+}
+
+function saveRewrite(task: PendingRewrite) {
+  window.sessionStorage.setItem(rewriteStorageKey(task.itemId), JSON.stringify(task));
+}
+
+function rewriteFailure(code: string | null) {
+  if (code === "material_changed") return "Материал изменился во время рерайта. Проверьте текст и попробуйте снова.";
+  if (code === "actor_disabled" || code === "permission_revoked" || code === "target_access_revoked") return "Рерайт остановлен: проверьте права доступа.";
+  if (code === "llm_not_configured") return "Сервис рерайта не настроен.";
+  return `Рерайт не выполнен${code ? ` (${code})` : ""}. Попробуйте снова.`;
+}
 
 function savedPageSize() {
   if (typeof window === "undefined") return defaultPageSize;
@@ -98,6 +123,10 @@ export function QueueExperience({ collectSignal = 0, targetId, openItemId = null
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [rewriteBusy, setRewriteBusy] = useState(false);
+  const [rewriteTask, setRewriteTask] = useState<PendingRewrite | null>(null);
+  const [rewriteCheck, setRewriteCheck] = useState(0);
+  const selectedIdRef = useRef(selectedId);
+  selectedIdRef.current = selectedId;
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [text, setText] = useState("");
@@ -183,6 +212,55 @@ export function QueueExperience({ collectSignal = 0, targetId, openItemId = null
   }, [openItemId]);
 
   useEffect(() => {
+    setRewriteBusy(false);
+    setRewriteTask(selectedId === null ? null : storedRewrite(selectedId));
+  }, [selectedId]);
+
+  useEffect(() => {
+    if (!rewriteTask?.taskId || selectedId !== rewriteTask.itemId) return;
+    const controller = new AbortController();
+    const itemId = rewriteTask.itemId;
+    const taskId = rewriteTask.taskId;
+    let timer: number | undefined;
+    setRewriteBusy(true);
+
+    async function check() {
+      try {
+        const task = await api.backgroundTask(taskId, controller.signal);
+        if (controller.signal.aborted) return;
+        if (task.state === "succeeded") {
+          const updated = await api.queueItem(itemId, controller.signal);
+          if (controller.signal.aborted) return;
+          replaceItem(updated);
+          setText(updated.rewritten_text ?? updated.original_text ?? "");
+          setEditing(false);
+          setMessage("Рерайт готов");
+        } else if (["failed", "cancelled", "needs_review"].includes(task.state)) {
+          setError(rewriteFailure(task.error_code));
+        } else {
+          timer = window.setTimeout(() => void check(), task.state === "retry_wait" ? 10_000 : task.state === "pending" ? 5000 : 3000);
+          return;
+        }
+        window.sessionStorage.removeItem(rewriteStorageKey(itemId));
+        setRewriteTask(null);
+        setRewriteBusy(false);
+      } catch (exc) {
+        if (controller.signal.aborted) return;
+        setRewriteBusy(false);
+        if (exc instanceof ApiError && [403, 404].includes(exc.status)) {
+          window.sessionStorage.removeItem(rewriteStorageKey(itemId));
+          setRewriteTask(null);
+          setError("Задача рерайта недоступна. Обновите материал и проверьте права доступа.");
+        } else {
+          setError("Не удалось проверить задачу рерайта. Нажмите «Переписать с ИИ», чтобы продолжить проверку.");
+        }
+      }
+    }
+    void check();
+    return () => { controller.abort(); window.clearTimeout(timer); };
+  }, [selectedId, rewriteTask?.taskId, rewriteCheck]);
+
+  useEffect(() => {
     if (!selectedId) return;
     let active = true;
     void (async () => {
@@ -242,18 +320,48 @@ export function QueueExperience({ collectSignal = 0, targetId, openItemId = null
   }
 
   async function rewrite() {
-    if (!selected) return;
+    if (!selected || rewriteBusy) return;
+    const itemId = selected.queue_item_id;
+    if (editing && text !== (selected.rewritten_text ?? selected.original_text ?? "")) {
+      setError("Сначала сохраните изменения текста, затем запустите рерайт.");
+      return;
+    }
     setRewriteBusy(true);
     setError("");
+    setEditing(false);
+    let queued = false;
     try {
-      const updated = await api.rewriteQueueItem(selected.queue_item_id);
-      replaceItem(updated);
-      setText(updated.rewritten_text ?? updated.original_text ?? "");
-      setEditing(false);
+      const pending = storedRewrite(itemId) ?? { itemId, idempotencyKey: crypto.randomUUID() };
+      if (!pending.taskId) {
+        saveRewrite(pending);
+        try {
+          const task = await api.submitRewriteTask(itemId, pending.idempotencyKey);
+          pending.taskId = task.task_id;
+          saveRewrite(pending);
+        } catch (exc) {
+          if (!(exc instanceof ApiError && exc.status === 503 && exc.message === "Фоновое исполнение ещё не включено")) throw exc;
+          window.sessionStorage.removeItem(rewriteStorageKey(itemId));
+          const updated = await api.rewriteQueueItem(itemId);
+          replaceItem(updated);
+          if (selectedIdRef.current === itemId) {
+            setText(updated.rewritten_text ?? updated.original_text ?? "");
+            setEditing(false);
+          }
+          return;
+        }
+      }
+      if (selectedIdRef.current === itemId) {
+        queued = true;
+        setRewriteTask(pending);
+        setRewriteCheck((current) => current + 1);
+      }
     } catch (exc) {
-      setError(exc instanceof Error ? exc.message : "Не удалось переписать публикацию");
+      if (exc instanceof ApiError && [400, 403, 404, 409, 422].includes(exc.status)) {
+        window.sessionStorage.removeItem(rewriteStorageKey(itemId));
+      }
+      if (selectedIdRef.current === itemId) setError(exc instanceof Error ? exc.message : "Не удалось переписать публикацию");
     } finally {
-      setRewriteBusy(false);
+      if (!queued) setRewriteBusy(false);
     }
   }
 
@@ -523,7 +631,7 @@ export function QueueExperience({ collectSignal = 0, targetId, openItemId = null
               item={selected}
               orderedPhotos={orderedPhotos}
               mediaOrder={mediaOrder}
-              busy={busy}
+              busy={busy || rewriteBusy}
               mediaKey={mediaKey}
               onRemoveAll={() => void saveMedia([])}
               onRestoreAll={() => void saveMedia(selected.photos.map(mediaKey))}
@@ -552,7 +660,7 @@ export function QueueExperience({ collectSignal = 0, targetId, openItemId = null
               originalText={selected.original_text}
               readonly={["published", "scheduled", "publication_unknown"].includes(selected.status)}
               editing={editing}
-              busy={busy}
+              busy={busy || rewriteBusy}
               rewriteBusy={rewriteBusy}
               canRewrite={["pending", "rewriting", "rejected"].includes(selected.status)}
               onEditingChange={setEditing}
