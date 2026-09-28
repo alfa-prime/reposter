@@ -168,3 +168,51 @@ ORDER BY finished_at DESC LIMIT 20;
 в production задаёт `API_WORKERS` (по умолчанию `1`, для двух — `2`). Повторная доставка
 сообщения из брокера не гарантирует единственной отправки в MAX: при неизвестном
 результате нужна проверка канала.
+
+### Бюджет при `API_WORKERS=2`
+
+Оценка верхней границы соединений SQLAlchemy по текущим `compose.yaml`,
+`compose.tasks.yaml` и `.env.example`:
+
+| Компонент | Процессы с пулом БД | Пул + overflow | Максимум соединений |
+| --- | ---: | ---: | ---: |
+| FastAPI | 2 | 10 + 10 | 40 |
+| Отдельный scheduler | 1 | 2 + 2 | 4 |
+| Outbox dispatcher | 1 | 2 + 2 | 4 |
+| Celery rewrite | 2 | 2 + 2 | 8 |
+| Celery collection, maintenance, publication | 3 | 2 + 2 | 12 |
+| **Итого** | | | **68** |
+
+Это потенциальный максимум пулов, а не обычное число открытых соединений.
+При `max_connections=100` останется не более 32 слотов на миграции, мониторинг,
+администрирование и зарезервированные соединения PostgreSQL. Если параметры
+`.env` или число Celery-процессов отличаются, пересчитайте таблицу.
+
+Шесть фоновых контейнеров (scheduler, outbox и четыре Celery worker) имеют
+предел по 512 МиБ каждый: суммарно до 3 ГиБ. Это лимиты, а не резерв памяти;
+у FastAPI, PostgreSQL, Redis, frontend и ОС здесь нет общего ограничения.
+Поэтому даже на рекомендованном сервере с 4 ГБ нельзя делать вывод о запасе
+памяти из одних настроек Compose.
+
+CI отдельно запускает два API-процесса с PostgreSQL и выполняет 320 запросов
+`GET /health/database` пачками по 16. В логе теста видны длительность, p95 и
+максимум наблюдавшихся подключений. Это короткая проверка параллельной работы;
+она не моделирует сбор, рерайт, публикацию, долгую нагрузку и ресурсы сервера.
+
+На отдельном тестовом стенде после запуска всех сервисов с профилем `background`
+проверить реальные пределы PostgreSQL и потребление памяти (команды только читают):
+
+```sh
+docker compose -f compose.yaml -f compose.prod.yaml -f compose.tasks.yaml --profile background ps
+docker stats --no-stream --format 'table {{.Name}}\t{{.MemUsage}}\t{{.CPUPerc}}'
+docker compose -f compose.yaml -f compose.prod.yaml -f compose.tasks.yaml --profile background \
+  exec -T postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"' <<'SQL'
+SHOW max_connections;
+SELECT state, count(*) FROM pg_stat_activity
+WHERE datname = current_database() GROUP BY state ORDER BY state;
+SQL
+```
+
+Во время отдельного нагрузочного прогона тестовыми данными повторить замеры:
+записать число ошибок, p95, пик соединений, память контейнеров и рестарты.
+Запросы к реальному MAX для такой проверки не требуются.

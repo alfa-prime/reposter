@@ -97,7 +97,13 @@ jobs:
         env:
           RUN_POSTGRES_TESTS: "1"
           RUN_REDIS_TESTS: "1"
-        run: uv run pytest tests/test_auth_postgres.py tests/test_journal_postgres.py tests/test_background_postgres.py tests/test_celery_redis_postgres.py tests/test_api_workers_postgres.py
+        run: uv run pytest tests/test_auth_postgres.py tests/test_journal_postgres.py tests/test_background_postgres.py tests/test_celery_redis_postgres.py
+
+      - name: Exercise two API workers under bounded concurrent load
+        env:
+          RUN_POSTGRES_TESTS: "1"
+          RUN_REDIS_TESTS: "1"
+        run: uv run pytest -s -q tests/test_api_workers_postgres.py
 
       - name: Downgrade database to base
         run: uv run alembic downgrade base
