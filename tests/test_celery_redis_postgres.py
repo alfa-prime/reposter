@@ -15,8 +15,8 @@ from sqlalchemy import select
 from test_background_postgres import create_task, isolated
 
 from news_reposter.background.celery_app import MixedTransport
-from news_reposter.background.contracts import TaskState
-from news_reposter.background.outbox import dispatch_once, reconcile_rewrite
+from news_reposter.background.contracts import TaskQueue, TaskState
+from news_reposter.background.outbox import dispatch_once, reconcile_celery
 from news_reposter.config import get_settings
 from news_reposter.db.models import BackgroundTask, TaskOutbox
 from news_reposter.db.session import async_session_factory
@@ -38,7 +38,7 @@ def start_worker(log):
             "worker",
             "--pool=solo",
             "--concurrency=1",
-            "--queues=rewrite",
+            "--queues=rewrite,collection",
             "--loglevel=WARNING",
         ],
         stdout=log,
@@ -100,10 +100,17 @@ def test_real_celery_redelivery_after_redis_message_loss():
                     )
                     row.delivered_at = datetime.now(UTC) - timedelta(minutes=3)
                     await session.commit()
-                assert await reconcile_rewrite() == 1
+                assert await reconcile_celery() == 1
                 assert await dispatch_once(MixedTransport())
                 process = start_worker(log)
                 assert await wait_for_failure(second.task_id) == (1, "missing_actor")
+                assert not get_settings().vk_access_token
+                collection = await create_task(TaskQueue.COLLECTION)
+                assert await dispatch_once(MixedTransport())
+                assert await wait_for_failure(collection.task_id) == (
+                    1,
+                    "vk_not_configured",
+                )
             except Exception:
                 log.flush()
                 log.seek(0)

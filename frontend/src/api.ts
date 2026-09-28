@@ -141,6 +141,7 @@ export type BackgroundTask = {
   attempts: number;
   max_attempts: number;
   available_at: string;
+  result: Record<string, unknown> | null;
 };
 
 export type PublicationAttempt = {
@@ -434,6 +435,7 @@ export const api = {
   sources: () => request<Source[]>("/api/v1/sources?limit=100"),
   targetSources: (targetId: number) => request<TargetSource[]>(`/api/v1/targets/${targetId}/sources`),
   collectNow: () => request<CollectSummary>("/api/v1/system/collect-now", { method: "POST", headers: csrfHeaders() }),
+  submitCollectionTask: (idempotencyKey: string) => request<BackgroundTask>("/api/v1/system/collection/tasks", { method: "POST", headers: csrfHeaders(), body: JSON.stringify({ idempotency_key: idempotencyKey }) }),
   collectionSettings: () => request<CollectionSettings>("/api/v1/system/collection/settings"),
   updateCollectionSettings: (data: Omit<CollectionSettings, "updated_at">) => request<CollectionSettings>("/api/v1/system/collection/settings", { method: "PUT", headers: csrfHeaders(), body: JSON.stringify(data) }),
   collectionStatus: () => request<CollectionStatus>("/api/v1/system/collection/status"),

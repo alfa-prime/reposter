@@ -1,13 +1,13 @@
 # Фоновые задачи: поэтапный переход на Celery
 
 Состояние задачи и бизнес-данные хранятся в PostgreSQL. В профиле `background`
-рерайт доставляется через Celery и Redis; сбор, публикация и обслуживание пока
+рерайт и сбор доставляются через Celery и Redis; публикация и обслуживание пока
 исполняются прежними PostgreSQL воркерами. По умолчанию
 `BACKGROUND_TASKS_ENABLED=false`, `BACKGROUND_TASK_TRANSPORT=postgres`.
 `compose.tasks.yaml` включает Redis, диспетчер outbox и четыре типа исполнителей.
-Кнопка рерайта использует асинхронный endpoint, когда фоновые задачи включены.
-Пока `BACKGROUND_TASKS_ENABLED=false`, она использует прежний синхронный endpoint;
-сбор и публикация в интерфейсе пока работают по старому сценарию.
+Кнопки рерайта и ручного сбора используют асинхронные endpoints, когда фоновые
+задачи включены. Пока `BACKGROUND_TASKS_ENABLED=false`, работают прежние
+синхронные endpoints; публикация в интерфейсе пока работает по старому сценарию.
 
 ## Состояния и гарантии
 
@@ -25,7 +25,7 @@
   уникальную квитанцию `task_deliveries`; Celery доставляет точный ID задачи, который
   захватывается в базе только если задача готова к исполнению. Повтор не создаёт
   вторую задачу. Диспетчер заново отправляет готовые `retry_wait` и застрявшие
-  более двух минут `pending` рерайты: это также восстанавливает потерянные Redis
+  более двух минут `pending` рерайты и сборы: это также восстанавливает потерянные Redis
   сообщения. Дубликаты допустимы, их отсекает захват строки PostgreSQL.
 - Исполнитель захватывает строку через `FOR UPDATE SKIP LOCKED`, создаёт случайный
   token и lease на 90 секунд. Продление — каждые 30 секунд. Завершение проверяет
@@ -103,7 +103,7 @@ Backoff экспоненциальный с jitter. Числовой `Retry-Afte
 Пример последовательности после резервной копии и проверки миграций:
 
 ```sh
-docker compose -f compose.yaml -f compose.prod.yaml -f compose.tasks.yaml --profile background build app migrate task-outbox task-rewrite
+docker compose -f compose.yaml -f compose.prod.yaml -f compose.tasks.yaml --profile background build app migrate task-outbox task-rewrite task-collection
 docker compose -f compose.yaml -f compose.prod.yaml -f compose.tasks.yaml --profile background up -d --no-build app redis task-outbox task-rewrite task-collection task-publication task-maintenance
 ```
 

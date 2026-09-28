@@ -25,7 +25,7 @@ from news_reposter.background.intents import publication_snapshot, rewrite_snaps
 from news_reposter.background.outbox import (
     PostgresTransport,
     dispatch_once,
-    reconcile_rewrite,
+    reconcile_celery,
 )
 from news_reposter.background.store import (
     claim,
@@ -291,7 +291,7 @@ def test_celery_exact_claim_redelivery_and_due_retry(monkeypatch):
             )
             row.delivered_at = datetime.now(UTC) - timedelta(minutes=3)
             await session.commit()
-        assert await reconcile_rewrite() == 1
+        assert await reconcile_celery() == 1
         assert await dispatch_once(broker)
         assert published == [task.task_id, task.task_id]
 
@@ -306,12 +306,12 @@ def test_celery_exact_claim_redelivery_and_due_retry(monkeypatch):
         monkeypatch.setitem(worker.HANDLERS, TaskQueue.REWRITE, handler)
         assert await worker.run_once(TaskQueue.REWRITE, None, task_id=task.task_id)
         assert not await worker.run_once(TaskQueue.REWRITE, None, task_id=task.task_id)
-        assert await reconcile_rewrite() == 0  # retry is not due yet
+        assert await reconcile_celery() == 0  # retry is not due yet
         async with async_session_factory() as session:
             current = await session.get(BackgroundTask, task.task_id)
             current.available_at = datetime.now(UTC) - timedelta(seconds=1)
             await session.commit()
-        assert await reconcile_rewrite() == 1
+        assert await reconcile_celery() == 1
         assert await dispatch_once(broker)
         assert await worker.run_once(TaskQueue.REWRITE, None, task_id=task.task_id)
         assert not await worker.run_once(TaskQueue.REWRITE, None, task_id=task.task_id)

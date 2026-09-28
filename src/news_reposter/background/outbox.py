@@ -26,7 +26,7 @@ class PostgresTransport:
             await session.commit()
 
 
-async def reconcile_rewrite(*, limit: int = 100) -> int:
+async def reconcile_celery(*, limit: int = 100) -> int:
     """Redis may lose an accepted message; retry due tasks and old pending IDs."""
     async with async_session_factory() as session:
         rows = list(
@@ -34,7 +34,7 @@ async def reconcile_rewrite(*, limit: int = 100) -> int:
                 select(TaskOutbox)
                 .join(BackgroundTask, BackgroundTask.task_id == TaskOutbox.task_id)
                 .where(
-                    BackgroundTask.queue == TaskQueue.REWRITE,
+                    BackgroundTask.queue.in_([TaskQueue.REWRITE, TaskQueue.COLLECTION]),
                     TaskOutbox.delivered_at.is_not(None),
                     (TaskOutbox.lease_until.is_(None))
                     | (TaskOutbox.lease_until <= func.now()),

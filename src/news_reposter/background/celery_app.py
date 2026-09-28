@@ -1,4 +1,4 @@
-"""Redis delivery for rewrite IDs; PostgreSQL owns execution and retry state."""
+"""Redis delivery for task IDs; PostgreSQL owns execution and retry state."""
 
 import asyncio
 from uuid import UUID
@@ -23,6 +23,15 @@ celery_app.conf.update(
 
 @celery_app.task(name="news_reposter.rewrite")
 def rewrite_task(task_id: str) -> None:
+    run_task(task_id, TaskQueue.REWRITE)
+
+
+@celery_app.task(name="news_reposter.collection")
+def collection_task(task_id: str) -> None:
+    run_task(task_id, TaskQueue.COLLECTION)
+
+
+def run_task(task_id: str, queue: TaskQueue) -> None:
     # A new event loop per delivery needs a fresh SQLAlchemy pool each time.
     from news_reposter.background.worker import run_once
     from news_reposter.db.session import close_database
@@ -31,7 +40,7 @@ def rewrite_task(task_id: str) -> None:
     async def run() -> None:
         client = create_http_client()
         try:
-            await run_once(TaskQueue.REWRITE, client, task_id=UUID(task_id))
+            await run_once(queue, client, task_id=UUID(task_id))
         finally:
             await client.aclose()
             await close_database()
@@ -40,17 +49,21 @@ def rewrite_task(task_id: str) -> None:
 
 
 class MixedTransport:
-    """Use Redis for rewrite; retain PostgreSQL delivery for other queues."""
+    """Use Redis for rewrite and collection, PostgreSQL for the other queues."""
 
     def __init__(self) -> None:
         self.postgres = PostgresTransport()
 
     async def publish(self, task_id: UUID, queue: str, event_id: UUID) -> None:
-        if queue == TaskQueue.REWRITE:
+        task = {
+            TaskQueue.REWRITE: rewrite_task,
+            TaskQueue.COLLECTION: collection_task,
+        }.get(queue)
+        if task is not None:
             await asyncio.to_thread(
-                rewrite_task.apply_async,
+                task.apply_async,
                 args=(str(task_id),),
-                queue=TaskQueue.REWRITE.value,
+                queue=queue,
                 task_id=str(event_id),
             )
         else:

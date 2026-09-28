@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { RefreshCw, Trash2, X } from "lucide-react";
 import { api, Source, Target, TargetSource } from "./api";
+import { collectNowInBackground } from "./collectionTask";
 import { AuthProvider, useAuth } from "./auth";
 import { AboutPage } from "./components/AboutPage";
 import { ChangePasswordModal } from "./components/ChangePasswordModal";
@@ -59,6 +60,9 @@ function AuthenticatedApp() {
   const [selectedQueueTargetId, setSelectedQueueTargetId] = useState<number | null>(null);
   const [targetSources, setTargetSources] = useState<TargetSource[]>([]);
   const [busy, setBusy] = useState(false);
+  const [collecting, setCollecting] = useState(false);
+  const collectController = useRef<AbortController | null>(null);
+  useEffect(() => () => collectController.current?.abort(), []);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialog>(null);
@@ -154,11 +158,15 @@ function AuthenticatedApp() {
   }
 
   async function collectNow() {
-    setBusy(true);
+    if (collecting) return;
+    const controller = new AbortController();
+    collectController.current = controller;
+    setCollecting(true);
     setError("");
-    setNotice("");
+    setNotice("Сбор запущен. Результат появится после завершения.");
     try {
-      const result = await api.collectNow();
+      const result = await collectNowInBackground(controller.signal);
+      await loadAll();
       if (result.sources_checked === 0) {
         if (sources.length === 0) {
           setSection("sources");
@@ -178,11 +186,11 @@ function AuthenticatedApp() {
         setNotice(`Проверено источников: ${result.sources_checked}. Новых постов: ${result.posts_created}. В очередь добавлено: ${result.queue_items_created}.`);
       }
       setQueueReloadSignal((value) => value + 1);
-      await loadAll();
     } catch (exc) {
-      setError(exc instanceof Error ? exc.message : "Сбор не выполнен");
+      if (!controller.signal.aborted) setError(exc instanceof Error ? exc.message : "Сбор не выполнен");
     } finally {
-      setBusy(false);
+      if (collectController.current === controller) collectController.current = null;
+      setCollecting(false);
     }
   }
 
@@ -261,8 +269,8 @@ function AuthenticatedApp() {
               <h1>{pageTitle}</h1>
               {section === "queue" && <p className="queue-context">{queueContext}</p>}
             </div>
-            <button className="primary" onClick={() => void collectNow()} disabled={busy}>
-              <RefreshCw size={17} className={busy ? "spin" : ""} />Собрать сейчас
+            <button className="primary" onClick={() => void collectNow()} disabled={busy || collecting}>
+              <RefreshCw size={17} className={collecting ? "spin" : ""} />{collecting ? "Идёт сбор…" : "Собрать сейчас"}
             </button>
           </header>
 

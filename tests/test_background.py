@@ -4,7 +4,11 @@ from uuid import uuid4
 import httpx
 import pytest
 
-from news_reposter.background.celery_app import MixedTransport, rewrite_task
+from news_reposter.background.celery_app import (
+    MixedTransport,
+    collection_task,
+    rewrite_task,
+)
 from news_reposter.background.contracts import (
     POLICIES,
     PermanentTaskError,
@@ -50,15 +54,19 @@ def test_only_explicit_transient_errors_are_retried():
     assert isinstance(classify_error(httpx.ConnectError("offline")), RetryableTaskError)
 
 
-def test_rewrite_transport_sends_only_the_id(monkeypatch):
+@pytest.mark.parametrize(
+    "queue,celery_task",
+    [(TaskQueue.REWRITE, rewrite_task), (TaskQueue.COLLECTION, collection_task)],
+)
+def test_celery_transport_sends_only_the_id(monkeypatch, queue, celery_task):
     calls = []
 
     def publish(*args, **kwargs):
         calls.append((args, kwargs))
 
-    monkeypatch.setattr(rewrite_task, "apply_async", publish)
+    monkeypatch.setattr(celery_task, "apply_async", publish)
     task_id, event_id = uuid4(), uuid4()
-    asyncio.run(MixedTransport().publish(task_id, "rewrite", event_id))
+    asyncio.run(MixedTransport().publish(task_id, queue.value, event_id))
     assert calls == [
-        ((), {"args": (str(task_id),), "queue": "rewrite", "task_id": str(event_id)})
+        ((), {"args": (str(task_id),), "queue": queue.value, "task_id": str(event_id)})
     ]

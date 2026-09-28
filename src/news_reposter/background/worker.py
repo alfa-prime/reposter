@@ -19,7 +19,7 @@ from news_reposter.background.handlers import HANDLERS, classify_error
 from news_reposter.background.outbox import (
     PostgresTransport,
     dispatch_once,
-    reconcile_rewrite,
+    reconcile_celery,
 )
 from news_reposter.background.store import claim, finish, heartbeat, recover_expired
 from news_reposter.config import get_settings
@@ -144,7 +144,7 @@ async def serve(queue: TaskQueue | None, once: bool) -> None:
                 and get_settings().background_task_transport == "celery"
                 and loop.time() >= next_reconcile
             ):
-                await reconcile_rewrite()
+                await reconcile_celery()
                 next_reconcile = loop.time() + 10
             worked = await (
                 dispatch_once(_transport())
