@@ -1,6 +1,10 @@
+import asyncio
+from uuid import uuid4
+
 import httpx
 import pytest
 
+from news_reposter.background.celery_app import MixedTransport, rewrite_task
 from news_reposter.background.contracts import (
     POLICIES,
     PermanentTaskError,
@@ -44,3 +48,17 @@ def test_only_explicit_transient_errors_are_retried():
     )
     assert isinstance(classify_error(ValueError("bug")), PermanentTaskError)
     assert isinstance(classify_error(httpx.ConnectError("offline")), RetryableTaskError)
+
+
+def test_rewrite_transport_sends_only_the_id(monkeypatch):
+    calls = []
+
+    def publish(*args, **kwargs):
+        calls.append((args, kwargs))
+
+    monkeypatch.setattr(rewrite_task, "apply_async", publish)
+    task_id, event_id = uuid4(), uuid4()
+    asyncio.run(MixedTransport().publish(task_id, "rewrite", event_id))
+    assert calls == [
+        ((), {"args": (str(task_id),), "queue": "rewrite", "task_id": str(event_id)})
+    ]

@@ -22,7 +22,11 @@ from news_reposter.background.contracts import (
     TaskState,
 )
 from news_reposter.background.intents import publication_snapshot, rewrite_snapshot
-from news_reposter.background.outbox import PostgresTransport, dispatch_once
+from news_reposter.background.outbox import (
+    PostgresTransport,
+    dispatch_once,
+    reconcile_rewrite,
+)
 from news_reposter.background.store import (
     claim,
     enqueue,
@@ -264,6 +268,57 @@ def test_lost_ack_redelivery_does_not_duplicate_execution(monkeypatch):
             assert (
                 await session.get(BackgroundTask, task.task_id)
             ).state == TaskState.SUCCEEDED
+
+    isolated(scenario)
+
+
+def test_celery_exact_claim_redelivery_and_due_retry(monkeypatch):
+    async def scenario():
+        task = await create_task()
+        published = []
+
+        class Broker:
+            async def publish(self, task_id, queue, event_id):
+                published.append(task_id)
+
+        broker = Broker()
+        assert await dispatch_once(broker)
+        assert published == [task.task_id]
+        # Redis dropped the accepted message: no PostgreSQL delivery receipt exists.
+        async with async_session_factory() as session:
+            row = await session.scalar(
+                select(TaskOutbox).where(TaskOutbox.task_id == task.task_id)
+            )
+            row.delivered_at = datetime.now(UTC) - timedelta(minutes=3)
+            await session.commit()
+        assert await reconcile_rewrite() == 1
+        assert await dispatch_once(broker)
+        assert published == [task.task_id, task.task_id]
+
+        calls = []
+
+        async def handler(current, client):
+            calls.append(current.task_id)
+            if len(calls) == 1:
+                raise RetryableTaskError("temporary")
+            return handlers.Completion({"ok": True})
+
+        monkeypatch.setitem(worker.HANDLERS, TaskQueue.REWRITE, handler)
+        assert await worker.run_once(TaskQueue.REWRITE, None, task_id=task.task_id)
+        assert not await worker.run_once(TaskQueue.REWRITE, None, task_id=task.task_id)
+        assert await reconcile_rewrite() == 0  # retry is not due yet
+        async with async_session_factory() as session:
+            current = await session.get(BackgroundTask, task.task_id)
+            current.available_at = datetime.now(UTC) - timedelta(seconds=1)
+            await session.commit()
+        assert await reconcile_rewrite() == 1
+        assert await dispatch_once(broker)
+        assert await worker.run_once(TaskQueue.REWRITE, None, task_id=task.task_id)
+        assert not await worker.run_once(TaskQueue.REWRITE, None, task_id=task.task_id)
+        assert calls == [task.task_id, task.task_id]
+        async with async_session_factory() as session:
+            finished = await session.get(BackgroundTask, task.task_id)
+            assert finished.attempts == 2 and finished.state == TaskState.SUCCEEDED
 
     isolated(scenario)
 

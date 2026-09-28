@@ -1,10 +1,12 @@
-# Фоновые задачи: подготовка к Celery
+# Фоновые задачи: поэтапный переход на Celery
 
-Состояние задачи и бизнес-данные хранятся в PostgreSQL. Сейчас транспорт — PostgreSQL,
-Celery и отдельный брокер ещё не устанавливаются. По умолчанию `BACKGROUND_TASKS_ENABLED=false`.
-`compose.tasks.yaml` включает производителей задач и запускает отдельный диспетчер
-outbox и четыре процесса исполнителей. Обычные синхронные HTTP endpoints остаются
-доступны; перевод кнопок интерфейса на новые асинхронные endpoints — следующий шаг.
+Состояние задачи и бизнес-данные хранятся в PostgreSQL. В профиле `background`
+рерайт доставляется через Celery и Redis; сбор, публикация и обслуживание пока
+исполняются прежними PostgreSQL воркерами. По умолчанию
+`BACKGROUND_TASKS_ENABLED=false`, `BACKGROUND_TASK_TRANSPORT=postgres`.
+`compose.tasks.yaml` включает Redis, диспетчер outbox и четыре типа исполнителей.
+Обычные синхронные HTTP endpoints и кнопки интерфейса пока остаются доступными;
+переход интерфейса на асинхронный рерайт выполняется отдельным шагом.
 
 ## Состояния и гарантии
 
@@ -19,7 +21,11 @@ outbox и четыре процесса исполнителей. Обычные
   задача; для сбора и обслуживания используются глобальные subject `0`.
 - Диспетчер отправляет только сохранённый ID и имя очереди. Доставка at-least-once:
   сбой после принятия сообщения может дать повтор. PostgreSQL transport сохраняет
-  уникальную квитанцию `task_deliveries`; повтор не создаёт вторую задачу.
+  уникальную квитанцию `task_deliveries`; Celery доставляет точный ID задачи, который
+  захватывается в базе только если задача готова к исполнению. Повтор не создаёт
+  вторую задачу. Диспетчер заново отправляет готовые `retry_wait` и застрявшие
+  более двух минут `pending` рерайты: это также восстанавливает потерянные Redis
+  сообщения. Дубликаты допустимы, их отсекает захват строки PostgreSQL.
 - Исполнитель захватывает строку через `FOR UPDATE SKIP LOCKED`, создаёт случайный
   token и lease на 90 секунд. Продление — каждые 30 секунд. Завершение проверяет
   token и срок lease. Старый исполнитель не может записать результат после потери
@@ -86,13 +92,18 @@ Backoff экспоненциальный с jitter. Числовой `Retry-Afte
 2 секунды и statement timeout 30 секунд. При занятой схеме миграция завершается
 ошибкой, а не удерживает длительную блокировку.
 
+Профиль `background` теперь поднимает Redis с AOF и политикой `noeviction`.
+Пример последовательности после резервной копии и проверки миграций:
+
 ```sh
-docker compose -f compose.yaml -f compose.prod.yaml -f compose.tasks.yaml --profile background build app migrate
-docker compose -f compose.yaml -f compose.prod.yaml -f compose.tasks.yaml --profile background up -d --no-build app task-outbox task-rewrite task-collection task-publication task-maintenance
+docker compose -f compose.yaml -f compose.prod.yaml -f compose.tasks.yaml --profile background build app migrate task-outbox task-rewrite
+docker compose -f compose.yaml -f compose.prod.yaml -f compose.tasks.yaml --profile background up -d --no-build app redis task-outbox task-rewrite task-collection task-publication task-maintenance
 ```
 
 Воркеры используют один образ приложения, общий media volume и доверенные TLS
-сертификаты. На каждый процесс установлен предел 512 МБ и 0,5 CPU. Перед масштабированием
+сертификаты. На контейнер установлен предел 512 МБ и 0,5 CPU; Celery рерайт
+использует два дочерних процесса. Пул БД фоновых контейнеров ограничен 2+2
+соединениями на процесс. Перед масштабированием
 нужно проверить общий бюджет подключений PostgreSQL и памяти. После включения всегда
 использовать все три compose файла и профиль `background` при управлении приложением.
 

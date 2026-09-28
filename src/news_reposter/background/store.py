@@ -101,17 +101,26 @@ async def enqueue(
 
 
 async def claim(
-    session: AsyncSession, queue: TaskQueue, lease_seconds: int
+    session: AsyncSession,
+    queue: TaskQueue,
+    lease_seconds: int,
+    *,
+    task_id: UUID | None = None,
 ) -> BackgroundTask | None:
-    task = await session.scalar(
-        select(BackgroundTask)
-        .where(
-            BackgroundTask.queue == queue,
-            BackgroundTask.state.in_([TaskState.PENDING, TaskState.RETRY_WAIT]),
-            BackgroundTask.available_at <= func.now(),
-            exists().where(TaskDelivery.task_id == BackgroundTask.task_id),
+    query = select(BackgroundTask).where(
+        BackgroundTask.queue == queue,
+        BackgroundTask.state.in_([TaskState.PENDING, TaskState.RETRY_WAIT]),
+        BackgroundTask.available_at <= func.now(),
+    )
+    if task_id is None:
+        # PostgreSQL transport uses a durable receipt; Celery supplies an exact ID.
+        query = query.where(
+            exists().where(TaskDelivery.task_id == BackgroundTask.task_id)
         )
-        .order_by(
+    else:
+        query = query.where(BackgroundTask.task_id == task_id)
+    task = await session.scalar(
+        query.order_by(
             BackgroundTask.available_at,
             BackgroundTask.created_at,
             BackgroundTask.task_id,

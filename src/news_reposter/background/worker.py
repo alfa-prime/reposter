@@ -4,6 +4,7 @@ import argparse
 import asyncio
 import logging
 from contextlib import suppress
+from uuid import UUID
 
 from news_reposter.background.contracts import (
     POLICIES,
@@ -15,7 +16,11 @@ from news_reposter.background.contracts import (
     TaskState,
 )
 from news_reposter.background.handlers import HANDLERS, classify_error
-from news_reposter.background.outbox import PostgresTransport, dispatch_once
+from news_reposter.background.outbox import (
+    PostgresTransport,
+    dispatch_once,
+    reconcile_rewrite,
+)
 from news_reposter.background.store import claim, finish, heartbeat, recover_expired
 from news_reposter.config import get_settings
 from news_reposter.db.session import async_session_factory, close_database
@@ -24,11 +29,13 @@ from news_reposter.http_client import create_http_client
 logger = logging.getLogger(__name__)
 
 
-async def run_once(queue: TaskQueue, client) -> bool:
+async def run_once(queue: TaskQueue, client, *, task_id: UUID | None = None) -> bool:
     settings = get_settings()
     async with async_session_factory() as session:
         await recover_expired(session)
-        task = await claim(session, queue, settings.background_task_lease_seconds)
+        task = await claim(
+            session, queue, settings.background_task_lease_seconds, task_id=task_id
+        )
         await session.commit()
     if task is None:
         return False
@@ -128,10 +135,19 @@ async def run_once(queue: TaskQueue, client) -> bool:
 
 async def serve(queue: TaskQueue | None, once: bool) -> None:
     client = create_http_client()
+    loop = asyncio.get_running_loop()
+    next_reconcile = 0.0
     try:
         while True:
+            if (
+                queue is None
+                and get_settings().background_task_transport == "celery"
+                and loop.time() >= next_reconcile
+            ):
+                await reconcile_rewrite()
+                next_reconcile = loop.time() + 10
             worked = await (
-                dispatch_once(PostgresTransport())
+                dispatch_once(_transport())
                 if queue is None
                 else run_once(queue, client)
             )
@@ -142,6 +158,14 @@ async def serve(queue: TaskQueue | None, once: bool) -> None:
     finally:
         await client.aclose()
         await close_database()
+
+
+def _transport():
+    if get_settings().background_task_transport == "celery":
+        from news_reposter.background.celery_app import MixedTransport
+
+        return MixedTransport()
+    return PostgresTransport()
 
 
 async def recover_only() -> None:

@@ -1,4 +1,4 @@
-# Opt-in durable workers before switching the transport to Celery.
+# Opt-in workers: rewrite over Celery/Redis; remaining queues over PostgreSQL.
 # Start with: docker compose -f compose.yaml -f compose.prod.yaml -f compose.tasks.yaml --profile background up -d --build
 x-task-worker: &task-worker
   profiles: [background]
@@ -8,9 +8,11 @@ x-task-worker: &task-worker
   init: true
   stop_grace_period: 30s
   env_file: [.env]
-  environment:
+  environment: &task-worker-env
     POSTGRES_HOST: postgres
     POSTGRES_PORT: 5432
+    DATABASE_POOL_SIZE: 2
+    DATABASE_MAX_OVERFLOW: 2
     HTTP_CA_FILE: /app/certs/russian_trusted_ca.pem
     MEDIA_ROOT: /app/data/media
   volumes:
@@ -25,15 +27,45 @@ x-task-worker: &task-worker
   mem_limit: 512m
   cpus: 0.5
 services:
+  redis:
+    image: redis:7.4-alpine
+    profiles: [background]
+    restart: unless-stopped
+    command: [redis-server, --appendonly, 'yes', --maxmemory-policy, noeviction]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: [CMD, redis-cli, ping]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    logging:
+      driver: json-file
+      options: {max-size: "10m", max-file: "5"}
   app:
     environment:
       BACKGROUND_TASKS_ENABLED: "true"
   task-outbox:
     <<: *task-worker
+    environment:
+      <<: *task-worker-env
+      REDIS_URL: redis://redis:6379/0
+      BACKGROUND_TASK_TRANSPORT: celery
+    depends_on:
+      postgres: {condition: service_healthy}
+      migrate: {condition: service_completed_successfully}
+      redis: {condition: service_healthy}
     command: [python, -m, news_reposter.background.worker, --dispatch]
   task-rewrite:
     <<: *task-worker
-    command: [python, -m, news_reposter.background.worker, --queue, rewrite]
+    environment:
+      <<: *task-worker-env
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      postgres: {condition: service_healthy}
+      migrate: {condition: service_completed_successfully}
+      redis: {condition: service_healthy}
+    command: [celery, -A, news_reposter.background.celery_app:celery_app, worker, --queues=rewrite, --concurrency=2, --loglevel=INFO]
   task-collection:
     <<: *task-worker
     command: [python, -m, news_reposter.background.worker, --queue, collection]
@@ -43,3 +75,5 @@ services:
   task-maintenance:
     <<: *task-worker
     command: [python, -m, news_reposter.background.worker, --queue, maintenance]
+volumes:
+  redis_data:

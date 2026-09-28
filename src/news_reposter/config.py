@@ -65,6 +65,8 @@ class Settings(BaseSettings):
     database_journal_timeout_seconds: float = Field(default=5.0, gt=0, le=60)
 
     background_tasks_enabled: bool = False
+    background_task_transport: Literal["postgres", "celery"] = "postgres"
+    redis_url: str = "redis://localhost:6379/0"
     background_task_lease_seconds: int = Field(default=90, ge=30, le=600)
     background_task_poll_seconds: float = Field(default=2, gt=0, le=60)
 

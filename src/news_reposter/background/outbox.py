@@ -8,7 +8,8 @@ from uuid import UUID, uuid4
 from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert
 
-from news_reposter.db.models import TaskDelivery, TaskOutbox
+from news_reposter.background.contracts import TaskQueue, TaskState
+from news_reposter.db.models import BackgroundTask, TaskDelivery, TaskOutbox
 from news_reposter.db.session import async_session_factory
 
 
@@ -23,6 +24,42 @@ class PostgresTransport:
                 insert(TaskDelivery).values(task_id=task_id).on_conflict_do_nothing()
             )
             await session.commit()
+
+
+async def reconcile_rewrite(*, limit: int = 100) -> int:
+    """Redis may lose an accepted message; retry due tasks and old pending IDs."""
+    async with async_session_factory() as session:
+        rows = list(
+            await session.scalars(
+                select(TaskOutbox)
+                .join(BackgroundTask, BackgroundTask.task_id == TaskOutbox.task_id)
+                .where(
+                    BackgroundTask.queue == TaskQueue.REWRITE,
+                    TaskOutbox.delivered_at.is_not(None),
+                    (TaskOutbox.lease_until.is_(None))
+                    | (TaskOutbox.lease_until <= func.now()),
+                    (
+                        (BackgroundTask.state == TaskState.RETRY_WAIT)
+                        & (BackgroundTask.available_at <= func.now())
+                    )
+                    | (
+                        (BackgroundTask.state == TaskState.PENDING)
+                        & (
+                            TaskOutbox.delivered_at
+                            <= func.now() - timedelta(seconds=120)
+                        )
+                    ),
+                )
+                .order_by(TaskOutbox.delivered_at)
+                .with_for_update(of=TaskOutbox, skip_locked=True)
+                .limit(limit)
+            )
+        )
+        for row in rows:
+            row.delivered_at = None
+            row.available_at = await session.scalar(select(func.now()))
+        await session.commit()
+        return len(rows)
 
 
 async def dispatch_once(transport: Transport) -> bool:
