@@ -174,3 +174,25 @@ jobs:
 
       - name: Build frontend image
         run: docker build --tag news-reposter-frontend:ci ./frontend
+
+      - name: Exercise disposable production Compose stack
+        env:
+          API_WORKERS: "2"
+        run: |
+          docker compose -f compose.yaml -f compose.prod.yaml -f compose.tasks.yaml --profile background \
+            up -d --build --wait postgres redis migrate app scheduler task-outbox \
+            task-rewrite task-collection task-maintenance task-publication
+          docker compose -f compose.yaml -f compose.prod.yaml -f compose.tasks.yaml --profile background \
+            exec -T app python - --url http://127.0.0.1:8000/health/database \
+            --requests 320 --concurrency 16 < scripts/bench_api_health.py
+          docker compose -f compose.yaml -f compose.prod.yaml -f compose.tasks.yaml --profile background \
+            exec -T postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"' <<'SQL'
+          SHOW max_connections;
+          SELECT state, count(*) FROM pg_stat_activity
+          WHERE datname = current_database() GROUP BY state ORDER BY state;
+          SQL
+          docker stats --no-stream --format 'table {{.Name}}\t{{.MemUsage}}\t{{.CPUPerc}}'
+
+      - name: Remove disposable stack
+        if: always()
+        run: docker compose -f compose.yaml -f compose.prod.yaml -f compose.tasks.yaml --profile background down -v --remove-orphans
