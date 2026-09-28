@@ -179,6 +179,7 @@ jobs:
         env:
           API_WORKERS: "2"
         run: |
+          cp /etc/ssl/certs/ca-certificates.crt certs/russian_trusted_ca.pem
           docker compose -f compose.yaml -f compose.prod.yaml -f compose.tasks.yaml --profile background \
             up -d --build --wait postgres redis migrate app scheduler task-outbox \
             task-rewrite task-collection task-maintenance task-publication
@@ -192,6 +193,13 @@ jobs:
           WHERE datname = current_database() GROUP BY state ORDER BY state;
           SQL
           docker stats --no-stream --format 'table {{.Name}}\t{{.MemUsage}}\t{{.CPUPerc}}'
+
+      - name: Diagnose disposable stack failure
+        if: failure()
+        run: |
+          docker compose -f compose.yaml -f compose.prod.yaml -f compose.tasks.yaml --profile background ps
+          docker compose -f compose.yaml -f compose.prod.yaml -f compose.tasks.yaml --profile background \
+            logs --no-color --tail=40 app scheduler task-outbox task-rewrite task-collection task-maintenance task-publication
 
       - name: Remove disposable stack
         if: always()
