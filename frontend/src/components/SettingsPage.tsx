@@ -97,7 +97,11 @@ export function SettingsPage() {
     setCollecting(true); setError(""); setNotice("Сбор запущен. Ожидаем результат.");
     try {
       const result = await collectNowInBackground(controller.signal);
-      setNotice(`Сбор №${result.run_id} завершён: найдено ${result.posts_found}, добавлено в очередь ${result.queue_items_created}.`);
+      if (result.errors) {
+        setError(`Сбор №${result.run_id} завершён с ошибками: ${result.errors}. Проверьте журнал.`);
+      } else {
+        setNotice(`Сбор №${result.run_id} завершён: найдено ${result.posts_found}, добавлено в очередь ${result.queue_items_created}.`);
+      }
       setStatus(await api.collectionStatus());
     } catch (exc) {
       if (!controller.signal.aborted) setError(exc instanceof Error ? exc.message : "Не удалось запустить сбор");

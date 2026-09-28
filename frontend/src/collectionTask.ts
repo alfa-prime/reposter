@@ -47,7 +47,7 @@ export async function collectNowInBackground(signal?: AbortSignal): Promise<Coll
       window.sessionStorage.removeItem(storageKey);
       const summary = task.result as CollectSummary | null;
       if (!summary || typeof summary.sources_checked !== "number") throw new Error("Результат сбора недоступен. Проверьте журнал запусков.");
-      return summary;
+      return { ...summary, status: "ok" };
     }
     if (["failed", "cancelled", "needs_review"].includes(task.state)) {
       window.sessionStorage.removeItem(storageKey);
