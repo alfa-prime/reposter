@@ -38,7 +38,7 @@ def start_worker(log):
             "worker",
             "--pool=solo",
             "--concurrency=1",
-            "--queues=rewrite,collection",
+            "--queues=rewrite,collection,maintenance",
             "--loglevel=WARNING",
         ],
         stdout=log,
@@ -110,6 +110,26 @@ def test_real_celery_redelivery_after_redis_message_loss():
                 assert await wait_for_failure(collection.task_id) == (
                     1,
                     "vk_not_configured",
+                )
+                stop_worker(process)
+                process = None
+                maintenance = await create_task(
+                    TaskQueue.MAINTENANCE, payload={"operation": "unsupported"}
+                )
+                assert await dispatch_once(MixedTransport())
+                assert await redis.delete("maintenance") == 1
+                async with async_session_factory() as session:
+                    row = await session.scalar(
+                        select(TaskOutbox).where(TaskOutbox.task_id == maintenance.task_id)
+                    )
+                    row.delivered_at = datetime.now(UTC) - timedelta(minutes=3)
+                    await session.commit()
+                assert await reconcile_celery() == 1
+                assert await dispatch_once(MixedTransport())
+                process = start_worker(log)
+                assert await wait_for_failure(maintenance.task_id) == (
+                    1,
+                    "unsupported_maintenance_operation",
                 )
             except Exception:
                 log.flush()

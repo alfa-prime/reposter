@@ -1,8 +1,8 @@
 # Фоновые задачи: поэтапный переход на Celery
 
 Состояние задачи и бизнес-данные хранятся в PostgreSQL. В профиле `background`
-рерайт и сбор доставляются через Celery и Redis; публикация и обслуживание пока
-исполняются прежними PostgreSQL воркерами. По умолчанию
+рерайт, сбор и обслуживание доставляются через Celery и Redis; публикация пока
+исполняется прежним PostgreSQL воркером. По умолчанию
 `BACKGROUND_TASKS_ENABLED=false`, `BACKGROUND_TASK_TRANSPORT=postgres`.
 `compose.tasks.yaml` включает Redis, диспетчер outbox и четыре типа исполнителей.
 Кнопки рерайта и ручного сбора используют асинхронные endpoints, когда фоновые
@@ -25,7 +25,7 @@
   уникальную квитанцию `task_deliveries`; Celery доставляет точный ID задачи, который
   захватывается в базе только если задача готова к исполнению. Повтор не создаёт
   вторую задачу. Диспетчер заново отправляет готовые `retry_wait` и застрявшие
-  более двух минут `pending` рерайты и сборы: это также восстанавливает потерянные Redis
+  более двух минут `pending` рерайты, сборы и обслуживание: это также восстанавливает потерянные Redis
   сообщения. Дубликаты допустимы, их отсекает захват строки PostgreSQL.
 - Исполнитель захватывает строку через `FOR UPDATE SKIP LOCKED`, создаёт случайный
   token и lease на 90 секунд. Продление — каждые 30 секунд. Завершение проверяет
@@ -103,7 +103,7 @@ Backoff экспоненциальный с jitter. Числовой `Retry-Afte
 Пример последовательности после резервной копии и проверки миграций:
 
 ```sh
-docker compose -f compose.yaml -f compose.prod.yaml -f compose.tasks.yaml --profile background build app migrate task-outbox task-rewrite task-collection
+docker compose -f compose.yaml -f compose.prod.yaml -f compose.tasks.yaml --profile background build app migrate task-outbox task-rewrite task-collection task-maintenance
 docker compose -f compose.yaml -f compose.prod.yaml -f compose.tasks.yaml --profile background up -d --no-build app redis task-outbox task-rewrite task-collection task-publication task-maintenance
 ```
 
@@ -143,13 +143,9 @@ ORDER BY finished_at DESC LIMIT 20;
    это история и ключи дедупликации. Production downgrade миграции удалит историю
    и для обычного отката не нужен.
 
-## Последующий переход на Celery
+## Следующие этапы
 
-Заменяется транспорт доставки ID, сохраняются DB состояния, ключи, снимки и fencing.
-Сам по себе publish в брокер не означает завершение бизнес-задачи. Celery consumer
-должен захватывать конкретный ID с проверкой состояния, а не произвольную задачу;
-повторная доставка завершённого ID — no-op. Потребуются publisher confirms, ack после
-сохранения результата, восстановление lease и доставка задач из `retry_wait` по
-`available_at`. Этот адаптер, брокер, мониторинг брокера и настройки Celery пока
-не реализованы. Проверка неопределённой публикации остаётся обязательной при любом
-транспорте: Celery не даёт exactly-once для внешнего API MAX.
+Сейчас планировщики работают внутри каждого процесса FastAPI. Перед запуском
+нескольких процессов API их нужно вынести в один отдельный процесс. Затем
+перенести публикацию на Celery с сохранением проверки неопределённой отправки:
+повторная доставка сообщения из брокера не гарантирует единственной отправки в MAX.

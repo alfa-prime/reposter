@@ -7,6 +7,7 @@ import pytest
 from news_reposter.background.celery_app import (
     MixedTransport,
     collection_task,
+    maintenance_task,
     rewrite_task,
 )
 from news_reposter.background.contracts import (
@@ -56,7 +57,11 @@ def test_only_explicit_transient_errors_are_retried():
 
 @pytest.mark.parametrize(
     "queue,celery_task",
-    [(TaskQueue.REWRITE, rewrite_task), (TaskQueue.COLLECTION, collection_task)],
+    [
+        (TaskQueue.REWRITE, rewrite_task),
+        (TaskQueue.COLLECTION, collection_task),
+        (TaskQueue.MAINTENANCE, maintenance_task),
+    ],
 )
 def test_celery_transport_sends_only_the_id(monkeypatch, queue, celery_task):
     calls = []

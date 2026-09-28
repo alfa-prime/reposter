@@ -31,6 +31,11 @@ def collection_task(task_id: str) -> None:
     run_task(task_id, TaskQueue.COLLECTION)
 
 
+@celery_app.task(name="news_reposter.maintenance")
+def maintenance_task(task_id: str) -> None:
+    run_task(task_id, TaskQueue.MAINTENANCE)
+
+
 def run_task(task_id: str, queue: TaskQueue) -> None:
     # A new event loop per delivery needs a fresh SQLAlchemy pool each time.
     from news_reposter.background.worker import run_once
@@ -49,7 +54,7 @@ def run_task(task_id: str, queue: TaskQueue) -> None:
 
 
 class MixedTransport:
-    """Use Redis for rewrite and collection, PostgreSQL for the other queues."""
+    """Use Redis for rewrite, collection and maintenance; PG for publication."""
 
     def __init__(self) -> None:
         self.postgres = PostgresTransport()
@@ -58,6 +63,7 @@ class MixedTransport:
         task = {
             TaskQueue.REWRITE: rewrite_task,
             TaskQueue.COLLECTION: collection_task,
+            TaskQueue.MAINTENANCE: maintenance_task,
         }.get(queue)
         if task is not None:
             await asyncio.to_thread(

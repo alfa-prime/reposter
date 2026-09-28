@@ -1,4 +1,4 @@
-# Opt-in workers: rewrite and collection over Celery/Redis.
+# Opt-in workers: rewrite, collection and maintenance over Celery/Redis.
 # Start with: docker compose -f compose.yaml -f compose.prod.yaml -f compose.tasks.yaml --profile background up -d --build
 x-task-worker: &task-worker
   profiles: [background]
@@ -81,6 +81,13 @@ services:
     command: [python, -m, news_reposter.background.worker, --queue, publication]
   task-maintenance:
     <<: *task-worker
-    command: [python, -m, news_reposter.background.worker, --queue, maintenance]
+    environment:
+      <<: *task-worker-env
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      postgres: {condition: service_healthy}
+      migrate: {condition: service_completed_successfully}
+      redis: {condition: service_healthy}
+    command: [celery, -A, news_reposter.background.celery_app:celery_app, worker, --queues=maintenance, --concurrency=1, --loglevel=INFO]
 volumes:
   redis_data:
