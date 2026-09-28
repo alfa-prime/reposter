@@ -49,7 +49,7 @@ def start_worker(log, *, env=None):
             "worker",
             "--pool=solo",
             "--concurrency=1",
-            "--queues=rewrite,collection,maintenance",
+            "--queues=rewrite,collection,maintenance,publication",
             "--loglevel=WARNING",
         ],
         stdout=log,
