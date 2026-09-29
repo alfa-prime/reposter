@@ -1,8 +1,15 @@
 # Развёртывание и обслуживание News Reposter
 
-Документ описывает установку на сервер, безопасное обновление, резервное
-копирование, восстановление и мониторинг. Рекомендуемая конфигурация: Ubuntu
-24.04 LTS, 2 vCPU, 4 ГБ RAM и SSD от 40 ГБ.
+Документ описывает текущую production-конфигурацию: Caddy, FastAPI,
+PostgreSQL, Redis, отдельный планировщик, outbox и четыре очереди Celery.
+Рекомендуемый начальный сервер: Ubuntu 24.04 LTS, 2 vCPU, 4 ГБ RAM и SSD от
+40 ГБ. На этой конфигурации проверены два процесса API; дальнейшее увеличение
+числа процессов требует отдельной проверки памяти и соединений PostgreSQL.
+
+Все команды управления работающим приложением ниже используют три файла
+`compose.yaml`, `compose.prod.yaml`, `compose.tasks.yaml` и профиль
+`background`. Не заменяйте их командой `docker compose up` без флагов: это
+локальный стек без Celery. Backup скрипты сами выбирают свой профиль.
 
 ## 1. Подготовка сервера
 
@@ -47,6 +54,7 @@ MAX_ACCESS_TOKEN=токен_бота_MAX
 POSTGRES_PASSWORD=длинный_случайный_пароль
 SITE_ADDRESS=news.example.ru
 AUTH_COOKIE_SECURE=true
+API_WORKERS=2
 ```
 
 Пароль PostgreSQL можно создать командой `openssl rand -hex 32`.
@@ -60,18 +68,36 @@ HTTP/HTTPS, автоматически получает TLS-сертификат
 `AUTH_COOKIE_SECURE=false`. Обычный HTTP не шифрует пароли и не подходит для
 постоянной эксплуатации.
 
+Production Compose задаёт `HTTP_CA_FILE=/app/certs/russian_trusted_ca.pem` для
+API, планировщика и исполнителей. Создайте `certs/` и поместите в этот файл
+доверенные CA перед запуском. Если дополнительных сертификатов пока нет,
+можно начать с системного набора сертификатов хоста:
+
+```bash
+mkdir -p certs
+cp /etc/ssl/certs/ca-certificates.crt certs/russian_trusted_ca.pem
+```
+
+Для API MAX/GigaChat при необходимости добавьте доверенные сертификаты к этому
+PEM-файлу. Секреты и сертификаты не добавляйте в Git.
+
 ## 3. Первый запуск
 
 ```bash
-docker compose -f compose.yaml -f compose.prod.yaml up -d --build
-docker compose -f compose.yaml -f compose.prod.yaml ps
+docker compose -f compose.yaml -f compose.prod.yaml -f compose.tasks.yaml \
+  --profile background config --quiet
+docker compose -f compose.yaml -f compose.prod.yaml -f compose.tasks.yaml \
+  --profile background up -d --build --wait
+docker compose -f compose.yaml -f compose.prod.yaml -f compose.tasks.yaml \
+  --profile background ps
 ```
 
 Контейнер `migrate` дождётся PostgreSQL и применит миграции Alembic до запуска
 backend. Для новой базы создайте первого администратора:
 
 ```bash
-docker compose -f compose.yaml -f compose.prod.yaml exec app \
+docker compose -f compose.yaml -f compose.prod.yaml -f compose.tasks.yaml \
+  --profile background exec app \
   python -m news_reposter.cli create-admin
 ```
 
@@ -80,8 +106,14 @@ docker compose -f compose.yaml -f compose.prod.yaml exec app \
 ```bash
 curl --fail --silent https://news.example.ru/health
 curl --fail --silent https://news.example.ru/health/database
-docker compose -f compose.yaml -f compose.prod.yaml logs --tail=100 app
+docker compose -f compose.yaml -f compose.prod.yaml -f compose.tasks.yaml \
+  --profile background logs --tail=100 app scheduler task-outbox
 ```
+
+Проверьте `redis-cli ping` внутри контейнера Redis. После настройки источников
+и каналов выполните ручной сбор в интерфейсе и проверьте выполнение задачи.
+Планировщик автоматического сбора по умолчанию выключен; отложенные публикации
+и очистка работают независимо от этой настройки.
 
 ## 4. Безопасное обновление
 
@@ -90,33 +122,50 @@ docker compose -f compose.yaml -f compose.prod.yaml logs --tail=100 app
 ```bash
 cd /путь/к/reposter
 ./backup/run-backup.sh
+./backup/run-verify.sh
 git pull --ff-only origin master
-docker compose -f compose.yaml -f compose.prod.yaml up -d --build
+docker compose -f compose.yaml -f compose.prod.yaml -f compose.tasks.yaml \
+  --profile background config --quiet
+docker compose -f compose.yaml -f compose.prod.yaml -f compose.tasks.yaml \
+  --profile background build app scheduler migrate frontend task-outbox \
+  task-rewrite task-collection task-maintenance task-publication
+docker compose -f compose.yaml -f compose.prod.yaml -f compose.tasks.yaml \
+  --profile background up -d --no-build --wait
 ```
 
-`--ff-only` запрещает неожиданное слияние истории на сервере. Docker собирает
-новые образы, применяет миграции и заменяет изменившиеся контейнеры. `.env`,
-PostgreSQL и постоянные Docker-тома не перезаписываются.
+`--ff-only` запрещает неожиданное слияние истории на сервере. Compose обновляет
+API, планировщик и **все** обработчики задач; они используют один код и должны
+работать на одной версии. Миграции запускаются до зависимых сервисов. `.env`
+и постоянные Docker тома не перезаписываются. Перед релизом с несовместимыми
+миграциями, изменением транспорта или контрактов задач нужен отдельный план
+переключения и проверки незавершённых публикаций.
 
 После обновления:
 
 ```bash
-docker compose -f compose.yaml -f compose.prod.yaml ps
+docker compose -f compose.yaml -f compose.prod.yaml -f compose.tasks.yaml \
+  --profile background ps
 curl --fail --silent https://news.example.ru/health
 curl --fail --silent https://news.example.ru/health/database
-docker compose -f compose.yaml -f compose.prod.yaml logs --since 5m app migrate
+docker compose -f compose.yaml -f compose.prod.yaml -f compose.tasks.yaml \
+  --profile background logs --since 5m app migrate scheduler task-outbox \
+  task-rewrite task-collection task-maintenance task-publication
+docker compose -f compose.yaml -f compose.prod.yaml -f compose.tasks.yaml \
+  --profile background exec -T redis redis-cli ping
 systemctl start reposter-monitor.service
 systemctl show reposter-monitor.service -p Result --value
 ```
 
-Для отката выберите предыдущий исправный коммит и снова соберите контейнеры.
-Если релиз менял схему или данные, сначала изучите миграцию Alembic — откатывать
-базу вслепую нельзя.
+Проверьте также завершение новых задач и публикацию в MAX ровно один раз.
+При ошибках сначала остановите создание новых задач и определите состояния
+`pending`, `running`, `retry_wait`, `needs_review` и неизвестные отправки;
+порядок отката транспорта описан в [BACKGROUND_TASKS.md](BACKGROUND_TASKS.md).
+Для отката версии кода на прежний коммит сначала проверьте совместимость схемы
+и контрактов задач. Откат базы вслепую может потерять данные.
 
 ## 5. Пул PostgreSQL
 
-Один процесс приложения использует до 10 постоянных и до 10 временных
-соединений:
+Один процесс API использует до 10 постоянных и 10 дополнительных соединений:
 
 ```dotenv
 DATABASE_POOL_SIZE=10
@@ -126,10 +175,10 @@ DATABASE_POOL_RECYCLE_SECONDS=1800
 DATABASE_COMMAND_TIMEOUT_SECONDS=30
 ```
 
-При добавлении процессов FastAPI или фоновых воркеров считайте суммарное число
-соединений. Планировщики уже вынесены из FastAPI в отдельный сервис `scheduler`.
-Расчёт для двух API-процессов и всех Celery-сервисов, а также проверка памяти
-приведены в разделе «Бюджет при `API_WORKERS=2`» файла `BACKGROUND_TASKS.md`.
+Для двух процессов API теоретический максимум пулов всех сервисов — 68
+соединений из `max_connections=100` PostgreSQL в проверенной конфигурации.
+Это верхняя граница, а не постоянное число открытых соединений. Расчёт и
+ограничения по памяти приведены в [BACKGROUND_TASKS.md](BACKGROUND_TASKS.md).
 
 ## 5.1. Ограничения медиа
 
@@ -213,31 +262,74 @@ systemctl status reposter-backup-verify.service
 
 ## 7. Проверка и полное восстановление
 
-Сначала проверяйте восстановление на временном сервере. Полное восстановление
-заменяет выбранную базу и все медиафайлы.
+`./backup/run-verify.sh` проверяет репозиторий и выборку данных, но не
+восстанавливает базу. Тестовое восстановление проводите на отдельном сервере
+после изменения схемы резервирования и не реже одного раза в три месяца.
+Записывайте дату, ID снимка, длительность и результат.
+
+Полное восстановление **заменяет базу и все файлы медиа**. На работающем
+сервере сначала прекратите приём изменений и остановите API, отдельный
+планировщик, outbox и всех Celery исполнителей. PostgreSQL оставьте запущенным
+для `pg_restore`:
 
 ```bash
 docker compose -f compose.yaml -f compose.prod.yaml --profile backup \
   run --rm backup snapshots
-docker compose -f compose.yaml -f compose.prod.yaml stop frontend app
+docker compose -f compose.yaml -f compose.prod.yaml -f compose.tasks.yaml \
+  --profile background stop frontend app scheduler task-outbox \
+  task-rewrite task-collection task-maintenance task-publication
 RESTORE_CONFIRM=RESTORE RESTORE_SNAPSHOT=latest \
   docker compose -f compose.yaml -f compose.prod.yaml --profile backup \
   run --rm -e RESTORE_CONFIRM -e RESTORE_SNAPSHOT backup restore
-docker compose -f compose.yaml -f compose.prod.yaml run --rm migrate
-docker compose -f compose.yaml -f compose.prod.yaml up -d app frontend
+docker compose -f compose.yaml -f compose.prod.yaml -f compose.tasks.yaml \
+  --profile background run --rm migrate
+```
+
+В томе Redis остаются сообщения, относящиеся к состоянию БД **до**
+восстановления. Перед запуском обработчиков согласуйте брокер с восстановленной
+БД: в выделенном Redis этого проекта очистите только используемую базу Redis
+`0` (`redis-cli -n 0 FLUSHDB`), затем запустите outbox. Он повторно отправит
+недоставленные сообщения и восстановит старые ожидающие задачи. Задачи,
+восстановленные в состоянии `running`, требуют проверки после истечения lease;
+`python -m news_reposter.background.worker --recover` закрывает просроченные
+lease и переносит неопределённые публикации в `needs_review`. Перед
+возобновлением публикаций разберите `sending`/`unknown` и `needs_review`:
+неизвестную отправку нельзя автоматически повторять без проверки канала.
+
+```bash
+docker compose -f compose.yaml -f compose.prod.yaml -f compose.tasks.yaml \
+  --profile background exec redis redis-cli -n 0 FLUSHDB
+docker compose -f compose.yaml -f compose.prod.yaml -f compose.tasks.yaml \
+  --profile background run --rm task-outbox \
+  python -m news_reposter.background.worker --recover
+docker compose -f compose.yaml -f compose.prod.yaml -f compose.tasks.yaml \
+  --profile background up -d --no-build --wait app scheduler task-outbox \
+  task-rewrite task-collection task-maintenance task-publication frontend
 curl --fail --silent https://news.example.ru/health/database
 ```
 
-Проводите проверку после изменения схемы резервирования и не реже одного раза
-в три месяца. Записывайте дату, ID снимка, длительность и результат.
+Выполняйте `--recover` после истечения lease из восстановленного снимка
+(по умолчанию 90 секунд с последнего продления); повторите проверку состояний
+задач до возобновления сервиса. На стенде с отдельной БД можно сначала
+протестировать этот порядок без риска для production.
+
+Команда `FLUSHDB` применима только если Redis DB 0 выделена этому приложению;
+на общем Redis сначала составьте отдельный план очистки. Для аварийного
+восстановления production дополнительно проверьте, что восстановленный снимок
+совместим с текущим кодом и миграциями. Outbox не служит заменой проверке
+внешних публикаций в MAX.
 
 ## 8. Мониторинг ntfy
 
-Каждые пять минут сервер проверяет контейнеры, публичные health-check, заполнение
-диска, свежесть копии и состояние задач резервирования. При изменении проблемы
+Каждые пять минут текущий скрипт проверяет `postgres`, `app`, `frontend`,
+публичные health-check, заполнение диска, свежесть копии и состояние задач
+резервирования. Он **пока не проверяет** Redis, scheduler, outbox и Celery:
+смотрите `docker compose ... ps`, логи и состояния задач из раздела ниже.
+При изменении обнаруженной проблемы
 приходит одно аварийное сообщение, после устранения — одно сообщение о
 восстановлении. По понедельникам около 09:00 по Москве приходит обычная
-недельная сводка: последняя копия, контейнеры, диск и состояние проверки S3.
+недельная сводка: последняя копия, три основных контейнера, диск и состояние
+проверки S3.
 
 ```dotenv
 NTFY_URL=https://ntfy.sh/длинная_случайная_тема
@@ -279,6 +371,7 @@ journalctl -u reposter-monitor.service -n 100 --no-pager
 ## 9. Постоянные данные
 
 - `postgres_data` — PostgreSQL;
+- `redis_data` — AOF Redis; состояние и результаты задач сохраняются в PostgreSQL;
 - `media_data` — изображения, видео, аватары и состояние медиа;
 - `caddy_data` — TLS-сертификаты и данные Caddy;
 - `.env` — секреты конкретного сервера;
@@ -304,8 +397,10 @@ journalctl -u reposter-monitor.service -n 100 --no-pager
 
 Перед запуском новой версии убедитесь, что сервис `migrate` успешно завершился.
 Стандартные зависимости Compose уже обеспечивают этот порядок.
-Для отката сначала верните прежние app и frontend; только затем при необходимости
-выполните `alembic downgrade 0018_publication_recovery`. JSON-история сохраняется.
+Для отката миграции сначала проверьте совместимость app и фоновых сервисов;
+`alembic downgrade` на работающей production БД не является штатным откатом.
+JSON-история сохраняется при откате только этой миграции, но более поздние
+миграции требуют отдельного анализа.
 
 Интерфейс трёх журналов использует `pagination=cursor` с `limit` до 100.
 Ответ содержит `has_more` и `next_cursor`; `total=null`, обязательного COUNT нет.
@@ -338,13 +433,29 @@ PostgreSQL statement_timeout для запросов списка журнало
 используйте только одноразовую БД. Времена локальной машины не являются SLA прода.
 
 
-## Фоновые задачи (этап 5)
+## Фоновые задачи и эксплуатация
 
-Инструкция включения, наблюдения и отката: [BACKGROUND_TASKS.md](BACKGROUND_TASKS.md).
-После включения использовать `compose.tasks.yaml` и профиль `background` вместе
-с основными compose файлами при обновлении app и task workers. Все исполнители
-используют образ `reposter-app`; после сборки app их нужно пересоздать.
-Обычный запуск без файла задач отключает производителей и оставляет worker-контейнеры
-вне выбранной конфигурации — для отката их остановить явно после завершения задач.
-Для отката исполнения миграцию `0020_background_tasks` не понижать: она содержит
-историю и ключи дедупликации. Инструкция отката журнала выше относится к этапу 4.
+Все четыре очереди работают через Celery/Redis. PostgreSQL хранит длительное
+состояние и транзакционный outbox; отдельный `scheduler` запускает сбор,
+публикации по времени и обслуживание. Технический разбор состояний,
+наблюдение, ручной разбор неизвестной публикации и переключение транспорта —
+в [BACKGROUND_TASKS.md](BACKGROUND_TASKS.md). Миграцию
+`0020_background_tasks` при обычном откате исполнения не понижать: она хранит
+историю и ключи дедупликации.
+
+Короткая диагностика:
+
+```bash
+docker compose -f compose.yaml -f compose.prod.yaml -f compose.tasks.yaml \
+  --profile background ps
+docker ps -q --filter label=com.docker.compose.project=reposter | \
+  xargs -r docker inspect \
+  --format '{{.Name}} restarts={{.RestartCount}} oom={{.State.OOMKilled}}'
+docker stats --no-stream
+```
+
+Через `psql` проверяйте число `pending`, `running`, `retry_wait` и
+`needs_review` в `background_tasks`, `delivered_at IS NULL` в `task_outbox`,
+а также `sending`/`unknown` в `publication_attempts`. Это выявляет задачи,
+которые не видны из `/health/database`. Redis и Celery живут в отдельных
+контейнерах; успешный ответ API сам по себе не доказывает доставку задач.
