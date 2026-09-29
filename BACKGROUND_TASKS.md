@@ -100,19 +100,52 @@ Backoff экспоненциальный с jitter. Числовой `Retry-Afte
 
 ## Включение на сервере
 
-Сначала резервная копия и проверка восстановления (`backup/run-backup.sh`,
-`backup/run-verify.sh`). Применение миграции `0020_background_tasks` добавляет таблицы
+Сначала резервная копия и проверка её хранилища (`backup/run-backup.sh`,
+`backup/run-verify.sh`). Проверка читает выборку данных, но не восстанавливает
+приложение; тестовое восстановление описано в `DEPLOY.md`. Применение миграции
+`0020_background_tasks` добавляет таблицы
 и nullable связи, существующие данные не переписываются. DDL ограничен lock timeout
 2 секунды и statement timeout 30 секунд. При занятой схеме миграция завершается
 ошибкой, а не удерживает длительную блокировку.
 
 Профиль `background` теперь поднимает Redis с AOF и политикой `noeviction`.
-Пример последовательности после резервной копии и проверки миграций:
+Пример для нового пустого сервера после настройки резервного копирования;
+для перехода работающего сервера используйте порядок ниже:
 
 ```sh
-docker compose -f compose.yaml -f compose.prod.yaml -f compose.tasks.yaml --profile background build app scheduler migrate task-outbox task-rewrite task-collection task-publication task-maintenance
-docker compose -f compose.yaml -f compose.prod.yaml -f compose.tasks.yaml --profile background up -d --no-build app scheduler redis task-outbox task-rewrite task-collection task-publication task-maintenance
+docker compose -f compose.yaml -f compose.prod.yaml -f compose.tasks.yaml --profile background build app scheduler migrate frontend task-outbox task-rewrite task-collection task-publication task-maintenance
+docker compose -f compose.yaml -f compose.prod.yaml -f compose.tasks.yaml --profile background up -d --no-build app scheduler redis frontend task-outbox task-rewrite task-collection task-publication task-maintenance
 ```
+
+### Переход работающего сервера с PostgreSQL transport
+
+На сервере с предыдущей версией планировщики работают внутри одного процесса
+FastAPI, а `task-*` используют PostgreSQL transport. Перед переключением нужно
+убедиться, что нет `pending`, `running`, `retry_wait`, недоставленных outbox и
+публикаций в состоянии `sending`/`unknown`; неизвестные результаты публикации
+разобрать вручную. Сделать свежую резервную копию и проверить её. Предварительно
+собрать новую версию `app`, `scheduler`, `migrate`, `frontend`, `task-outbox` и
+всех четырёх `task-*` с тремя compose-файлами и профилем `background`.
+
+Для самого переключения предусмотреть короткий перерыв в доступности API:
+
+1. Остановить старый `app`, чтобы его встроенные планировщики больше не создавали
+   задачи. Дождаться завершения уже запущенных задач и повторить проверку состояний.
+2. Остановить старые `task-outbox` и четыре `task-*`. Не использовать
+   `--remove-orphans`: при командах резервирования без `compose.tasks.yaml`
+   предупреждение об orphan-контейнерах ожидаемо, но удалять их до завершения
+   перехода нельзя.
+3. Поднять Redis и новую версию `app`, отдельный `scheduler`, outbox, четыре
+   Celery worker и `frontend` с тремя compose-файлами. Проверить успешное
+   завершение `migrate` и здоровье PostgreSQL/Redis/API. Новый `scheduler`
+   запускать только после остановки старого `app`.
+4. Начать с `API_WORKERS=1` (значение по умолчанию), проверить реальные операции,
+   очереди, ошибки и рестарты. Только после этого установить `API_WORKERS=2`,
+   пересоздать `app` и наблюдать подключения PostgreSQL и память.
+
+При откате сначала остановить новый `scheduler` и исполнителей Celery, затем
+вернуть прежние `app` и PostgreSQL worker. Не запускать старый `app` одновременно
+с новым `scheduler`; миграцию `0020_background_tasks` не понижать.
 
 Воркеры используют один образ приложения, общий media volume и доверенные TLS
 сертификаты. На контейнер установлен предел 512 МБ и 0,5 CPU; Celery рерайт
