@@ -103,6 +103,7 @@ QUEUE_WRITE_OPERATIONS = {
     ("/api/v1/tasks/{task_id}/cancel", "post"),
     ("/api/v1/queue/{queue_item_id}/rewrite-task", "post"),
     ("/api/v1/queue/{queue_item_id}/publish-task", "post"),
+    ("/api/v1/queue/{queue_item_id}/retry-publication-task", "post"),
     ("/api/v1/queue", "post"),
     ("/api/v1/queue/{queue_item_id}", "patch"),
     ("/api/v1/queue/{queue_item_id}", "delete"),

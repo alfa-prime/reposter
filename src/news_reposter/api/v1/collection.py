@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from news_reposter.api.dependencies import (
@@ -68,7 +68,6 @@ async def get_collection_settings(
 )
 async def update_collection_settings(
     data: CollectionSettingsUpdate,
-    request: Request,
     session: Session,
     _auth: SchedulerManageDep,
     _csrf_auth: CsrfAuthContextDep,
@@ -77,9 +76,6 @@ async def update_collection_settings(
     repository = CollectionRepository(session)
     settings = await repository.get_settings()
     settings = await repository.update_settings(settings, **data.model_dump())
-    scheduler = getattr(request.app.state, "collection_scheduler", None)
-    if scheduler is not None:
-        scheduler.notify_settings_changed()
     return CollectionSettingsRead.model_validate(settings)
 
 

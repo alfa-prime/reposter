@@ -4,11 +4,12 @@ import asyncio
 import os
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
+from unittest.mock import AsyncMock
 from uuid import uuid4
 
 import httpx
 import pytest
-from sqlalchemy import delete, func, select, update
+from sqlalchemy import delete, func, select, text, update
 from test_auth_postgres import run_postgres_scenario
 
 from news_reposter.background import handlers, worker
@@ -22,7 +23,11 @@ from news_reposter.background.contracts import (
     TaskState,
 )
 from news_reposter.background.intents import publication_snapshot, rewrite_snapshot
-from news_reposter.background.outbox import PostgresTransport, dispatch_once
+from news_reposter.background.outbox import (
+    PostgresTransport,
+    dispatch_once,
+    reconcile_celery,
+)
 from news_reposter.background.store import (
     claim,
     enqueue,
@@ -48,13 +53,76 @@ from news_reposter.db.models import (
     TaskOutbox,
     User,
 )
-from news_reposter.db.session import async_session_factory
+from news_reposter.db.session import async_session_factory, engine
 from news_reposter.llm import RewriteResult
+from news_reposter.services import scheduler_runner
 from news_reposter.services.publisher import _loaded_item
+from news_reposter.services.scheduler_runner import LOCK_KEY
 
 pytestmark = pytest.mark.skipif(
     os.getenv("RUN_POSTGRES_TESTS") != "1", reason="requires disposable PostgreSQL"
 )
+
+
+def test_scheduler_lock_excludes_second_process_and_releases_on_disconnect():
+    async def scenario():
+        async with engine.connect() as leader, engine.connect() as standby:
+            query = text("SELECT pg_try_advisory_lock(:key)")
+            assert await leader.scalar(query, {"key": LOCK_KEY}) is True
+            await leader.commit()
+            assert await standby.scalar(query, {"key": LOCK_KEY}) is False
+            await standby.commit()
+            await leader.invalidate()
+            assert await standby.scalar(query, {"key": LOCK_KEY}) is True
+            await standby.commit()
+            await standby.invalidate()
+
+    run_postgres_scenario(scenario)
+
+
+def test_scheduler_runner_holds_lock_until_shutdown(monkeypatch):
+    started = asyncio.Event()
+    instances = []
+    client = SimpleNamespace(aclose=AsyncMock())
+
+    class FakeScheduler:
+        def __init__(self, *_args):
+            instances.append(self)
+            self.stopped = False
+
+        def start(self):
+            if len(instances) == 3:
+                started.set()
+
+        async def stop(self):
+            self.stopped = True
+
+    monkeypatch.setattr(scheduler_runner, "create_http_client", lambda: client)
+    monkeypatch.setattr(scheduler_runner, "CollectionScheduler", FakeScheduler)
+    monkeypatch.setattr(scheduler_runner, "PublicationScheduler", FakeScheduler)
+    monkeypatch.setattr(scheduler_runner, "MediaCleanupScheduler", FakeScheduler)
+
+    async def scenario():
+        stop = asyncio.Event()
+        task = asyncio.create_task(scheduler_runner.run_schedulers(stop))
+        try:
+            await asyncio.wait_for(started.wait(), timeout=5)
+            async with engine.connect() as standby:
+                query = text("SELECT pg_try_advisory_lock(:key)")
+                assert await standby.scalar(query, {"key": LOCK_KEY}) is False
+                await standby.commit()
+        finally:
+            stop.set()
+            await asyncio.wait_for(task, timeout=5)
+        assert len(instances) == 3
+        assert all(instance.stopped for instance in instances)
+        client.aclose.assert_awaited_once_with()
+        async with engine.connect() as standby:
+            assert await standby.scalar(query, {"key": LOCK_KEY}) is True
+            await standby.commit()
+            await standby.invalidate()
+
+    run_postgres_scenario(scenario)
 
 
 def isolated(scenario):
@@ -264,6 +332,57 @@ def test_lost_ack_redelivery_does_not_duplicate_execution(monkeypatch):
             assert (
                 await session.get(BackgroundTask, task.task_id)
             ).state == TaskState.SUCCEEDED
+
+    isolated(scenario)
+
+
+def test_celery_exact_claim_redelivery_and_due_retry(monkeypatch):
+    async def scenario():
+        task = await create_task()
+        published = []
+
+        class Broker:
+            async def publish(self, task_id, queue, event_id):
+                published.append(task_id)
+
+        broker = Broker()
+        assert await dispatch_once(broker)
+        assert published == [task.task_id]
+        # Redis dropped the accepted message: no PostgreSQL delivery receipt exists.
+        async with async_session_factory() as session:
+            row = await session.scalar(
+                select(TaskOutbox).where(TaskOutbox.task_id == task.task_id)
+            )
+            row.delivered_at = datetime.now(UTC) - timedelta(minutes=3)
+            await session.commit()
+        assert await reconcile_celery() == 1
+        assert await dispatch_once(broker)
+        assert published == [task.task_id, task.task_id]
+
+        calls = []
+
+        async def handler(current, client):
+            calls.append(current.task_id)
+            if len(calls) == 1:
+                raise RetryableTaskError("temporary")
+            return handlers.Completion({"ok": True})
+
+        monkeypatch.setitem(worker.HANDLERS, TaskQueue.REWRITE, handler)
+        assert await worker.run_once(TaskQueue.REWRITE, None, task_id=task.task_id)
+        assert not await worker.run_once(TaskQueue.REWRITE, None, task_id=task.task_id)
+        assert await reconcile_celery() == 0  # retry is not due yet
+        async with async_session_factory() as session:
+            current = await session.get(BackgroundTask, task.task_id)
+            current.available_at = datetime.now(UTC) - timedelta(seconds=1)
+            await session.commit()
+        assert await reconcile_celery() == 1
+        assert await dispatch_once(broker)
+        assert await worker.run_once(TaskQueue.REWRITE, None, task_id=task.task_id)
+        assert not await worker.run_once(TaskQueue.REWRITE, None, task_id=task.task_id)
+        assert calls == [task.task_id, task.task_id]
+        async with async_session_factory() as session:
+            finished = await session.get(BackgroundTask, task.task_id)
+            assert finished.attempts == 2 and finished.state == TaskState.SUCCEEDED
 
     isolated(scenario)
 
@@ -519,6 +638,90 @@ def test_publication_confirms_domain_and_task_in_one_commit(monkeypatch):
             assert calls == [True]
         finally:
             settings.max_access_token = old
+
+    isolated(scenario)
+
+
+def test_manual_retry_requires_channel_check_before_queueing(monkeypatch):
+    from fastapi import HTTPException
+
+    from news_reposter.api.v1.task_submission import retry_publication_task
+    from news_reposter.schemas.background_task import PublicationRetrySubmission
+    from news_reposter.services import publisher
+
+    async def scenario():
+        item_id, target_id, user_id = await material(
+            QueueItemStatus.PUBLICATION_UNKNOWN
+        )
+        async with async_session_factory() as session:
+            pub = Publication(
+                queue_item_id=item_id, status=PublicationStatus.UNKNOWN, attempts=1
+            )
+            session.add(pub)
+            await session.flush()
+            attempt = PublicationAttempt(
+                publication_id=pub.publication_id,
+                attempt_number=1,
+                status=PublicationAttemptStatus.UNKNOWN,
+                trigger="manual",
+                prepared_text="editor text",
+                content_fingerprint="0" * 64,
+            )
+            session.add(attempt)
+            await session.commit()
+        auth = SimpleNamespace(user=SimpleNamespace(user_id=user_id), target_ids=None)
+        data = PublicationRetrySubmission(
+            idempotency_key="test-retry-" + uuid4().hex,
+            checked_channel=True,
+            accept_duplicate_risk=True,
+        )
+        settings = get_settings()
+        old_background, old_token = (
+            settings.background_tasks_enabled,
+            settings.max_access_token,
+        )
+        settings.background_tasks_enabled = True
+        settings.max_access_token = "test-token"
+        calls = []
+
+        async def send(client, **kwargs):
+            calls.append(True)
+            return {"message": {"body": {"mid": "retried-mid"}}}
+
+        monkeypatch.setattr(publisher, "_publish_with_media_retry", send)
+        try:
+            async with async_session_factory() as session:
+                with pytest.raises(HTTPException) as error:
+                    await retry_publication_task(
+                        item_id, data, auth, session, None, None
+                    )
+                assert error.value.status_code == 409
+            async with async_session_factory() as session:
+                attempt = await session.scalar(
+                    select(PublicationAttempt).where(
+                        PublicationAttempt.publication_id == pub.publication_id
+                    )
+                )
+                attempt.check_count = 1
+                await session.commit()
+            async with async_session_factory() as session:
+                queued = await retry_publication_task(
+                    item_id, data, auth, session, None, None
+                )
+            assert queued.state == TaskState.PENDING
+            assert calls == []
+            await PostgresTransport().publish(queued.task_id, "publication", uuid4())
+            assert await worker.run_once(TaskQueue.PUBLICATION, None)
+            async with async_session_factory() as session:
+                task = await session.get(BackgroundTask, queued.task_id)
+                item = await _loaded_item(session, item_id)
+                assert task.state == TaskState.SUCCEEDED
+                assert item.status == QueueItemStatus.PUBLISHED
+                assert item.publication.status == PublicationStatus.PUBLISHED
+                assert calls == [True]
+        finally:
+            settings.background_tasks_enabled = old_background
+            settings.max_access_token = old_token
 
     isolated(scenario)
 

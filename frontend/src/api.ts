@@ -133,6 +133,17 @@ export type QueueItem = {
   publication?: PublicationInfo | null;
 };
 
+export type BackgroundTask = {
+  task_id: string;
+  queue: "rewrite" | "collection" | "publication" | "maintenance";
+  state: "pending" | "running" | "retry_wait" | "succeeded" | "failed" | "cancelled" | "needs_review";
+  error_code: string | null;
+  attempts: number;
+  max_attempts: number;
+  available_at: string;
+  result: Record<string, unknown> | null;
+};
+
 export type PublicationAttempt = {
   publication_attempt_id: number;
   attempt_number: number;
@@ -413,7 +424,7 @@ export const api = {
     { method: "POST", headers: csrfHeaders() },
   ),
   queuePage: fetchQueuePage,
-  queueItem: (id: number) => request<QueueItem>(`/api/v1/queue/${id}`),
+  queueItem: (id: number, signal?: AbortSignal) => request<QueueItem>(`/api/v1/queue/${id}`, { signal }),
   queueMediaState: (id: number) => request<QueueMediaState>(`/api/v1/queue/${id}/media-state`),
   updateQueueMediaState: (id: number, mediaOrder: string[]) => request<QueueMediaState>(`/api/v1/queue/${id}/media-state`, { method: "PUT", headers: csrfHeaders(), body: JSON.stringify({ media_order: mediaOrder }) }),
   queueVideoInfo: (id: number) => request<QueueVideoInfo>(`/api/v1/queue/${id}/video-info`),
@@ -424,6 +435,7 @@ export const api = {
   sources: () => request<Source[]>("/api/v1/sources?limit=100"),
   targetSources: (targetId: number) => request<TargetSource[]>(`/api/v1/targets/${targetId}/sources`),
   collectNow: () => request<CollectSummary>("/api/v1/system/collect-now", { method: "POST", headers: csrfHeaders() }),
+  submitCollectionTask: (idempotencyKey: string) => request<BackgroundTask>("/api/v1/system/collection/tasks", { method: "POST", headers: csrfHeaders(), body: JSON.stringify({ idempotency_key: idempotencyKey }) }),
   collectionSettings: () => request<CollectionSettings>("/api/v1/system/collection/settings"),
   updateCollectionSettings: (data: Omit<CollectionSettings, "updated_at">) => request<CollectionSettings>("/api/v1/system/collection/settings", { method: "PUT", headers: csrfHeaders(), body: JSON.stringify(data) }),
   collectionStatus: () => request<CollectionStatus>("/api/v1/system/collection/status"),
@@ -446,6 +458,10 @@ export const api = {
   updateTargetSource: (targetId: number, targetSourceId: number, data: Partial<Pick<TargetSource, "is_active" | "rewrite_enabled">>) => request<TargetSource>(`/api/v1/targets/${targetId}/sources/${targetSourceId}`, { method: "PATCH", headers: csrfHeaders(), body: JSON.stringify(data) }),
   detachSource: (targetId: number, targetSourceId: number) => request<void>(`/api/v1/targets/${targetId}/sources/${targetSourceId}`, { method: "DELETE", headers: csrfHeaders() }),
   rewriteQueueItem: (id: number) => request<QueueItem>(`/api/v1/queue/${id}/rewrite`, { method: "POST", headers: csrfHeaders() }),
+  submitRewriteTask: (id: number, idempotencyKey: string) => request<BackgroundTask>(`/api/v1/queue/${id}/rewrite-task`, { method: "POST", headers: csrfHeaders(), body: JSON.stringify({ idempotency_key: idempotencyKey }) }),
+  submitPublicationTask: (id: number, idempotencyKey: string) => request<BackgroundTask>(`/api/v1/queue/${id}/publish-task`, { method: "POST", headers: csrfHeaders(), body: JSON.stringify({ idempotency_key: idempotencyKey }) }),
+  submitPublicationRetryTask: (id: number, idempotencyKey: string) => request<BackgroundTask>(`/api/v1/queue/${id}/retry-publication-task`, { method: "POST", headers: csrfHeaders(), body: JSON.stringify({ idempotency_key: idempotencyKey, checked_channel: true, accept_duplicate_risk: true }) }),
+  backgroundTask: (taskId: string, signal?: AbortSignal) => request<BackgroundTask>(`/api/v1/tasks/${encodeURIComponent(taskId)}`, { signal }),
   updateQueueText: (id: number, rewritten_text: string) => request<QueueItem>(`/api/v1/queue/${id}`, { method: "PATCH", headers: csrfHeaders(), body: JSON.stringify({ rewritten_text }) }),
   updateQueueSignature: (id: number, signature_text: string | null) => request<QueueItem>(`/api/v1/queue/${id}`, { method: "PATCH", headers: csrfHeaders(), body: JSON.stringify({ signature_text }) }),
   submit: (id: number) => request<QueueItem>(`/api/v1/queue/${id}/submit`, { method: "POST", headers: csrfHeaders() }),

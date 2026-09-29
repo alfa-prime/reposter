@@ -1,6 +1,6 @@
-import { ChangeEvent, useEffect, useMemo, useState } from "react";
+import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Archive, X } from "lucide-react";
-import { api, QueueItem, QueuePhoto } from "./api";
+import { ApiError, api, QueueItem, QueuePhoto } from "./api";
 import { QueueActionsFooter } from "./components/QueueActionsFooter";
 import { QueueDrawerHeader } from "./components/QueueDrawerHeader";
 import { QueueMediaSection } from "./components/QueueMediaSection";
@@ -28,6 +28,49 @@ const statusLabels: Record<string, string> = {
 };
 
 const defaultPageSize = 20;
+
+type PendingRewrite = { itemId: number; idempotencyKey: string; taskId?: string };
+type PendingPublication = { itemId: number; idempotencyKey: string; retry: boolean; taskId?: string };
+
+function rewriteStorageKey(itemId: number) { return `reposter:rewrite-task:${itemId}`; }
+
+function storedRewrite(itemId: number): PendingRewrite | null {
+  try {
+    const stored = window.sessionStorage.getItem(rewriteStorageKey(itemId));
+    if (!stored) return null;
+    const value = JSON.parse(stored) as PendingRewrite;
+    return value.itemId === itemId && typeof value.idempotencyKey === "string"
+      ? value : null;
+  } catch { return null; }
+}
+
+function saveRewrite(task: PendingRewrite) {
+  window.sessionStorage.setItem(rewriteStorageKey(task.itemId), JSON.stringify(task));
+}
+
+function publicationStorageKey(itemId: number) { return `reposter:publication-task:${itemId}`; }
+
+function storedPublication(itemId: number): PendingPublication | null {
+  try {
+    const stored = window.sessionStorage.getItem(publicationStorageKey(itemId));
+    if (!stored) return null;
+    const value = JSON.parse(stored) as PendingPublication;
+    return value.itemId === itemId && typeof value.idempotencyKey === "string" && typeof value.retry === "boolean"
+      ? value : null;
+  } catch { return null; }
+}
+
+function savePublication(task: PendingPublication) {
+  window.sessionStorage.setItem(publicationStorageKey(task.itemId), JSON.stringify(task));
+}
+
+function rewriteFailure(code: string | null) {
+  if (code === "material_changed") return "Материал изменился во время рерайта. Проверьте текст и попробуйте снова.";
+  if (code === "actor_disabled" || code === "permission_revoked" || code === "target_access_revoked") return "Рерайт остановлен: проверьте права доступа.";
+  if (code === "llm_not_configured") return "Сервис рерайта не настроен.";
+  if (["provider_timeout", "llm_provider_unavailable", "http_provider_unavailable"].includes(code ?? "")) return "Сервис ИИ временно недоступен. Попробуйте позже.";
+  return "Рерайт не выполнен. Попробуйте снова или обратитесь к администратору.";
+}
 
 function savedPageSize() {
   if (typeof window === "undefined") return defaultPageSize;
@@ -98,6 +141,13 @@ export function QueueExperience({ collectSignal = 0, targetId, openItemId = null
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [rewriteBusy, setRewriteBusy] = useState(false);
+  const [rewriteTask, setRewriteTask] = useState<PendingRewrite | null>(null);
+  const [rewriteCheck, setRewriteCheck] = useState(0);
+  const [publicationBusy, setPublicationBusy] = useState(false);
+  const [publicationTask, setPublicationTask] = useState<PendingPublication | null>(null);
+  const [publicationCheck, setPublicationCheck] = useState(0);
+  const selectedIdRef = useRef(selectedId);
+  selectedIdRef.current = selectedId;
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [text, setText] = useState("");
@@ -183,6 +233,105 @@ export function QueueExperience({ collectSignal = 0, targetId, openItemId = null
   }, [openItemId]);
 
   useEffect(() => {
+    setRewriteBusy(false);
+    setRewriteTask(selectedId === null ? null : storedRewrite(selectedId));
+    setPublicationBusy(false);
+    setPublicationTask(selectedId === null ? null : storedPublication(selectedId));
+  }, [selectedId]);
+
+  useEffect(() => {
+    if (!rewriteTask?.taskId || selectedId !== rewriteTask.itemId) return;
+    const controller = new AbortController();
+    const itemId = rewriteTask.itemId;
+    const taskId = rewriteTask.taskId;
+    let timer: number | undefined;
+    setRewriteBusy(true);
+
+    async function check() {
+      try {
+        const task = await api.backgroundTask(taskId, controller.signal);
+        if (controller.signal.aborted) return;
+        if (task.state === "succeeded") {
+          const updated = await api.queueItem(itemId, controller.signal);
+          if (controller.signal.aborted) return;
+          replaceItem(updated);
+          setText(updated.rewritten_text ?? updated.original_text ?? "");
+          setEditing(false);
+          setMessage("Рерайт готов");
+        } else if (["failed", "cancelled", "needs_review"].includes(task.state)) {
+          setError(rewriteFailure(task.error_code));
+        } else {
+          timer = window.setTimeout(() => void check(), task.state === "retry_wait" ? 10_000 : task.state === "pending" ? 5000 : 3000);
+          return;
+        }
+        window.sessionStorage.removeItem(rewriteStorageKey(itemId));
+        setRewriteTask(null);
+        setRewriteBusy(false);
+      } catch (exc) {
+        if (controller.signal.aborted) return;
+        setRewriteBusy(false);
+        if (exc instanceof ApiError && [403, 404].includes(exc.status)) {
+          window.sessionStorage.removeItem(rewriteStorageKey(itemId));
+          setRewriteTask(null);
+          setError("Задача рерайта недоступна. Обновите материал и проверьте права доступа.");
+        } else {
+          setError("Не удалось проверить задачу рерайта. Нажмите «Переписать с ИИ», чтобы продолжить проверку.");
+        }
+      }
+    }
+    void check();
+    return () => { controller.abort(); window.clearTimeout(timer); };
+  }, [selectedId, rewriteTask?.taskId, rewriteCheck]);
+
+  useEffect(() => {
+    if (!publicationTask?.taskId || selectedId !== publicationTask.itemId) return;
+    const controller = new AbortController();
+    const itemId = publicationTask.itemId;
+    const taskId = publicationTask.taskId;
+    let timer: number | undefined;
+    setPublicationBusy(true);
+
+    async function check() {
+      try {
+        const task = await api.backgroundTask(taskId, controller.signal);
+        if (controller.signal.aborted) return;
+        if (!["succeeded", "failed", "cancelled", "needs_review"].includes(task.state)) {
+          timer = window.setTimeout(() => void check(), task.state === "retry_wait" ? 10_000 : task.state === "pending" ? 5000 : 3000);
+          return;
+        }
+        const updated = await api.queueItem(itemId, controller.signal);
+        if (controller.signal.aborted) return;
+        replaceItem(updated);
+        window.sessionStorage.removeItem(publicationStorageKey(itemId));
+        setPublicationTask(null);
+        setPublicationBusy(false);
+        if (task.state === "succeeded") {
+          setMessage("Публикация отправлена");
+          closeDrawer();
+          await loadQueue();
+        } else if (updated.status === "publication_unknown" || task.state === "needs_review") {
+          setMessage("Результат отправки неизвестен. Проверьте канал MAX перед повтором.");
+          if (updated.status === "publication_unknown") setTab("attention");
+        } else {
+          setError(task.error_code === "material_changed" ? "Материал изменился после постановки публикации в очередь." : "Публикация не выполнена. Проверьте материал и настройки MAX.");
+        }
+      } catch (exc) {
+        if (controller.signal.aborted) return;
+        setPublicationBusy(false);
+        if (exc instanceof ApiError && [403, 404].includes(exc.status)) {
+          window.sessionStorage.removeItem(publicationStorageKey(itemId));
+          setPublicationTask(null);
+          setError("Задача публикации недоступна. Проверьте материал и права доступа.");
+        } else {
+          setError("Не удалось проверить задачу публикации. Нажмите «Опубликовать сейчас», чтобы продолжить проверку.");
+        }
+      }
+    }
+    void check();
+    return () => { controller.abort(); window.clearTimeout(timer); };
+  }, [selectedId, publicationTask?.taskId, publicationCheck]);
+
+  useEffect(() => {
     if (!selectedId) return;
     let active = true;
     void (async () => {
@@ -242,18 +391,48 @@ export function QueueExperience({ collectSignal = 0, targetId, openItemId = null
   }
 
   async function rewrite() {
-    if (!selected) return;
+    if (!selected || rewriteBusy) return;
+    const itemId = selected.queue_item_id;
+    if (editing && text !== (selected.rewritten_text ?? selected.original_text ?? "")) {
+      setError("Сначала сохраните изменения текста, затем запустите рерайт.");
+      return;
+    }
     setRewriteBusy(true);
     setError("");
+    setEditing(false);
+    let queued = false;
     try {
-      const updated = await api.rewriteQueueItem(selected.queue_item_id);
-      replaceItem(updated);
-      setText(updated.rewritten_text ?? updated.original_text ?? "");
-      setEditing(false);
+      const pending = storedRewrite(itemId) ?? { itemId, idempotencyKey: crypto.randomUUID() };
+      if (!pending.taskId) {
+        saveRewrite(pending);
+        try {
+          const task = await api.submitRewriteTask(itemId, pending.idempotencyKey);
+          pending.taskId = task.task_id;
+          saveRewrite(pending);
+        } catch (exc) {
+          if (!(exc instanceof ApiError && exc.status === 503 && exc.message === "Фоновое исполнение ещё не включено")) throw exc;
+          window.sessionStorage.removeItem(rewriteStorageKey(itemId));
+          const updated = await api.rewriteQueueItem(itemId);
+          replaceItem(updated);
+          if (selectedIdRef.current === itemId) {
+            setText(updated.rewritten_text ?? updated.original_text ?? "");
+            setEditing(false);
+          }
+          return;
+        }
+      }
+      if (selectedIdRef.current === itemId) {
+        queued = true;
+        setRewriteTask(pending);
+        setRewriteCheck((current) => current + 1);
+      }
     } catch (exc) {
-      setError(exc instanceof Error ? exc.message : "Не удалось переписать публикацию");
+      if (exc instanceof ApiError && [400, 403, 404, 409, 422].includes(exc.status)) {
+        window.sessionStorage.removeItem(rewriteStorageKey(itemId));
+      }
+      if (selectedIdRef.current === itemId) setError(exc instanceof Error ? exc.message : "Не удалось переписать публикацию");
     } finally {
-      setRewriteBusy(false);
+      if (!queued) setRewriteBusy(false);
     }
   }
 
@@ -374,13 +553,52 @@ export function QueueExperience({ collectSignal = 0, targetId, openItemId = null
     }
   }
 
-  async function publishNow() {
-    if (!selected) return;
-    const updated = await runAction(
-      () => api.publishNow(selected.queue_item_id),
-      "Публикация отправлена",
-    );
-    if (updated) closeDrawer();
+  async function publishNow(retry = false) {
+    if (!selected || publicationBusy) return;
+    const itemId = selected.queue_item_id;
+    setPublicationBusy(true);
+    setError("");
+    let queued = false;
+    try {
+      const stored = storedPublication(itemId);
+      const pending = stored?.retry === retry ? stored : { itemId, idempotencyKey: crypto.randomUUID(), retry };
+      if (!pending.taskId) {
+        savePublication(pending);
+        try {
+          const task = retry
+            ? await api.submitPublicationRetryTask(itemId, pending.idempotencyKey)
+            : await api.submitPublicationTask(itemId, pending.idempotencyKey);
+          pending.taskId = task.task_id;
+          savePublication(pending);
+        } catch (exc) {
+          if (!(exc instanceof ApiError && exc.status === 503 && exc.message === "Фоновое исполнение ещё не включено")) throw exc;
+          window.sessionStorage.removeItem(publicationStorageKey(itemId));
+          const updated = retry ? await api.retryPublication(itemId) : await api.publishNow(itemId);
+          replaceItem(updated);
+          if (updated.status === "publication_unknown") {
+            setMessage("Результат отправки неизвестен. Проверьте канал MAX перед повтором.");
+            setTab("attention");
+          } else {
+            setMessage("Публикация отправлена");
+            closeDrawer();
+            await loadQueue();
+          }
+          return;
+        }
+      }
+      if (selectedIdRef.current === itemId) {
+        queued = true;
+        setPublicationTask(pending);
+        setPublicationCheck((current) => current + 1);
+      }
+    } catch (exc) {
+      if (exc instanceof ApiError && [400, 403, 404, 409, 422].includes(exc.status)) {
+        window.sessionStorage.removeItem(publicationStorageKey(itemId));
+      }
+      if (selectedIdRef.current === itemId) setError(exc instanceof Error ? exc.message : "Не удалось запустить публикацию");
+    } finally {
+      if (!queued) setPublicationBusy(false);
+    }
   }
 
   async function schedule() {
@@ -444,7 +662,7 @@ export function QueueExperience({ collectSignal = 0, targetId, openItemId = null
 
   async function retryPublication() {
     if (!selected || !window.confirm("Вы проверили канал и публикации там нет? Повторная отправка может создать дубликат.")) return;
-    await runAction(() => api.retryPublication(selected.queue_item_id), "Повторная отправка выполнена");
+    await publishNow(true);
   }
 
   async function returnPublicationToWork() {
@@ -523,7 +741,7 @@ export function QueueExperience({ collectSignal = 0, targetId, openItemId = null
               item={selected}
               orderedPhotos={orderedPhotos}
               mediaOrder={mediaOrder}
-              busy={busy}
+              busy={busy || rewriteBusy || publicationBusy}
               mediaKey={mediaKey}
               onRemoveAll={() => void saveMedia([])}
               onRestoreAll={() => void saveMedia(selected.photos.map(mediaKey))}
@@ -539,7 +757,7 @@ export function QueueExperience({ collectSignal = 0, targetId, openItemId = null
             {selected.status === "publication_unknown" && (
               <PublicationRecoveryPanel
                 item={selected}
-                busy={busy}
+                busy={busy || publicationBusy}
                 onCheck={() => void checkPublication()}
                 onMarkPublished={() => void markPublished()}
                 onRetry={() => void retryPublication()}
@@ -550,9 +768,9 @@ export function QueueExperience({ collectSignal = 0, targetId, openItemId = null
             <QueueTextEditor
               value={text}
               originalText={selected.original_text}
-              readonly={["published", "scheduled", "publication_unknown"].includes(selected.status)}
+              readonly={publicationBusy || ["published", "scheduled", "publication_unknown"].includes(selected.status)}
               editing={editing}
-              busy={busy}
+              busy={busy || rewriteBusy || publicationBusy}
               rewriteBusy={rewriteBusy}
               canRewrite={["pending", "rewriting", "rejected"].includes(selected.status)}
               onEditingChange={setEditing}
@@ -571,7 +789,7 @@ export function QueueExperience({ collectSignal = 0, targetId, openItemId = null
             {selected.status === "approved" && (
               <QueueSchedulePanel
                 value={scheduleAt}
-                busy={busy}
+                busy={busy || publicationBusy}
                 error={scheduleError}
                 onChange={(value, changedPart) => {
                   setScheduleAt(value);
@@ -586,10 +804,11 @@ export function QueueExperience({ collectSignal = 0, targetId, openItemId = null
               />
             )}
 
+            {publicationBusy && <p role="status" className="editorial-message">Публикация выполняется. Ожидаю подтверждения MAX…</p>}
             <QueueActionsFooter
               item={selected}
               editing={editing}
-              busy={busy}
+              busy={busy || publicationBusy}
               onSaveText={() => void saveText()}
               onSubmit={() => void submitForModeration()}
               onApprove={() => void runAction(() => api.approve(selected.queue_item_id))}

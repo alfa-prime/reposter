@@ -22,3 +22,7 @@ services:
       - --reload
     volumes:
       - ./src:/app/src
+
+  scheduler:
+    volumes:
+      - ./src:/app/src

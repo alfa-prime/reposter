@@ -277,6 +277,12 @@ uv sync --frozen
 uv run uvicorn news_reposter.main:app --reload
 ```
 
+Во втором терминале запустить планировщик сбора, публикации и очистки:
+
+```bash
+uv run python -m news_reposter.services.scheduler_runner
+```
+
 Frontend:
 
 ```bash

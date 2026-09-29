@@ -11,8 +11,14 @@ services:
       - 0.0.0.0
       - --port
       - "8000"
+      - --workers
+      - ${API_WORKERS:-1}
       - --proxy-headers
       - --forwarded-allow-ips=*
+
+  scheduler:
+    environment:
+      HTTP_CA_FILE: /app/certs/russian_trusted_ca.pem
 
   frontend:
     environment:

@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Play, Save } from "lucide-react";
 import { api, CollectionSettings, CollectionStatus } from "../api";
+import { collectNowInBackground } from "../collectionTask";
 import "../scheduler.css";
 
 type FormState = Omit<CollectionSettings, "updated_at">;
@@ -48,6 +49,9 @@ export function SettingsPage() {
   const [form, setForm] = useState<FormState | null>(null);
   const [status, setStatus] = useState<CollectionStatus | null>(null);
   const [busy, setBusy] = useState(false);
+  const [collecting, setCollecting] = useState(false);
+  const collectController = useRef<AbortController | null>(null);
+  useEffect(() => () => collectController.current?.abort(), []);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
 
@@ -87,21 +91,31 @@ export function SettingsPage() {
   }
 
   async function runNow() {
-    setBusy(true); setError(""); setNotice("");
+    if (collecting) return;
+    const controller = new AbortController();
+    collectController.current = controller;
+    setCollecting(true); setError(""); setNotice("Сбор запущен. Ожидаем результат.");
     try {
-      const result = await api.collectNow();
-      setNotice(`Сбор №${result.run_id} завершён: найдено ${result.posts_found}, добавлено в очередь ${result.queue_items_created}.`);
+      const result = await collectNowInBackground(controller.signal);
+      if (result.errors) {
+        setError(`Сбор №${result.run_id} завершён с ошибками: ${result.errors}. Проверьте журнал.`);
+      } else {
+        setNotice(`Сбор №${result.run_id} завершён: найдено ${result.posts_found}, добавлено в очередь ${result.queue_items_created}.`);
+      }
       setStatus(await api.collectionStatus());
     } catch (exc) {
-      setError(exc instanceof Error ? exc.message : "Не удалось запустить сбор");
-    } finally { setBusy(false); }
+      if (!controller.signal.aborted) setError(exc instanceof Error ? exc.message : "Не удалось запустить сбор");
+    } finally {
+      if (collectController.current === controller) collectController.current = null;
+      setCollecting(false);
+    }
   }
 
   return (
     <section className="settings-page scheduler-page">
       <header className="settings-page-head scheduler-head">
         <div><p className="eyebrow">АДМИНИСТРИРОВАНИЕ · ПЛАНИРОВЩИК</p><h1>Планировщик</h1></div>
-        <button className="secondary" disabled={busy} onClick={() => void runNow()}><Play size={16} />Собрать сейчас</button>
+        <button className="secondary" disabled={busy || collecting} onClick={() => void runNow()}><Play size={16} />{collecting ? "Идёт сбор…" : "Собрать сейчас"}</button>
       </header>
 
       {(error || notice) && <div className={error ? "toast error" : "toast"}>{error || notice}<button onClick={() => { setError(""); setNotice(""); }}>×</button></div>}

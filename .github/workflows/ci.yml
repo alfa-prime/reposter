@@ -54,6 +54,15 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
+      redis:
+        image: redis:7.4-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
 
     env:
       POSTGRES_DB: news_reposter
@@ -61,6 +70,7 @@ jobs:
       POSTGRES_PASSWORD: news_reposter
       POSTGRES_HOST: localhost
       POSTGRES_PORT: "5432"
+      REDIS_URL: redis://localhost:6379/15
 
     steps:
       - name: Checkout repository
@@ -86,7 +96,14 @@ jobs:
       - name: Run PostgreSQL integration tests
         env:
           RUN_POSTGRES_TESTS: "1"
-        run: uv run pytest tests/test_auth_postgres.py tests/test_journal_postgres.py tests/test_background_postgres.py
+          RUN_REDIS_TESTS: "1"
+        run: uv run pytest tests/test_auth_postgres.py tests/test_journal_postgres.py tests/test_background_postgres.py tests/test_celery_redis_postgres.py
+
+      - name: Exercise two API workers under bounded concurrent load
+        env:
+          RUN_POSTGRES_TESTS: "1"
+          RUN_REDIS_TESTS: "1"
+        run: uv run pytest -s -q tests/test_api_workers_postgres.py
 
       - name: Downgrade database to base
         run: uv run alembic downgrade base
@@ -133,8 +150,57 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Validate two-worker production Compose configuration
+        env:
+          API_WORKERS: "2"
+        run: |
+          cp .env.example .env
+          docker compose -f compose.yaml -f compose.prod.yaml -f compose.tasks.yaml --profile background config --format json | python -c '
+          import json
+          import sys
+
+          services = json.load(sys.stdin)["services"]
+          command = services["app"]["command"]
+          assert command[command.index("--workers") + 1] == "2", command
+          assert services["scheduler"]["command"] == ["python", "-m", "news_reposter.services.scheduler_runner"]
+          for queue in ("rewrite", "collection", "maintenance", "publication"):
+              assert "--queues=" + queue in services["task-" + queue]["command"]
+          assert "task-outbox" in services and "redis" in services
+          print("Two API workers, separate scheduler and all four Celery queues configured")
+          '
+
       - name: Build backend image
         run: docker build --tag news-reposter:ci .
 
       - name: Build frontend image
         run: docker build --tag news-reposter-frontend:ci ./frontend
+
+      - name: Exercise disposable production Compose stack
+        env:
+          API_WORKERS: "2"
+        run: |
+          cp /etc/ssl/certs/ca-certificates.crt certs/russian_trusted_ca.pem
+          docker compose -f compose.yaml -f compose.prod.yaml -f compose.tasks.yaml --profile background \
+            up -d --build --wait postgres redis migrate app scheduler task-outbox \
+            task-rewrite task-collection task-maintenance task-publication
+          docker compose -f compose.yaml -f compose.prod.yaml -f compose.tasks.yaml --profile background \
+            exec -T app python - --url http://127.0.0.1:8000/health/database \
+            --requests 320 --concurrency 16 < scripts/bench_api_health.py
+          docker compose -f compose.yaml -f compose.prod.yaml -f compose.tasks.yaml --profile background \
+            exec -T postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"' <<'SQL'
+          SHOW max_connections;
+          SELECT state, count(*) FROM pg_stat_activity
+          WHERE datname = current_database() GROUP BY state ORDER BY state;
+          SQL
+          docker stats --no-stream --format 'table {{.Name}}\t{{.MemUsage}}\t{{.CPUPerc}}'
+
+      - name: Diagnose disposable stack failure
+        if: failure()
+        run: |
+          docker compose -f compose.yaml -f compose.prod.yaml -f compose.tasks.yaml --profile background ps
+          docker compose -f compose.yaml -f compose.prod.yaml -f compose.tasks.yaml --profile background \
+            logs --no-color --tail=40 app scheduler task-outbox task-rewrite task-collection task-maintenance task-publication
+
+      - name: Remove disposable stack
+        if: always()
+        run: docker compose -f compose.yaml -f compose.prod.yaml -f compose.tasks.yaml --profile background down -v --remove-orphans

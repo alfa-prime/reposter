@@ -28,9 +28,6 @@ from news_reposter.observability import (
     request_id_middleware,
     unexpected_exception_handler,
 )
-from news_reposter.services.media_cleanup import MediaCleanupScheduler
-from news_reposter.services.publication_scheduler import PublicationScheduler
-from news_reposter.services.scheduler import CollectionScheduler
 
 settings = get_settings()
 configure_logging(settings.log_level)
@@ -87,24 +84,14 @@ OPENAPI_TAGS = [
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
-    """Запускает фоновые задачи и освобождает ресурсы при остановке."""
+    """Создаёт ресурсы API и освобождает их при остановке."""
 
     http_client = create_http_client()
-    collection_scheduler = CollectionScheduler(http_client)
-    publication_scheduler = PublicationScheduler(http_client)
-    media_cleanup_scheduler = MediaCleanupScheduler()
     _app.state.http_client = http_client
     _app.state.llm_provider = None
-    _app.state.collection_scheduler = collection_scheduler
-    collection_scheduler.start()
-    publication_scheduler.start()
-    media_cleanup_scheduler.start()
     try:
         yield
     finally:
-        await publication_scheduler.stop()
-        await media_cleanup_scheduler.stop()
-        await collection_scheduler.stop()
         await http_client.aclose()
         await close_database()
 
